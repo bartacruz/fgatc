@@ -6,6 +6,7 @@ Created on Apr 24, 2015
 '''
 from fgserver.models import Airport, Runway
 from fgserver.helper import normalize
+import re
 
 
 def rwys_from_aptdat(airport,line):
@@ -14,11 +15,14 @@ def rwys_from_aptdat(airport,line):
         - airport is an fgserver.Airport instance
         - line is an array with the line of apt.dat already splitted
     returns an array with the runways suited to use in Runway.objects.bulk_create
-    '''
-    runways=[]
-    rwy = Runway()
-    rname = line[3].replace('x','')
     
+    WARNING: it'll take a couple of minutes to import all the database!
+    '''
+    
+    runways=[]
+    
+    # get rid of the extra x's
+    rname = line[3].replace('x','')
     #r,created = Runway.objects.get_or_create(airport__icao=airport.icao, name=designation)
     r = Runway(airport=airport, name=rname)
     r.altitude=airport.altitude
@@ -29,18 +33,16 @@ def rwys_from_aptdat(airport,line):
     r.width = line[8]
     runways.append(r)
     #print r.__dict__
+    rwy_match = re.compile("(\d+)([RL]*)").match(r.name) # e.g.:31x, 18R, 8xx
+    
     ''' If it's not an helipad, calculate the opposite runway '''
-    if not r.name.startswith('H'):
-        
-        rbearing = normalize(float(r.bearing)+180)
-        rname = str(int(normalize(float(r.name[:2])*10+180)/10))
-        if r.name[2:3]=='L':
-            rname= rname + "R"
-        if r.name[2:3]=='R':
-            rname= rname + "L"
-             
-        rinv = Runway(airport=airport, name=rname)
-        rinv.bearing = rbearing
+    if rwy_match:
+        oname,oside = rwy_match.groups()
+        obearing = normalize(float(r.bearing)+180) # the opposite bearing
+        oname = str(int(normalize(float(oname)*10+180)/10)) #the opposite name
+        oname +={'R':'L','L':'R'}.get(oside) # rwy side vodoo ;-) 
+        rinv = Runway(airport=airport, name=oname)
+        rinv.bearing = obearing
         ''' The original runway lat/lon mark the center of the rwy, which is the same for the opposite.''' 
         rinv.lat = r.lat
         rinv.lon = r.lon
@@ -58,9 +60,10 @@ def import_apts(file):
     cont = True
     while cont:
         line=f.readline()
-        line = line.decode('iso-8859-1').encode('utf8')
-        if line.startswith('1 '):
-            line = line.strip()
+        line = line.decode('iso-8859-1').encode('utf8').strip()
+        if line.startswith('99'):
+            cont= False
+        elif line.startswith('1 '):
             #print line
             aline = line.split(None,5)
 #            print aline
@@ -85,7 +88,6 @@ def import_apts(file):
                             airport.lon = al[2]
                         if al[3] != 'xxx':
                             runways += rwys_from_aptdat(airport, al)
-                        #TODO: generate runways
                     if l.startswith('14 '):
                         #TODO: Generate controller
                         print "found tower %s " % al[5]
@@ -95,4 +97,4 @@ def import_apts(file):
                 Runway.objects.bulk_create(runways)
                 print airport.icao, airport.name, airport.lat, airport.lon,airport.altitude, len(runways)
 
-import_apts("../data/apt.dat.gz")
+#import_apts("../data/apt.dat.gz")
