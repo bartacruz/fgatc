@@ -4,21 +4,14 @@ Created on Apr 13, 2015
 
 @author: bartacruz
 '''
-import time
 
 from math import sqrt, fabs, atan2, pi, sin, cos, asin, acos
-import messages
 from fgserver.settings import METAR_URL
 from metar.Metar import Metar
 import urllib
-from django.dispatch.dispatcher import receiver
-from django.db.models.signals import post_save
-from scipy.constants import mile
 from geographiclib.geodesic import Geodesic
 from scipy import rint
-from gdata import geo
 from __builtin__ import float
-from fgserver.units import RAD
 
 LETTERS = [
 "alpha", "bravo", "charlie", "delta", "echo",

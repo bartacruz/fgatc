@@ -20,7 +20,7 @@ from django.utils import timezone
 
 
 class Airport(Model):
-    icao=CharField(max_length=4)
+    icao=CharField(max_length=4, db_index=True)
     name=CharField(max_length=255)
     lat=DecimalField(default=0,max_digits=10,decimal_places=6)
     lon=DecimalField(default=0,max_digits=10,decimal_places=6)
