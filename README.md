@@ -1,4 +1,4 @@
 # fgatc
 FlightGear AI ATC server
 
-Early alpha stage
+In early-alpha stage
