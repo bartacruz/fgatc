@@ -2,7 +2,7 @@
 '''
 Created on Apr 15, 2015
 
-@author: julio
+@author: bartacruz
 '''
 from django.db.models.base import Model
 from django.db.models.fields import CharField, DecimalField, IntegerField,\

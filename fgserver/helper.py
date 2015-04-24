@@ -2,7 +2,7 @@
 '''
 Created on Apr 13, 2015
 
-@author: julio
+@author: bartacruz
 '''
 import time
 

@@ -2,7 +2,7 @@
 '''
 Created on Apr 17, 2015
 
-@author: julio
+@author: bartacruz
 '''
 from random import randint
 from fgserver.helper import short_callsign

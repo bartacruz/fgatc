@@ -1,7 +1,7 @@
 '''
 Created on Apr 20, 2015
 
-@author: julio
+@author: bartacruz
 '''
 from math import pi
 M=1.0

@@ -2,7 +2,7 @@
 '''
 Created on Apr 19, 2015
 
-@author: julio
+@author: bartacruz
 '''
 from fgserver.helper import Position, get_distance, get_heading_to, Vector3D,\
     move, normdeg, Quaternion, geod2cart, normalize
