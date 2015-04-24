@@ -12,6 +12,7 @@ import urllib
 from geographiclib.geodesic import Geodesic
 from scipy import rint
 from __builtin__ import float
+from random import randint
 
 LETTERS = [
 "alpha", "bravo", "charlie", "delta", "echo",
@@ -266,3 +267,7 @@ def get_heading_to(fro, to):
     if heading > 360.0:
         heading = heading - 360.0
     return heading
+
+def random_callsign():
+    return "%s%s-%s%s%s" % (chr(randint(65,90)),chr(randint(65,90)),chr(randint(65,90)),chr(randint(65,90)),chr(randint(65,90)))
+    

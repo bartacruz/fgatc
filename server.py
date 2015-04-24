@@ -8,7 +8,7 @@ import socket
 from xdrlib import Unpacker
 from fgserver.messages import PROP_REQUEST, PROP_FREQ, PosMsg, PROP_CHAT,\
     PROP_ORDER
-from fgserver.helper import cart2geod
+from fgserver.helper import cart2geod, random_callsign
 from django.db.models.signals import post_save
 from django.dispatch.dispatcher import receiver
 from fgserver.models import Order, Aircraft, Request, Airport
@@ -19,6 +19,7 @@ from random import randint
 from fgserver import ai
 from django.core.cache import cache, get_cache
 import os 
+from fgserver.ai.models import Circuit
 os.environ['DJANGO_SETTINGS_MODULE'] = 'fgserver.settings' 
 import django
 
@@ -56,6 +57,23 @@ def process_request(sender, instance, **kwargs):
         
         queue_order(order)
 
+def get_mpplanes(apt):
+    planes = []
+    # TODO: Search by aircraft closeness and radio frequency
+    cch = get_cache('default')
+    aicircuit = cch.get(apt.icao)
+    if aicircuit and aicircuit != '':
+        planes.append(aicircuit)
+    else:
+        print "creating circuit"
+        try:
+            aicircuit= Circuit.objects.get(airport=apt)
+            cch.set(apt.icao,aicircuit)
+            aicircuit.reset()
+            cch.set(apt.icao,aicircuit)
+        except:
+            cch.set(apt.icao,'',60)
+        
 def send_pos(callsign):
     aircraft = Aircraft.objects.get(callsign=callsign)
     request = Request.objects.filter(sender=aircraft).order_by('-date').first()
@@ -73,26 +91,22 @@ def send_pos(callsign):
             
             #print "sending to",order.sender.get_position(),msg.position,msg.orientation
             sendto(msg.send(), aircraft.get_addr())
-            cch = get_cache('default')
-            aiplane = cch.get(apt.icao)
-            if aiplane:
-                wait = aiplane._waiting
-                #print "aiplane found:",wait,aiplane.time
-                aiplane.update(msg.time)
-                cch.set(apt.icao,aiplane)
+            
+            ''' send mp and ai planes positions to player ''' 
+            for mp in get_mpplanes(apt):
+                cch = get_cache('default')
+                wait = mp._waiting
+                #print "mp found:",wait,mp.time
+                mp.update(msg.time)
+                cch.set(apt.icao,mp)
                 if not wait:
-                    msg2 = aiplane.get_pos_message()
+                    msg2 = mp.get_pos_message()
                     msg2.time = msg.time
                     msg2.lag=msg.lag
                     #print "time:",msg.time, msg.lag,msg2.position
                     sendto(msg2.send(),aircraft.get_addr())
-            else:
-                print "creating aiplane"
-                # TODO: obtener el callsign
-                aiplane = ai.Circuit(Airport.objects.get(icao=apt.icao),'VNL723')
-                cch.set(apt.icao,aiplane)
-                aiplane.reset()
-                cch.set(apt.icao,aiplane)
+            
+            
                 
 def sim_time():
     return (timezone.now() - DATE_STARTED).total_seconds()
@@ -112,7 +126,7 @@ def process_pos(pos):
     request = request_p['value']
     aircraft,create = Aircraft.objects.get_or_create(callsign=pos.callsign())
     if create:
-        print "Nuevo avion:", aircraft 
+        print "New Plane:", aircraft 
     freq = pos.get_property(PROP_FREQ)['value']
     #print "request=", request
     if aircraft.state == 0 or aircraft.ip != pos.header.reply_addr:
