@@ -1,0 +1,12 @@
+/__init__.pyc
+/admin.pyc
+/ai.pyc
+/controllers.pyc
+/helper.pyc
+/messages.pyc
+/models.pyc
+/settings.pyc
+/units.pyc
+/urls.pyc
+/wsgi.pyc
+/settings.py
