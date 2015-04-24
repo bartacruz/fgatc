@@ -15,10 +15,12 @@ class RunwayInline(TabularInline):
     extra=0
     
 class AirportAdmin(ModelAdmin):
+    search_fields = ['icao','name']
     list_display=('icao','name','lat','lon')
     inlines = [RunwayInline,]
 
 class RunwayAdmin(ModelAdmin):
+    search_fields = ['airport__icao','airport__name']
     list_display=('airport','name','bearing')
 
 class AircraftAdmin(ModelAdmin):
