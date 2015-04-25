@@ -18,6 +18,29 @@
  <div id="map"></div>
  <button type="button" onclick="doit();">DoIt</button><button type="button" onclick="doit2();">DoIt2</button>
 <script type="text/javascript">
+L.RotatedMarker = L.Marker.extend({
+	  options: { angle: 0 },
+	  _setPos: function(pos) {
+	    L.Marker.prototype._setPos.call(this, pos);
+	    if (L.DomUtil.TRANSFORM) {
+	      // use the CSS transform rule if available
+	      this._icon.style[L.DomUtil.TRANSFORM] += ' rotate(' + this.options.angle + 'deg)';
+	    } else if (L.Browser.ie) {
+	      // fallback for IE6, IE7, IE8
+	      var rad = this.options.angle * L.LatLng.DEG_TO_RAD,
+	      costheta = Math.cos(rad),
+	      sintheta = Math.sin(rad);
+	      this._icon.style.filter += ' progid:DXImageTransform.Microsoft.Matrix(sizingMethod=\'auto expand\', M11=' +
+	        costheta + ', M12=' + (-sintheta) + ', M21=' + sintheta + ', M22=' + costheta + ')';
+	    }
+	  }
+	});
+L.rotatedMarker = function(pos, options) {
+	    return new L.RotatedMarker(pos, options);
+	};
+
+
+
 var ll = [{{ airport.lat }}, {{airport.lon}}];
 var planes={};
 var map = L.map('map').setView(ll,13);
@@ -31,17 +54,16 @@ function addPlane(ev) {
 	    iconSize: [25, 25],
 	    className: callsign,
 	});
-	var marker = L.marker(ll,{icon:planeicon,title:callsign}).addTo(map);
+	var marker = L.rotatedMarker(ll,{icon:planeicon,title:callsign}).addTo(map);
 	marker.bearing=180;
 	planes[callsign]= marker;
 	console.debug(callsign,marker.getLatLng(),marker);
 }
 function rotate(callsign,adiff) {
-	marker = planes[callsign]; 
-	marker.bearing = marker.bearing +adiff;
-	$('.'+callsign).rotate(marker.bearing);
-	//marker.setLatLng(marker.getLatLng());
-	console.debug(callsign,marker.getLatLng(),marker);
+	marker = planes[callsign];
+	marker.options.angle += adiff;
+	marker.setLatLng(marker.getLatLng());
+	console.debug(callsign,marker.options.angle,marker);
 }
 function doit(ev) {
 	//marker.setLatLng([-34.454, -58.590]);
@@ -50,6 +72,8 @@ function doit(ev) {
 function doit2(ev) {
 	rotate(callsign=Object.keys(planes)[0],+10);//just for testing
 }
+
+
 </script>
 
 </body>
