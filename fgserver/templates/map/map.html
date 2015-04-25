@@ -18,22 +18,37 @@
  <div id="map"></div>
  <button type="button" onclick="doit();">DoIt</button><button type="button" onclick="doit2();">DoIt2</button>
 <script type="text/javascript">
-var ll = [-34.456, -58.584];
-var planeicon = L.icon({
-    iconUrl: '{{ STATIC_URL }}images/plane-25.png',
-    iconSize: [25, 25],
-    className: "vfr723"
-});
+var ll = [{{ airport.lat }}, {{airport.lon}}];
+var planes={};
 var map = L.map('map').setView(ll,13);
 L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png?{foo}', {foo: 'bar'}).addTo(map);
-var marker = L.marker(ll,{icon:planeicon}).addTo(map);
+addPlane(null);
 
+function addPlane(ev) {
+	callsign="VFR-" + Math.round(Math.random()*10) + Math.round(Math.random()*10);
+	var planeicon = L.icon({
+	    iconUrl: '{{ STATIC_URL }}images/plane-25.png',
+	    iconSize: [25, 25],
+	    className: callsign,
+	});
+	var marker = L.marker(ll,{icon:planeicon,title:callsign}).addTo(map);
+	marker.bearing=180;
+	planes[callsign]= marker;
+	console.debug(callsign,marker.getLatLng(),marker);
+}
+function rotate(callsign,adiff) {
+	marker = planes[callsign]; 
+	marker.bearing = marker.bearing +adiff;
+	$('.'+callsign).rotate(marker.bearing);
+	//marker.setLatLng(marker.getLatLng());
+	console.debug(callsign,marker.getLatLng(),marker);
+}
 function doit(ev) {
-	marker.setLatLng([-34.454, -58.590]);
-	$('.vfr723').rotate(50);
+	//marker.setLatLng([-34.454, -58.590]);
+	rotate(callsign=Object.keys(planes)[0],-10);//just for testing
 }
 function doit2(ev) {
-	$('.vfr723').rotate(230);
+	rotate(callsign=Object.keys(planes)[0],+10);//just for testing
 }
 </script>
 

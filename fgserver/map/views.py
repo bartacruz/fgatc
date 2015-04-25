@@ -8,7 +8,8 @@ from fgserver.models import Airport
 from django.template.context import RequestContext
 
 def map_view(request):
-    airport = Airport.objects.get(icao="SADF")
+    icao=request.REQUEST.get('icao','SABE')
+    airport = Airport.objects.get(icao=icao)
     return render_to_response('map/map.html',
                     {'title': 'Map','airport': airport},
                     context_instance=RequestContext(request))
