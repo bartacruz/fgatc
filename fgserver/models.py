@@ -6,7 +6,7 @@ Created on Apr 15, 2015
 '''
 from django.db.models.base import Model
 from django.db.models.fields import CharField, DecimalField, IntegerField,\
-    DateTimeField, BooleanField
+    DateTimeField, BooleanField, FloatField
 from django.db.models.fields.related import ForeignKey
 from fgserver.settings import METAR_URL, METAR_UPDATE
 from fgserver.helper import normdeg, fetch_metar, Position
@@ -100,6 +100,7 @@ class Aircraft(Model):
     last_order=CharField(max_length=60,blank=True,null=True)
     ip=CharField(max_length=15,blank=True,null=True)
     port=CharField(max_length=5,blank=True,null=True)
+    heading=FloatField(default=0)
     
     def get_addr(self):
         return (self.ip,int(self.port))
@@ -108,6 +109,9 @@ class Aircraft(Model):
             return type('new_dict', (object,),{p.split('=')[0]:p.split('=')[1] for p in self.last_request.split(';')})
         return None
 
+    def get_position(self):
+        return Position(self.lat, self.lon, self.altitude)
+    
     def __unicode__(self):
         return self.callsign
 

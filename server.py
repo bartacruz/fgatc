@@ -8,7 +8,7 @@ import socket
 from xdrlib import Unpacker
 from fgserver.messages import PROP_REQUEST, PROP_FREQ, PosMsg, PROP_CHAT,\
     PROP_ORDER
-from fgserver.helper import cart2geod, random_callsign
+from fgserver.helper import cart2geod, random_callsign, Quaternion, Vector3D
 from django.db.models.signals import post_save
 from django.dispatch.dispatcher import receiver
 from fgserver.models import Order, Aircraft, Request, Airport
@@ -16,10 +16,11 @@ from datetime import datetime
 from django.utils import timezone
 from fgserver.controllers import get_controller
 from random import randint
-from fgserver import ai
+from fgserver import ai, units
 from django.core.cache import cache, get_cache
 import os 
 from fgserver.ai.models import Circuit
+from math import atan2
 os.environ['DJANGO_SETTINGS_MODULE'] = 'fgserver.settings' 
 import django
 
@@ -137,15 +138,27 @@ def process_pos(pos):
         aircraft.ip=pos.header.reply_addr 
         aircraft.port=pos.header.reply_port
         aircraft.save()
-    if request != aircraft.last_request or freq != aircraft.freq or not aircraft.state:
-        print "aircraft %s requests %s at %s" % (aircraft.callsign, request, freq) 
-        geo = cart2geod(pos.position)
-        aircraft.state=1
+    elif aircraft.state==1:
         geod = cart2geod(pos.position)
         aircraft.lat=geod[0]
         aircraft.lon=geod[1]
+        
+        
+        vor = Vector3D.from_array(pos.orientation)
+        qor = Quaternion.fromAngleAxis(vor)
+        qpos = Quaternion.fromLatLon(aircraft.lat, aircraft.lon)
+        h10r = qpos.conjugate().multiply(qor)
+        eul = h10r.getEuler().scale(units.RAD)
+        #print eul.get_array()
+        
+        aircraft.heading= eul.z
         aircraft.altitude=geod[2]
         aircraft.freq = freq
+        aircraft.save()
+    
+    if request != aircraft.last_request or freq != aircraft.freq or not aircraft.state:
+        print "aircraft %s requests %s at %s" % (aircraft.callsign, request, freq) 
+        aircraft.state=1
         aircraft.last_request = request
         aircraft.save()
         request = Request(sender=aircraft,date=timezone.now(),request=request)

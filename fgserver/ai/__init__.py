@@ -132,6 +132,11 @@ class AIPlane():
         elif state == PlaneInfo.TOUCHDOWN:
             self.turn_rate=1
             self.speed=40*units.KNOTS
+        self.aircraft.lat = self.position.x
+        self.aircraft.lon = self.position.y
+        self.aircraft.altitude = self.position.z
+        self.aircraft.heading = self.course
+        self.aircraft.save()
         
         self.check_request()
         

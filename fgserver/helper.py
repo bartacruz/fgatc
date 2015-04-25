@@ -5,7 +5,7 @@ Created on Apr 13, 2015
 @author: bartacruz
 '''
 
-from math import sqrt, fabs, atan2, pi, sin, cos, asin, acos
+from math import sqrt, fabs, atan2, pi, sin, cos, asin, acos, atan
 from fgserver.settings import METAR_URL
 from metar.Metar import Metar
 import urllib
@@ -13,6 +13,7 @@ from geographiclib.geodesic import Geodesic
 from scipy import rint
 from __builtin__ import float
 from random import randint
+from fgserver import units
 
 LETTERS = [
 "alpha", "bravo", "charlie", "delta", "echo",
@@ -136,9 +137,9 @@ class Vector3D():
     y = 0
     z = 0
     def __init__(self, x=0,y=0,z=0):
-        self.x = x
-        self.y = y
-        self.z = z
+        self.x = float(x)
+        self.y = float(y)
+        self.z = float(z)
 
     def get_array(self):
         return [self.x,self.y,self.z]
@@ -157,6 +158,10 @@ class Vector3D():
         if length < 1e-22:
             return Vector3D(0,0,0)
         return Vector3D(self.x/length,self.y/length,self.z/length)
+ 
+    @staticmethod
+    def from_array(arr):
+        return Vector3D(arr[0],arr[1],arr[2])
     
     def __unicode__(self):
         return "%s"%self.get_array()
@@ -216,7 +221,50 @@ class Quaternion():
                               self.w*q.x+q.w*self.x+self.y*q.z-self.z*q.y,
                               self.w*q.y+q.w*self.y+self.z*q.x-self.x*q.z,
                               self.w*q.z+q.w*self.z+self.x*q.y-self.y*q.x)
+    def transform(self,v):
+        qv = Quaternion(0,v.x,v.y,v.z)
+        qvn = self.multiply(qv).multiply(self.conjugate())
+        return Vector3D(qvn.x,qvn.y,qvn.z)
 
+    def getEuler(self):
+        w2 = self.w*self.w
+        x2 = self.x*self.x
+        y2 = self.y*self.y
+        z2 = self.w*self.z
+        num = 2*(self.y*self.z+self.w*self.x)
+        den = w2-x2-y2+z2
+        if fabs(den) <= units.EPSILON and fabs(num) <= units.EPSILON:
+            xr = 0
+        else:
+            xr = atan2(num,den)
+        tmp = 2*(self.x * self.z - self.w*self.y)
+        if tmp <= -1:
+            yr = units.pi/2
+        elif 1<= tmp:
+            yr = -units.pi/2
+        else:
+            yr = -1*asin(tmp)
+        num = 2*(self.x*self.y+self.w*self.z)
+        den = w2+x2-y2-z2
+        if fabs(den) <= units.EPSILON and fabs(num) <= units.EPSILON:
+            zr = 0
+        else:
+            psi = atan2(num,den)
+            if psi <0:
+                psi += 2*units.pi
+            zr = psi
+        return Vector3D(xr,yr,zr)
+                
+        
+    def __unicode__(self):
+        return "%s,%s,%s,%s" %(self.w,self.x,self.y,self.z)
+    def get_array(self):
+        return [self.w,self.x,self.y,self.z]
+
+    @staticmethod
+    def fromEulerAnglesRad(x,y,z):
+        return Quaternion.fromEulerAngles(z*RAD, y*RAD, x*RAD)
+    
     @staticmethod
     def fromEulerAngles(z, y, x):
         # sequence is z,y,x
@@ -255,6 +303,17 @@ class Quaternion():
         cosy2=cos(y2)
         siny2=sin(y2)
         return Quaternion(cosz2*cosy2,-sinz2*siny2,cosz2*siny2,sinz2*cosy2)
+    
+    @staticmethod
+    def fromAngleAxis(angle_axis):
+        naxis = angle_axis.get_length()
+        if naxis < units.EPSILON:
+            return Quaternion(1,0,0,0)
+        angle = naxis*0.5
+        axis = angle_axis.normalise()        
+        nn = angle_axis.scale(sin(angle)/naxis)
+        return Quaternion(cos(angle),nn.x,nn.y,nn.z)
+        
 
 meter = 1
 def get_distance(fro, to, unit=meter):
