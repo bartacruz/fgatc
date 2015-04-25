@@ -1,4 +1,3 @@
-/server.pyc
-/db.sqlite3
-/.settings
+syntax: glob
+.settings
 *.pyc
