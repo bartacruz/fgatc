@@ -91,13 +91,13 @@ class Runway(Model):
     
 class Aircraft(Model):
     callsign = CharField(max_length=8)
-    freq = CharField(max_length=8,blank=True,null=True)
+    freq = CharField(max_length=10,blank=True,null=True)
     lat=DecimalField(default=0,max_digits=10,decimal_places=6)
     lon=DecimalField(default=0,max_digits=10,decimal_places=6)
     altitude=IntegerField(default=0)
     state = IntegerField(default=0)
-    last_request=CharField(max_length=10,blank=True,null=True)
-    last_order=CharField(max_length=10,blank=True,null=True)
+    last_request=CharField(max_length=60,blank=True,null=True)
+    last_order=CharField(max_length=60,blank=True,null=True)
     ip=CharField(max_length=15,blank=True,null=True)
     port=CharField(max_length=5,blank=True,null=True)
     
@@ -158,7 +158,8 @@ class Order(Model):
     def __init__(self, *args, **kwargs):
         super(Order, self).__init__(*args, **kwargs)
         try:
-            self._order = eval(self.order)
+            if self._order:
+                self._order = eval(self.order)
         except:
             print "ERROR parseando orden"
 

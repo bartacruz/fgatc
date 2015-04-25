@@ -62,18 +62,21 @@ def get_mpplanes(apt):
     # TODO: Search by aircraft closeness and radio frequency
     cch = get_cache('default')
     aicircuit = cch.get(apt.icao)
-    if aicircuit and aicircuit != '':
-        planes.append(aicircuit)
-    else:
-        print "creating circuit"
+    #print "get_mpplanes",aicircuit,apt
+    if aicircuit==None:
         try:
             aicircuit= Circuit.objects.get(airport=apt)
             cch.set(apt.icao,aicircuit)
             aicircuit.reset()
             cch.set(apt.icao,aicircuit)
-        except:
+            print "Circuit loaded:",aicircuit
+        except Circuit.DoesNotExist:
             cch.set(apt.icao,'',60)
+    elif aicircuit != '':
+        planes.append(aicircuit)
         
+    return planes
+
 def send_pos(callsign):
     aircraft = Aircraft.objects.get(callsign=callsign)
     request = Request.objects.filter(sender=aircraft).order_by('-date').first()

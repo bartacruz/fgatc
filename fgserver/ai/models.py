@@ -28,11 +28,9 @@ class Circuit(Model):
     FINAL = 500*units.FT
     _waiting=0
 
-    def init(self):
+    def reset(self):
         self.aircraft=AIPlane(self.name)
         self.aircraft.airport = self.airport
-
-    def reset(self):
         self.waypoints=[]
         self.calculateCircuit()
         self._waypoint=0
