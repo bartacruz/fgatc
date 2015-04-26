@@ -1,3 +1,4 @@
+# -*- encoding: utf-8 -*-
 '''
 Created on Apr 22, 2015
 
@@ -12,4 +13,5 @@ urlpatterns = patterns('',
     # url(r'^blog/', include('blog.urls')),
 
     url(r'^map/', 'fgserver.map.views.map_view'),
+    url(r'^aircrafts/', 'fgserver.map.views.aircrafts'),
 )

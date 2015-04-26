@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <title>FGServer map</title>
 <script src="https://code.jquery.com/jquery-1.11.1.min.js"></script>
-<script src="https://code.jquery.com/jquery-migrate-1.2.1.min.js"></script>
 <script src="{{STATIC_URL}}js/jQueryRotateCompressed.js"></script>
 <link rel="stylesheet"
 	href="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.css" />
@@ -16,7 +15,7 @@
 </head>
 <body>
  <div id="map"></div>
- <button type="button" onclick="doit();">DoIt</button><button type="button" onclick="doit2();">DoIt2</button>
+ <button type="button" onclick="start();">Start</button><button type="button" onclick="stop();">Stop</button>
 <script type="text/javascript">
 L.RotatedMarker = L.Marker.extend({
 	  options: { angle: 0 },
@@ -45,17 +44,20 @@ var ll = [{{ airport.lat }}, {{airport.lon}}];
 var planes={};
 var map = L.map('map').setView(ll,13);
 L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png?{foo}', {foo: 'bar'}).addTo(map);
-addPlane(null);
 
-function addPlane(ev) {
-	callsign="VFR-" + Math.round(Math.random()*10) + Math.round(Math.random()*10);
+function updatePlane(fields) {
+	marker = planes[fields.callsign];
+	marker.options.angle=fields.heading;
+	marker.setLatLng([fields.lat,fields.lon]);
+}
+function addPlane(fields) {
+	callsign=fields.callsign;
 	var planeicon = L.icon({
 	    iconUrl: '{{ STATIC_URL }}images/plane-25.png',
-	    iconSize: [25, 25],
+	    iconSize: [fields.lat, fields.lon],
 	    className: callsign,
 	});
-	var marker = L.rotatedMarker(ll,{icon:planeicon,title:callsign}).addTo(map);
-	marker.bearing=180;
+	var marker = L.rotatedMarker(ll,{icon:planeicon,title:callsign,angle:fields.heading}).addTo(map);
 	planes[callsign]= marker;
 	console.debug(callsign,marker.getLatLng(),marker);
 }
@@ -72,8 +74,48 @@ function doit(ev) {
 function doit2(ev) {
 	rotate(callsign=Object.keys(planes)[0],+10);//just for testing
 }
-
-
+var _handler=null;
+function start() {
+	_handler = setInterval(fg_update,2000);
+}
+function stop() {
+	clearInterval(_handler);
+}
+function update_aircrafts(data,textStatus,jqXHR) {
+	console.debug("update aircraft",data);
+	for (i in data.aircrafts) {
+		
+		var acft= data.aircrafts[i];
+		console.debug(i,acft);
+		if (planes[acft.fields.callsign]) {
+			updatePlane(acft.fields);
+		} else {
+			addPlane(acft.fields);
+		}
+		
+	}
+}
+function update_error(XHR, textStatus, errorThrow) {
+	console.debug("ERROR",textStatus,errorThrow);
+}
+function fg_update(){
+	url = '/map/aircrafts/';
+	data = {
+			center: ""+map.getCenter(),
+			bounds: ""+map.getBounds(),
+			zoom: map.getZoom(),
+			lat: map.getCenter().lat,
+			lon: map.getCenter().lng
+	};
+	console.debug("update. data=",data);
+	$.ajax({
+		dataType: "json",
+		url: url,
+		data: data,
+		success: update_aircrafts,
+		error: update_error
+	});
+}
 </script>
 
 </body>
