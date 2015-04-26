@@ -35,18 +35,21 @@ var messages = {
 	straight: '{apt} tower, {cs}, straight for runway {rwy}',
 	clearrw: '{apt} tower, {cs}, clear {rwyof}',
 	around: '{apt} tower, {cs}, going around',
+	tunein: '',
 	
 };
 	
 
 
-var sendmessage = func(message=""){
+var sendmessage = func(message="",dlg=1){
 	var msg = parse_message(message);
 	var request = sprintf("req=%s;apt=%s",message,airport.id);
 	print("Sendmessage: " ~ request ~ ", " ~ msg);
 	setprop(pilotchannel,request);
 	setprop(chatchannel,msg);
-	dialog.destroy();
+	if (dlg) {
+		dialog.destroy();
+	}
 };
 var repeat = func() {
 	print("ATCNg: repeat");
@@ -124,7 +127,7 @@ var parse_message = func(tag) {
 	}
 	var msg = messages[tag];
 	if (msg == nil or msg == "") {
-		return tag;
+		return "";
 	}
 	print (sprintf("parse_message. tag=%s, msg=%s",tag,msg));
 	msg = string.replace(msg,'{cs}',callsign);
@@ -212,6 +215,7 @@ var update = func {
 					atcng.set_comm(apt,f);
 					print(frq, apt.id, f.ident,f.frequency);
 					settimer(atcng.check_model, 5);
+					sendmessage('tunein',0);
 					return;
 				}
 			}
