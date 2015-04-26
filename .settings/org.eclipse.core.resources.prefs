@@ -1,5 +1,6 @@
 eclipse.preferences.version=1
 encoding//fgserver/admin.py=utf-8
+encoding//fgserver/ai/admin.py=utf-8
 encoding//fgserver/ai/migrations/0001_initial.py=utf-8
 encoding//fgserver/controllers.py=utf-8
 encoding//fgserver/helper.py=utf-8

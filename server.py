@@ -8,28 +8,44 @@ import socket
 from xdrlib import Unpacker
 from fgserver.messages import PROP_REQUEST, PROP_FREQ, PosMsg, PROP_CHAT,\
     PROP_ORDER
-from fgserver.helper import cart2geod, random_callsign, Quaternion, Vector3D
+from fgserver.helper import cart2geod, random_callsign, Quaternion, Vector3D,\
+    move
 from django.db.models.signals import post_save
 from django.dispatch.dispatcher import receiver
 from fgserver.models import Order, Aircraft, Request, Airport
-from datetime import datetime
 from django.utils import timezone
-from fgserver.controllers import get_controller
+from fgserver.controllers import Tower
 from random import randint
-from fgserver import ai, units
-from django.core.cache import cache, get_cache
+from fgserver import units
+from django.core.cache import  get_cache
 import os 
 from fgserver.ai.models import Circuit
-from math import atan2
+from __builtin__ import Exception
 os.environ['DJANGO_SETTINGS_MODULE'] = 'fgserver.settings' 
 import django
 
 orders = {}
 
+UPDATE_RATE=2
+_aircrafts=[]
 def queue_order(order):
     print "queue_order.",order
     orders.setdefault(order.sender.icao,[]).append(order)
-
+    
+def save_cache():
+    _last_update = get_cache('default').get('last_update')
+    if not _last_update or (timezone.now() - _last_update).total_seconds() > UPDATE_RATE:
+        c = get_cache('aircrafts')
+        for callsign in _aircrafts:
+            #print "saving aircraft %s" % callsign
+            p = get_pos(callsign)
+            a = c.get(callsign)
+            if not p or sim_time() - p.sim_time > 10:
+                _aircrafts.remove(callsign)
+                a.state=0
+            a.save()
+        get_cache('default').set('last_update',timezone.now())
+        
 def process_queues():
     for apt in orders:
         if len(orders[apt]):
@@ -40,14 +56,69 @@ def process_queues():
                 o.confirmed=True
                 print "activating order ",o
                 o.save()
-                
+
+def get_airport(icao):
+    a = get_cache('airports').get(icao)
+    if not a:
+        try:
+            a = Airport.objects.get(icao=icao)
+            get_cache('airports').set(icao,a)
+        except Airport.DoesNotExist as e:
+            print "ERROR. Airport not found:",icao,e
+    return a
+
+def load_circuits(airport):
+    for circuit in Circuit.objects.filter(airport=airport):
+        circuit.init()
+        set_aircraft(circuit.aircraft)
+        get_cache('circuits').set(circuit.id,circuit)
+        print "Circuit %s added" % circuit
+             
+def get_controller(airport):
+    #TODO determinar el tipo de controlador y configurarlo
+    a = get_cache('controllers').get(airport.icao)
+    if not a:
+        print "Creating controller for %s" % airport
+        a=Tower(airport)
+        get_cache('controllers').set(airport.icao,a)
+        load_circuits(airport)
+    print "get_controller. returning %s" % a
+    return a
+
+def get_aicraft(callsign):
+    a = get_cache('aircrafts').get(callsign)
+    if not a:
+        try:
+            a,create = Aircraft.objects.get_or_create(callsign=pos.callsign())
+            if create:
+                print "New Plane:", a
+            a.state = 1
+            set_aircraft(a)
+        except Exception as e:
+            print "ERROR. Can't find or create aircraft:",callsign,e
+    return a
+
+def set_aircraft(aircraft):
+    get_cache('aircrafts').set(aircraft.callsign,aircraft)
+    if not _aircrafts.count(aircraft.callsign):
+        print "adding aircraft to cache: %s" % aircraft.callsign
+        _aircrafts.append(aircraft.callsign)
+
+def get_pos(callsign):
+    pos = get_cache('positions').get(callsign)
+    # TODO: if doesn't exists, see if we can recreate it from the aircraft.
+    return pos
+
+def set_pos(pos):
+    pos.sim_time = sim_time()
+    get_cache('positions').set(pos.callsign(),pos)
+    
 @receiver(post_save,sender=Request)
 def process_request(sender, instance, **kwargs):
     req = instance.get_request()
-    airport = Airport.objects.get(icao=req.apt)
+    airport = get_airport(req.apt)
     controller = get_controller(airport)
     order= controller.manage(instance)
-        
     if order:
         order.date = timezone.now()
         order.sender = airport
@@ -55,27 +126,15 @@ def process_request(sender, instance, **kwargs):
         order.add_param(Order.PARAM_RECEIVER,instance.sender.callsign)
         order.save()
         print "saving order",order
-        
         queue_order(order)
 
-def get_mpplanes(apt):
+def get_mpplanes(aircraft):
     planes = []
-    # TODO: Search by aircraft closeness and radio frequency
-    cch = get_cache('default')
-    aicircuit = cch.get(apt.icao)
-    #print "get_mpplanes",aicircuit,apt
-    if aicircuit==None:
-        try:
-            aicircuit= Circuit.objects.get(airport=apt)
-            cch.set(apt.icao,aicircuit)
-            aicircuit.reset()
-            cch.set(apt.icao,aicircuit)
-            print "Circuit loaded:",aicircuit
-        except Circuit.DoesNotExist:
-            cch.set(apt.icao,'',60)
-    elif aicircuit != '':
-        planes.append(aicircuit)
-        
+    sw = move(aircraft.get_position(),-135,50*units.NM,aircraft.altitude)
+    ne = move(aircraft.get_position(),45,50*units.NM,aircraft.altitude)
+    afs = Aircraft.objects.filter(state__gte=1,lat__lte=ne.x, lat__gte=sw.x,lon__lte=ne.y,lon__gte=sw.y)
+    for af in afs:
+        planes.append(af)
     return planes
 
 def send_pos(callsign):
@@ -95,21 +154,24 @@ def send_pos(callsign):
             
             #print "sending to",order.sender.get_position(),msg.position,msg.orientation
             sendto(msg.send(), aircraft.get_addr())
-            
-            ''' send mp and ai planes positions to player ''' 
-            for mp in get_mpplanes(apt):
-                cch = get_cache('default')
-                wait = mp._waiting
-                #print "mp found:",wait,mp.time
-                mp.update(msg.time)
-                cch.set(apt.icao,mp)
-                if not wait:
-                    msg2 = mp.get_pos_message()
-                    msg2.time = msg.time
-                    msg2.lag=msg.lag
-                    #print "time:",msg.time, msg.lag,msg2.position
-                    sendto(msg2.send(),aircraft.get_addr())
-            
+        else:
+            msg = PosMsg()
+            msg.send_from(apt)
+            msg.time = sim_time()
+            msg.lag=0.1
+            sendto(msg.send(), aircraft.get_addr())
+    ''' send mp and ai planes positions to player ''' 
+    for mp in get_mpplanes(aircraft):
+        if mp.plans.count():
+            for p in mp.plans.all():
+                pos = p.update(msg.time)
+                set_pos(pos)
+                set_aircraft(p.aircraft)
+        else:
+            pos = get_pos(mp.callsign)
+        
+        if pos:
+            sendto(pos,aircraft.get_addr())
             
                 
 def sim_time():
@@ -124,47 +186,39 @@ def sendto(data,addr):
         #print "Error sending to", addr
 
 def process_pos(pos):
-    request_p = pos.get_property(PROP_REQUEST)
-    if not request_p:
-        return False
-    request = request_p['value']
-    aircraft,create = Aircraft.objects.get_or_create(callsign=pos.callsign())
-    if create:
-        print "New Plane:", aircraft 
-    freq = pos.get_property(PROP_FREQ)['value']
-    #print "request=", request
-    if aircraft.state == 0 or aircraft.ip != pos.header.reply_addr:
-        print "setting addr:",pos.header.reply_addr,pos.header.reply_port 
-        aircraft.ip=pos.header.reply_addr 
-        aircraft.port=pos.header.reply_port
-        aircraft.save()
-    elif aircraft.state==1:
-        geod = cart2geod(pos.position)
-        aircraft.lat=geod[0]
-        aircraft.lon=geod[1]
-        
-        
-        vor = Vector3D.from_array(pos.orientation)
-        qor = Quaternion.fromAngleAxis(vor)
-        qpos = Quaternion.fromLatLon(aircraft.lat, aircraft.lon)
-        h10r = qpos.conjugate().multiply(qor)
-        eul = h10r.getEuler().scale(units.RAD)
-        #print eul.get_array()
-        
-        aircraft.heading= eul.z
-        aircraft.altitude=geod[2]
-        aircraft.freq = freq
-        aircraft.save()
     
-    if request != aircraft.last_request or freq != aircraft.freq or not aircraft.state:
-        print "aircraft %s requests %s at %s" % (aircraft.callsign, request, freq) 
-        aircraft.state=1
-        aircraft.last_request = request
-        aircraft.save()
-        request = Request(sender=aircraft,date=timezone.now(),request=request)
-        request.save()
-        return True
-    return False
+    set_pos(pos)
+    aircraft = get_aicraft(pos.callsign())
+    aircraft.ip=pos.header.reply_addr 
+    aircraft.port=pos.header.reply_port
+    geod = cart2geod(pos.position)
+    aircraft.lat=geod[0]
+    aircraft.lon=geod[1]
+    aircraft.altitude=geod[2]
+    
+    qor = Quaternion.fromAngleAxis(Vector3D.from_array(pos.orientation))
+    h10r = Quaternion.fromLatLon(aircraft.lat, aircraft.lon).conjugate().multiply(qor)
+    eul = h10r.getEuler().scale(units.RAD)
+    aircraft.heading= eul.z
+    
+    freq = pos.get_property(PROP_FREQ)['value']
+    aircraft.freq = freq
+    
+    set_aircraft(aircraft)
+    
+    request_p = pos.get_property(PROP_REQUEST)
+    if request_p:
+        request = request_p['value']
+        if request != aircraft.last_request:
+            print "aircraft %s requests %s at %s" % (aircraft.callsign, request, freq) 
+            aircraft.last_request = request
+            set_aircraft(aircraft)
+            request = Request(sender=aircraft,date=timezone.now(),request=request)
+            request.save()
+    return True
+#     except Exception as e:
+#         print "ERROR al procesar posicion",e,pos
+#         return False
 
 #t = threading.Thread(target=processor, name='Servicio')
 DATE_STARTED = timezone.now()
@@ -174,6 +228,7 @@ MSG_MAGIC = 0x46474653
 # Reset all planes to 0
 Aircraft.objects.all().update(state=0)
 Order.objects.all().update(confirmed=False)
+get_cache('default').set('last_update',timezone.now())
 
 fgsock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
 fglisten = ("localhost",5100)
@@ -189,5 +244,6 @@ while cont:
     pos.header.reply_addr=addr[0]
     pos.header.reply_port=addr[1]
     resp = process_pos(pos)
+    save_cache()
     process_queues()
     send_pos(pos.callsign)
