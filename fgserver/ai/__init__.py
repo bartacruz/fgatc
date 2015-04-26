@@ -19,7 +19,20 @@ class PlaneInfo():
     LANDING = 9
     TOUCHDOWN = 10
     CIRCUIT=11
-        
+    CHOICES = (
+        (STOPPED,'Stopped'),
+        (PUSHBACK,'Pushback'),
+        (TAXIING,'Taxiing'),
+        (DEPARTING,'Departing'),
+        (TURNING,'Turning'),
+        (CLIMBING,'Climbing'),
+        (CRUISING,'Cruising'),
+        (APPROACHING,'Approaching'),
+        (LANDING,'Landing'),
+        (TOUCHDOWN,'Touchdown'),
+        (CIRCUIT,'In circuit')
+    )
+            
 class WayPoint():
     position=None
     name=None
@@ -58,10 +71,7 @@ class WayPoint():
         return "WP %s, type:%s, pos= %s" %(self.name,self.type,self.position)
 
 class AIPlane():
-    DEFAULT_MODEL="Aircraft/c310/Models/c310-dpm.xml"
-    aircraft=None
-    airport = None
-    model=DEFAULT_MODEL
+    circuit = None
     state = PlaneInfo.STOPPED
     position=None
     orientation=None
@@ -78,18 +88,15 @@ class AIPlane():
     target_altitude=0
     
     def callsign(self):
-        return self.aircraft.callsign
+        return self.circuit.aircraft.callsign
     
-    def __init__(self,callsign):
-        self.model = self.DEFAULT_MODEL
-        self.state = PlaneInfo.STOPPED
-        self.position = Position()
+    def __init__(self,circuit):
+        self.circuit = circuit
+        self.waypoint = self.circuit.waypoints.first()
+        self.position = self.waypoint.get_position()
         self.orientation = Position()
         self.linear_velocity = Position()
-        self.aircraft,created = Aircraft.objects.get_or_create(callsign=callsign)
-        self.aircraft.ip = None
-        self.aircraft.state=1
-        self.aircraft.save()
+        self.set_state(self.waypoint.status)
         
     def set_state(self,state):
         if state <=0:
@@ -132,33 +139,34 @@ class AIPlane():
         elif state == PlaneInfo.TOUCHDOWN:
             self.turn_rate=1
             self.speed=40*units.KNOTS
-        self.aircraft.lat = self.position.x
-        self.aircraft.lon = self.position.y
-        self.aircraft.altitude = self.position.z
-        self.aircraft.heading = self.course
-        self.aircraft.save()
         
         self.check_request()
-        
+    
+    def airport(self):
+        return self.circuit.airport
+
+    def aircraft(self):
+        return self.circuit.aircraft
+    
     def check_request(self):
-        print "check_request",self.airport,self.waypoint.type
-        if not self.airport:
+        print "check_request",self.waypoint.type
+        if not self.airport():
             return
         if self.waypoint.type == WayPoint.CIRCUIT_DOWNWIND:
-            req = "req=downwind;apt=%s" % self.airport.icao
-            request = Request(sender=self.aircraft,date=timezone.now(),request=req)
-            self.message="%s Tower, %s, Dowwnind for runway %s" % (self.airport.name, self.callsign(),self.airport.active_runway())
+            req = "req=downwind;apt=%s" % self.airport().icao
+            request = Request(sender=self.aircraft(),date=timezone.now(),request=req)
+            self.message="%s Tower, %s, Dowwnind for runway %s" % (self.airport().name, self.callsign(),self.airport().active_runway())
             print req,self.message
             request.save()
         elif self.waypoint.type == WayPoint.TAXI:
-            req = "req=readytko;apt=%s" % self.airport.icao
-            request = Request(sender=self.aircraft,date=timezone.now(),request=req)
-            self.message="%s Tower, %s, ready for takeoff" % (self.airport.name, self.callsign())
+            req = "req=readytko;apt=%s" % self.airport().icao
+            request = Request(sender=self.aircraft(),date=timezone.now(),request=req)
+            self.message="%s Tower, %s, ready for takeoff" % (self.airport().name, self.callsign())
             print req,self.message
             request.save()
         elif self.waypoint.type == WayPoint.PARKING:
-            req = "req=tunein;apt=%s" % self.airport.icao
-            request = Request(sender=self.aircraft,date=timezone.now(),request=req)
+            req = "req=tunein;apt=%s" % self.airport().icao
+            request = Request(sender=self.aircraft(),date=timezone.now(),request=req)
             self.message=""
             print req,self.message
             request.save()
@@ -255,6 +263,13 @@ class AIPlane():
         pos.position=self.position.get_array_cart()
         self._fill_properties(pos)
         return pos
+        
+    def update_aircraft(self):
+        a = self.aircraft()
+        a.lat = self.position.x
+        a.lon = self.position.y
+        a.altitude = self.position.z
+        a.heading= self.course
         
         
         

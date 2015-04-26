@@ -95,6 +95,7 @@ class Aircraft(Model):
     lat=DecimalField(default=0,max_digits=10,decimal_places=6)
     lon=DecimalField(default=0,max_digits=10,decimal_places=6)
     altitude=IntegerField(default=0)
+    model = CharField(max_length=96,blank=True,null=True)
     state = IntegerField(default=0)
     last_request=CharField(max_length=60,blank=True,null=True)
     last_order=CharField(max_length=60,blank=True,null=True)
@@ -145,7 +146,6 @@ class Order(Model):
     PARAM_ATIS='atis'
     PARAM_RECEIVER='to'
     
-
     def add_param(self,key,val):
         self._order[key]=val
 
@@ -161,11 +161,11 @@ class Order(Model):
     
     def __init__(self, *args, **kwargs):
         super(Order, self).__init__(*args, **kwargs)
-        try:
-            if self._order:
+        if self._order:
+            try:
                 self._order = eval(self.order)
-        except:
-            print "ERROR parseando orden"
+            except:
+                pass
 
     def save(self, *args, **kwargs):
         self.order=str(self._order)

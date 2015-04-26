@@ -31,11 +31,7 @@ class RunwayAdmin(ModelAdmin):
 class AircraftAdmin(ModelAdmin):
     list_display=('callsign','lat','lon','altitude','last_request','last_order','state')
 
-class CircuitAdmin(ModelAdmin):
-    list_display=('name','airport','description','radius','altitude')
-    search_fields = ['name','airport__icao','airport__name']
 
 admin.site.register(Airport, AirportAdmin)
 admin.site.register(Runway,RunwayAdmin)
 admin.site.register(Aircraft,AircraftAdmin)
-admin.site.register(Circuit,CircuitAdmin)

@@ -29,6 +29,7 @@ class Controller():
         self.airport=airport
     
     def manages(self,req):
+        # TODO: possible security leak?. A plane can issue a request with '__init__', or destroy. 
         return req and hasattr(self,req)
     
     def manage(self,request):
@@ -134,6 +135,3 @@ class Approach(Controller):
         self.name="Approach"
     
     
-def get_controller(airport):
-    #TODO determinar el tipo de controlador y configurarlo
-    return Tower(airport)

@@ -316,6 +316,7 @@ class PosMsg:
     angular_vel=[0,0,0]
     linear_accel=[0,0,0]
     angular_accel=[0,0,0]
+    sim_time=None
     def __init__(self):
         self.header = Header()
         self.properties = PropertyData()
