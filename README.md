@@ -9,10 +9,14 @@ The project contains:
 * Multiplayer server that 
   * creates AI ATCs on demand and react to player's messages
     
-    For instance, you can send a message like 
- > San Francisco Tower, Ready to taxi, YOURCALLSIGN 
+  For instance, you can send a message like 
+
+> San Francisco Tower, Ready to taxi, YOURCALLSIGN 
+ 
     and the AI ATC that you are tunned in will respond with something like 
- > YOURCALLSIGN, Taxi to runway 28 and hold short
+ 
+> YOURCALLSIGN, Taxi to runway 28 and hold short
+ 
   * Also creates AI traffic that can be configured with the Django admin app
 
 * Django admin app for configuration and administration of airports, aircrafts and AI traffic.
@@ -61,8 +65,11 @@ If you want to create a virtualenv, use the `requirements.txt` file to install a
 2. Create a database.
 3. Edit settings.py to suit your needs (mostly db configuration)
 4. Generate the tables with
-	$ python manage.py syncdb 
-	$ python manage.py migrate
+
+```
+$ python manage.py syncdb 
+$ python manage.py migrate
+```
 
 There's a neat Nasal script in the Nasal directory that does all the magic in the FlightGear side. 
 You can install it in your FlightGear root directory or in your local .fgfs/ directory, under `Nasal/`.
