@@ -1,0 +1,9 @@
+Django==1.6.11
+South==1.0.2
+django-admin-bootstrapped==1.6.3
+geographiclib==1.40
+metar==1.4.0
+numpy==1.9.2
+psycopg2==2.6
+scipy==0.15.1
+wsgiref==0.1.2
