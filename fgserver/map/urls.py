@@ -14,4 +14,5 @@ urlpatterns = patterns('',
 
     url(r'^map/', 'fgserver.map.views.map_view'),
     url(r'^aircrafts/', 'fgserver.map.views.aircrafts'),
+    url(r'^flightplan/', 'fgserver.map.views.flightplan'),
 )

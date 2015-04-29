@@ -8,6 +8,9 @@
 <link rel="stylesheet"
 	href="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.css" />
 <script src="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.js"></script>
+<script src="{{STATIC_URL}}js/rotated-marker.js"></script>
+<script src="{{STATIC_URL}}js/map.js"></script>
+
 <link rel="stylesheet" href="{{STATIC_URL}}css/style.css">
 <style type="text/css">
 #map { height:400px; }
@@ -15,107 +18,11 @@
 </head>
 <body>
  <div id="map"></div>
- <button type="button" onclick="start();">Start</button><button type="button" onclick="stop();">Stop</button>
+ <button type="button" onclick="start();">Start</button><button type="button" onclick="stop();">Stop</button><button type="button" onclick="get_wps();">wps</button>
 <script type="text/javascript">
-L.RotatedMarker = L.Marker.extend({
-	  options: { angle: 0 },
-	  _setPos: function(pos) {
-	    L.Marker.prototype._setPos.call(this, pos);
-	    if (L.DomUtil.TRANSFORM) {
-	      // use the CSS transform rule if available
-	      this._icon.style[L.DomUtil.TRANSFORM] += ' rotate(' + this.options.angle + 'deg)';
-	    } else if (L.Browser.ie) {
-	      // fallback for IE6, IE7, IE8
-	      var rad = this.options.angle * L.LatLng.DEG_TO_RAD,
-	      costheta = Math.cos(rad),
-	      sintheta = Math.sin(rad);
-	      this._icon.style.filter += ' progid:DXImageTransform.Microsoft.Matrix(sizingMethod=\'auto expand\', M11=' +
-	        costheta + ', M12=' + (-sintheta) + ', M21=' + sintheta + ', M22=' + costheta + ')';
-	    }
-	  }
-	});
-L.rotatedMarker = function(pos, options) {
-	    return new L.RotatedMarker(pos, options);
-	};
-
-
-
 var ll = [{{ airport.lat }}, {{airport.lon}}];
-var planes={};
-var map = L.map('map').setView(ll,13);
-L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png?{foo}', {foo: 'bar'}).addTo(map);
-
-function updatePlane(fields) {
-	marker = planes[fields.callsign];
-	marker.options.angle=fields.heading;
-	marker.setLatLng([fields.lat,fields.lon]);
-}
-function addPlane(fields) {
-	callsign=fields.callsign;
-	var planeicon = L.icon({
-	    iconUrl: '{{ STATIC_URL }}images/plane-25.png',
-	    iconSize: [fields.lat, fields.lon],
-	    className: callsign,
-	});
-	var marker = L.rotatedMarker(ll,{icon:planeicon,title:callsign,angle:fields.heading}).addTo(map);
-	planes[callsign]= marker;
-	console.debug(callsign,marker.getLatLng(),marker);
-}
-function rotate(callsign,adiff) {
-	marker = planes[callsign];
-	marker.options.angle += adiff;
-	marker.setLatLng(marker.getLatLng());
-	console.debug(callsign,marker.options.angle,marker);
-}
-function doit(ev) {
-	//marker.setLatLng([-34.454, -58.590]);
-	rotate(callsign=Object.keys(planes)[0],-10);//just for testing
-}
-function doit2(ev) {
-	rotate(callsign=Object.keys(planes)[0],+10);//just for testing
-}
-var _handler=null;
-function start() {
-	_handler = setInterval(fg_update,2000);
-}
-function stop() {
-	clearInterval(_handler);
-}
-function update_aircrafts(data,textStatus,jqXHR) {
-	console.debug("update aircraft",data);
-	for (i in data.aircrafts) {
-		
-		var acft= data.aircrafts[i];
-		console.debug(i,acft);
-		if (planes[acft.fields.callsign]) {
-			updatePlane(acft.fields);
-		} else {
-			addPlane(acft.fields);
-		}
-		
-	}
-}
-function update_error(XHR, textStatus, errorThrow) {
-	console.debug("ERROR",textStatus,errorThrow);
-}
-function fg_update(){
-	url = '/map/aircrafts/';
-	data = {
-			center: ""+map.getCenter(),
-			bounds: ""+map.getBounds(),
-			zoom: map.getZoom(),
-			lat: map.getCenter().lat,
-			lon: map.getCenter().lng
-	};
-	console.debug("update. data=",data);
-	$.ajax({
-		dataType: "json",
-		url: url,
-		data: data,
-		success: update_aircrafts,
-		error: update_error
-	});
-}
+var static_url='{{ STATIC_URL }}';
+initMap(ll);
 </script>
 
 </body>

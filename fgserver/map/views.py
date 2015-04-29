@@ -29,18 +29,18 @@ def aircrafts(request):
     acfts = []
     for aircraft in aircrafts:
         dist = get_distance(center, aircraft.get_position())
-        print "map: dist=",dist,aircraft
+        #print "map: dist=",dist,aircraft
         acfts.append(aircraft)
     d = json.loads(serialize('json',acfts ))
-    print d    
+    #print d    
     return HttpResponse(json.dumps({'aircrafts': d}), mimetype='application/javascript;charset=utf-8"')
 
 def flightplan(request):
-    callsign = float(request.REQUEST.get('callsign'))
+    callsign = request.REQUEST.get('callsign')
     wps = WayPoint.objects.filter(flightplan__aircraft__callsign=callsign)
     d = json.loads(serialize('json',wps ))
     print callsign, d    
-    return HttpResponse(json.dumps({'waypoings': d}), mimetype='application/javascript;charset=utf-8"')
+    return HttpResponse(json.dumps({'waypoints': d}), mimetype='application/javascript;charset=utf-8"')
 
     
 
