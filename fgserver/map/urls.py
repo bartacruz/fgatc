@@ -12,7 +12,7 @@ urlpatterns = patterns('',
     # url(r'^$', 'fgserver.views.home', name='home'),
     # url(r'^blog/', include('blog.urls')),
 
-    url(r'^map/', 'fgserver.map.views.map_view'),
+    url(r'^$', 'fgserver.map.views.map_view'),
     url(r'^aircrafts/', 'fgserver.map.views.aircrafts'),
     url(r'^flightplan/', 'fgserver.map.views.flightplan'),
 )
