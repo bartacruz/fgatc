@@ -77,7 +77,7 @@ def move(position, course, dist, alt):
     course = float(course) / RAD
     dist = float(dist) / ERAD
     alt = float(alt)
-    # position = position.to_cart()
+    #position = position.to_cart()
     lat = position.x / RAD
     lon = position.y / RAD
     lat = asin(sin(lat) * cos(dist)
@@ -88,6 +88,10 @@ def move(position, course, dist, alt):
     lat = lat * RAD
     lon = lon * RAD
     return Position(lat, lon, alt)
+
+def movec(position,course,dist,alt):
+    p = position.to_geod()
+    return move(p, course, dist, alt)
 
 def cart2geod(cart):
     _EQURAD = 6378137.0
@@ -171,9 +175,14 @@ class Vector3D():
         return Vector3D(self.x / length, self.y / length, self.z / length)
     def get_array_cart(self):
         return geod2cart(self.get_array())
+    def get_array_geod(self):
+        return cart2geod(self.get_array())
     
     def to_cart(self):
         c = self.get_array_cart()
+        return Vector3D(c[0], c[1], c[2])
+    def to_geod(self):
+        c = self.get_array_geod()
         return Vector3D(c[0], c[1], c[2])
     
     @staticmethod
@@ -340,9 +349,7 @@ def get_distance(fro, to, unit=meter):
 def get_heading_to(fro, to):
     info = Geodesic.WGS84.Inverse(fro.x, fro.y, to.x, to.y)
     heading = info['azi2']
-    if heading > 360.0:
-        heading = heading - 360.0
-    return heading
+    return normdeg(heading)
 
 def random_callsign():
     return "%s%s-%s%s%s" % (chr(randint(65, 90)), chr(randint(65, 90)), chr(randint(65, 90)), chr(randint(65, 90)), chr(randint(65, 90)))

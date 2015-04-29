@@ -28,35 +28,9 @@ orders = {}
 
 UPDATE_RATE=2
 _aircrafts=[]
-def queue_order(order):
-    print "queue_order.",order
-    orders.setdefault(order.sender.icao,[]).append(order)
-    
-def save_cache():
-    _last_update = get_cache('default').get('last_update')
-    if not _last_update or (timezone.now() - _last_update).total_seconds() > UPDATE_RATE:
-        c = get_cache('aircrafts')
-        for callsign in _aircrafts:
-            #print "saving aircraft %s" % callsign
-            p = get_pos(callsign)
-            a = c.get(callsign)
-            if not p or sim_time() - p.sim_time > 10:
-                _aircrafts.remove(callsign)
-                a.state=0
-            a.save()
-        get_cache('default').set('last_update',timezone.now())
-        
-def process_queues():
-    for apt in orders:
-        if len(orders[apt]):
-            o = orders[apt][0]
-            dif =(timezone.now() - o.date).total_seconds()
-            if dif > 5+randint(0,5):
-                o = orders[apt].pop(0)
-                o.confirmed=True
-                print "activating order ",o
-                o.save()
-
+_aaa={}
+_circuits={}
+                    
 def get_airport(icao):
     a = get_cache('airports').get(icao)
     if not a:
@@ -71,7 +45,7 @@ def load_circuits(airport):
     for circuit in Circuit.objects.filter(airport=airport):
         circuit.init()
         set_aircraft(circuit.aircraft)
-        get_cache('circuits').set(circuit.id,circuit)
+        set_circuit(circuit)
         print "Circuit %s added" % circuit
              
 def get_controller(airport):
@@ -86,12 +60,15 @@ def get_controller(airport):
     return a
 
 def get_aicraft(callsign):
-    a = get_cache('aircrafts').get(callsign)
+    #a = get_cache('aircrafts').get(callsign)
+    a = _aaa.get(callsign)
     if not a:
         try:
             a,create = Aircraft.objects.get_or_create(callsign=pos.callsign())
             if create:
                 print "New Plane:", a
+            else:
+                print "Loaded plane",a
             a.state = 1
             set_aircraft(a)
         except Exception as e:
@@ -99,7 +76,8 @@ def get_aicraft(callsign):
     return a
 
 def set_aircraft(aircraft):
-    get_cache('aircrafts').set(aircraft.callsign,aircraft)
+    _aaa[aircraft.callsign]=aircraft
+    #get_cache('aircrafts').set(aircraft.callsign,aircraft)
     if not _aircrafts.count(aircraft.callsign):
         print "adding aircraft to cache: %s" % aircraft.callsign
         _aircrafts.append(aircraft.callsign)
@@ -109,10 +87,59 @@ def get_pos(callsign):
     # TODO: if doesn't exists, see if we can recreate it from the aircraft.
     return pos
 
+def set_circuit(circuit):
+    if circuit:
+        #print "storing circuit",circuit.__dict__
+        #get_cache('circuits').set(circuit.name,circuit)
+        if not _circuits.has_key(circuit.name):
+            print "storing circuit"
+            _circuits[circuit.name]=circuit
+        
+def get_circuit(name):
+    #return get_cache('circuits').get(name)
+    return _circuits[name]
+
 def set_pos(pos):
-    pos.sim_time = sim_time()
-    get_cache('positions').set(pos.callsign(),pos)
+    if pos:
+        pos.sim_time = sim_time()
+        get_cache('positions').set(pos.callsign(),pos)
     
+def queue_order(order):
+    print "queue_order.",order
+    orders.setdefault(order.sender.icao,[]).append(order)
+    
+        
+def process_queues():
+    for apt in orders:
+        if len(orders[apt]):
+            o = orders[apt][0]
+            dif =(timezone.now() - o.date).total_seconds()
+            if dif > 10+randint(0,5):
+                o = orders[apt].pop(0)
+                o.confirmed=True
+                print "activating order ",o
+                o.save()
+                if not o.receiver.ip:
+                    c = get_circuit(o.receiver.callsign)
+                    print "processint order",o
+                    c.process_order(o)
+                    set_circuit(c)
+                
+def save_cache():
+    _last_update = get_cache('default').get('last_update')
+    if not _last_update or (timezone.now() - _last_update).total_seconds() > UPDATE_RATE:
+        for callsign in _aircrafts:
+            p = get_pos(callsign)
+            a = get_aicraft(callsign)
+            #print "saving aircraft %s" % a.__dict__
+            if p and sim_time() - p.sim_time > 10:
+                print "Deactivating aircraft: %s" % callsign, sim_time(),p.sim_time
+                _aircrafts.remove(callsign)
+                a.state=0
+            #print "saving aircraft", a.callsign, a.lat,a.lon,a.altitude
+            a.save()
+        get_cache('default').set('last_update',timezone.now())
+
 @receiver(post_save,sender=Request)
 def process_request(sender, instance, **kwargs):
     req = instance.get_request()
@@ -134,7 +161,8 @@ def get_mpplanes(aircraft):
     ne = move(aircraft.get_position(),45,50*units.NM,aircraft.altitude)
     afs = Aircraft.objects.filter(state__gte=1,lat__lte=ne.x, lat__gte=sw.x,lon__lte=ne.y,lon__gte=sw.y)
     for af in afs:
-        planes.append(af)
+        if af.callsign != aircraft.callsign:
+            planes.append(af)
     return planes
 
 def send_pos(callsign):
@@ -164,14 +192,26 @@ def send_pos(callsign):
     for mp in get_mpplanes(aircraft):
         if mp.plans.count():
             for p in mp.plans.all():
-                pos = p.update(msg.time)
-                set_pos(pos)
-                set_aircraft(p.aircraft)
+                if p.circuit:
+                    cir = get_circuit(p.circuit.name)
+                    if cir: 
+                        pos = cir.update(msg.time)
+                        set_circuit(cir)
+                        set_aircraft(cir.aircraft)
+                        aaa= get_aicraft(cir.aircraft.callsign)
+                else:
+                    pos = p.update(msg.time)
+                
+                if pos:
+                    set_pos(pos)
         else:
             pos = get_pos(mp.callsign)
         
         if pos:
-            sendto(pos,aircraft.get_addr())
+            pos.time = sim_time()
+            pos.lag=0.1
+            #print "sending mp",pos.__dict__
+            sendto(pos.send(),aircraft.get_addr())
             
                 
 def sim_time():
