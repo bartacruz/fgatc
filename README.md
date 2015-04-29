@@ -1,5 +1,5 @@
-# fgatc
-FlightGear AI ATC and Aircraft multiplayer server
+#FlightGear AI ATC and Aircraft multiplayer server
+
 **In early-alpha stage**
 
 The project contains:
@@ -8,10 +8,11 @@ The project contains:
 
 * Multiplayer server that 
   * creates AI ATCs on demand and react to player's messages
+    
     For instance, you can send a message like 
-    > San Francisco Tower, Ready to taxi, YOURCALLSIGN 
+ > San Francisco Tower, Ready to taxi, YOURCALLSIGN 
     and the AI ATC that you are tunned in will respond with something like 
-    > YOURCALLSIGN, Taxi to runway 28 and hold short
+ > YOURCALLSIGN, Taxi to runway 28 and hold short
   * Also creates AI traffic that can be configured with the Django admin app
 
 * Django admin app for configuration and administration of airports, aircrafts and AI traffic.
@@ -23,25 +24,35 @@ The project contains:
 
 * Python (tested with v2.7)
 * Django (tested with v1.6)
+
   `pip install django==1.6.11`
 * Python database driver for your DB of choice (psycopg2, python-mysql,etc)  
-* Geographiclib <https://pypi.python.org/pypi/geographiclib>
+* [Geographiclib] (https://pypi.python.org/pypi/geographiclib)
+
   Install with `pip install geographiclib`  
-* Metar <http://sourceforge.net/projects/python-metar/>
+* [Metar] (http://sourceforge.net/projects/python-metar/)
+
   Download sources and install with `python setup.py install`
 * NumPy 
+
   `pip install scipy`
-* SciPy <http://www.scipy.org/>
+* [SciPy] (http://www.scipy.org/)
+
   Install with `pip install scipy`
 * South 
+
   Install with `pip install south`
 * Django Admin Bootstrapped (optional)
+
   Install with `pip install django-admin-bootstrapped==1.6.3`
-  Make sure you install the 1.6.3 version. 
+
+  **Make sure you install the 1.6.3 version.** 
   
 
 Most of this packages (except python-metar) comes with all major Linux distributions. 
 Try installing them with Apt, Yum, etc.
+
+If you want to create a virtualenv, use the `requirements.txt` file to install all the dependencies.
 
 ## Install
 
@@ -71,4 +82,17 @@ and runway information into the database from FlightGear's apt-dat.gz (or any X-
   With no other parameters, it will show the SABE area (Buenos Aires). 
   Use the `icao` parameter to customize the startup location of the map. (i.e.: <http://localhost:8000/map/?icao=KSFO>) 
 
-** NOTE **: As you *may* have noticed, English is not my mother's tongue. If your eyes are bleeding for my spelling and/or grammar mistakes, feel free to edit this file (or any other) and make any corrections you like! 
+## Planned/ToDo
+* Enhance AI tower's traffic management. 
+* Create more AI traffic types (currently there's only a left circuit)
+* Implement ground routes directions using Dijkstra's shortest path algorithm.
+* Relay positions to FlightGear's official MP servers.
+* Enhance map interactions
+* Implement [RAAS] (http://wiki.flightgear.org/Runway_Awareness_and_Advisory_System)
+* ATIS service
+* Transponder code
+* Use [OpenRadar] (http://wiki.flightgear.org/OpenRadar) aliases for ATC responses
+
+
+## NOTE
+As you *may* have noticed, English is not my mother's tongue. If your eyes are bleeding for my spelling and/or grammar mistakes, feel free to edit this file (or any other) and make any corrections you like! 
