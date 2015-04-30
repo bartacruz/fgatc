@@ -8,19 +8,19 @@ import socket
 from xdrlib import Unpacker
 from fgserver.messages import PROP_REQUEST, PROP_FREQ, PosMsg, PROP_CHAT,\
     PROP_ORDER
-from fgserver.helper import cart2geod, random_callsign, Quaternion, Vector3D,\
+from fgserver.helper import cart2geod, Quaternion, Vector3D,\
     move
 from django.db.models.signals import post_save
 from django.dispatch.dispatcher import receiver
 from fgserver.models import Order, Aircraft, Request, Airport
 from django.utils import timezone
-from fgserver.controllers import Tower
+from fgserver.atc.models import Tower, ATC, Departure, Approach
 from random import randint
 from fgserver import units
 from django.core.cache import  get_cache
 import os 
 from fgserver.ai.models import Circuit
-from __builtin__ import Exception
+from __builtin__ import Exception, max
 os.environ['DJANGO_SETTINGS_MODULE'] = 'fgserver.settings' 
 import django
 
@@ -30,6 +30,8 @@ UPDATE_RATE=2
 _aircrafts=[]
 _aaa={}
 _circuits={}
+
+_last_orders={}
                     
 def get_airport(icao):
     a = get_cache('airports').get(icao)
@@ -41,22 +43,35 @@ def get_airport(icao):
             print "ERROR. Airport not found:",icao,e
     return a
 
+def set_circuit(circuit):
+    if circuit:
+        #print "storing circuit",circuit.__dict__
+        #get_cache('circuits').set(circuit.name,circuit)
+        if not _circuits.has_key(circuit.name):
+            print "storing circuit"
+            _circuits[circuit.name]=circuit
+        
+def get_circuit(name):
+    #return get_cache('circuits').get(name)
+    return _circuits.get(name)
+
 def load_circuits(airport):
-    for circuit in Circuit.objects.filter(airport=airport):
-        circuit.init()
-        set_aircraft(circuit.aircraft)
-        set_circuit(circuit)
-        print "Circuit %s added" % circuit
+    for circuit in airport.circuits.all():
+        if not get_circuit(circuit.name):
+            circuit.init()
+            set_aircraft(circuit.aircraft)
+            set_circuit(circuit)
+            print "Circuit %s added" % circuit
              
 def get_controller(airport):
-    #TODO determinar el tipo de controlador y configurarlo
-    a = get_cache('controllers').get(airport.icao)
-    if not a:
+    a,create=ATC.objects.get_or_create(airport=airport)
+    if create:
         print "Creating controller for %s" % airport
-        a=Tower(airport)
-        get_cache('controllers').set(airport.icao,a)
-        load_circuits(airport)
-    print "get_controller. returning %s" % a
+        Departure.objects.create(atc=a,name="%s Departure" % airport.name)
+        Approach.objects.create(atc=a,name="%s Approach" % airport.name)
+        Tower.objects.create(atc=a,name="%s Tower" % airport.name)
+    load_circuits(airport)
+    #print "get_controller. returning %s" % a
     return a
 
 def get_aicraft(callsign):
@@ -87,17 +102,6 @@ def get_pos(callsign):
     # TODO: if doesn't exists, see if we can recreate it from the aircraft.
     return pos
 
-def set_circuit(circuit):
-    if circuit:
-        #print "storing circuit",circuit.__dict__
-        #get_cache('circuits').set(circuit.name,circuit)
-        if not _circuits.has_key(circuit.name):
-            print "storing circuit"
-            _circuits[circuit.name]=circuit
-        
-def get_circuit(name):
-    #return get_cache('circuits').get(name)
-    return _circuits[name]
 
 def set_pos(pos):
     if pos:
@@ -105,7 +109,7 @@ def set_pos(pos):
         get_cache('positions').set(pos.callsign(),pos)
     
 def queue_order(order):
-    print "queue_order.",order
+    print "queue_order.",order,order.date
     orders.setdefault(order.sender.icao,[]).append(order)
     
         
@@ -114,11 +118,12 @@ def process_queues():
         if len(orders[apt]):
             o = orders[apt][0]
             dif =(timezone.now() - o.date).total_seconds()
-            if dif > 10+randint(0,5):
+            if dif > 1:
                 o = orders[apt].pop(0)
                 o.confirmed=True
                 print "activating order ",o
                 o.save()
+                _last_orders[o.sender.icao]=o
                 if not o.receiver.ip:
                     c = get_circuit(o.receiver.callsign)
                     print "processint order",o
@@ -139,21 +144,23 @@ def save_cache():
             #print "saving aircraft", a.callsign, a.lat,a.lon,a.altitude
             a.save()
         get_cache('default').set('last_update',timezone.now())
+@receiver(post_save,sender=Order)
+def process_order(sender, instance, **kwargs):
+    if not instance.confirmed:
+        queue_order(instance)
+
 
 @receiver(post_save,sender=Request)
 def process_request(sender, instance, **kwargs):
     req = instance.get_request()
     airport = get_airport(req.apt)
     controller = get_controller(airport)
-    order= controller.manage(instance)
-    if order:
-        order.date = timezone.now()
-        order.sender = airport
-        order.receiver = instance.sender
-        order.add_param(Order.PARAM_RECEIVER,instance.sender.callsign)
-        order.save()
-        print "saving order",order
-        queue_order(order)
+    controller.manage(instance)
+#     order= 
+#     if order:
+#         order.sender = airport
+#         order.save()
+#         print "saving order",order,order.date,timezone.now()
 
 def get_mpplanes(aircraft):
     planes = []
@@ -171,7 +178,9 @@ def send_pos(callsign):
     if request:
         req = request.get_request()
         apt = Airport.objects.get(icao=req.apt)
-        order = Order.objects.filter(sender=apt, confirmed=True).exclude(message='').order_by('-date').first()
+        order = _last_orders.get(apt.icao)
+        #order = apt.orders.filter(confirmed=True).exclude(message='').order_by('-date').first()
+        #order = Order.objects.filter(sender=apt, confirmed=True).exclude(message='').order_by('-date').first()
         if order:
             msg = PosMsg()
             msg.send_from(order.sender)

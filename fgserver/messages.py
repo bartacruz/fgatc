@@ -5,13 +5,13 @@ Created on Apr 16, 2015
 @author: bartacruz
 '''
 from xdrlib import Packer
-import helper
 
 PROP_FREQ = 10001
 PROP_CHAT = 10116
 PROP_REQUEST = 10117
 PROP_ORDER = 10118
 
+# FlightGear's MP messages properties.(from v2.12)
 PROPERTIES = {
   100: {'node': 'surface-positions/left-aileron-pos-norm', 'type':'FLOAT'},
   101: {'node': 'surface-positions/right-aileron-pos-norm', 'type':'FLOAT'},
@@ -188,30 +188,57 @@ PROPERTIES = {
   10319: {'node': 'sim/multiplay/generic/int[19]', 'type':'INT'}
 }
 
-def encode_node(unp,node):
-    packers={'INT': unp.pack_uint,
+class alias():
+    CLEAR_CROSS='clearcross'
+    CLEAR_LAND='clearland'
+    CLEAR_TK='cleartk'
+    INBOUND_APPROACH='inbound'
+    JOIN_CIRCUIT='join'
+    GO_AROUND='around'
+    LINEUP='lineup'
+    WAIT='wait'
+    REACH_CIRCUIT='cirreach'
+    REPORT_CIRCUIT='cirrep'
+    STARTUP='startup'
+    TAXI_READY='readytaxi'
+    TAXI_TO='taxito'
+    TRANSITION='transiton'
+    TUNE_IN='tunein'
+    TUNE_OK='tuneok'
+    
+    CIRCUIT_LEFT='left'
+    CIRCUIT_RIGHT='right'
+    CIRCUIT_STRAIGHT='straight'
+    CIRCUIT_CROSSWIND='crosswind'
+    CIRCUIT_DOWNWIND='downwind'
+    CIRCUIT_BASE='base'
+    CIRCUIT_FINAL='final'
+
+    
+def encode_node(unp, node):
+    packers = {'INT': unp.pack_uint,
                'BOOL': unp.pack_uint,
                'LONG': unp.pack_uint,
                'FLOAT': unp.pack_float,
                'DOUBLE': unp.pack_double,
                'STRING': unp.pack_string,
     }
-    #print "packing a ",node
+    # print "packing a ",node
     unp.pack_uint(node['id'])
     if node['type'] == 'STRING':
         val = node['value']
         aux = len(val)
         unp.pack_uint(aux)
-        aux2 = (aux+3)//4*4
+        aux2 = (aux + 3) // 4 * 4
         for s in val:
             unp.pack_uint(ord(s))
-        for i in range(aux2-aux):
+        for i in range(aux2 - aux):
             unp.pack_uint(0)
     else:
         return packers[node['type']](node['value'])
 
 def decode_node(unp):
-    unpackers={'INT': unp.unpack_uint,
+    unpackers = {'INT': unp.unpack_uint,
                'BOOL': unp.unpack_uint,
                'LONG': unp.unpack_uint,
                'FLOAT': unp.unpack_float,
@@ -221,84 +248,87 @@ def decode_node(unp):
     pid = unp.unpack_uint()
     if PROPERTIES.has_key(pid):
         prop = PROPERTIES[pid].copy()
-        prop['id']=pid
+        prop['id'] = pid
         ptype = prop["type"]
         if ptype == 'STRING':
             aux = unp.unpack_uint()
-            aux2 = (aux+3)//4*4
+            aux2 = (aux + 3) // 4 * 4
             val = ''
             for i in range(aux2):
-                #unp.set_position(unp.get_position()+4)
+                # unp.set_position(unp.get_position()+4)
                 s = unp.unpack_uint()
                 if (s > 0):
-                    val=val + chr(s)          
+                    val = val + chr(s)          
         else: 
             val = unpackers[ptype]()
-        prop['value']=val
+        prop['value'] = val
         return prop
     else:
         print "Propiedad invalida: %d" % pid
         return None
     
 class Header:
-    magic=0x46474653
-    version=0x00010001
-    msgid=7
-    msglen=0
-    reply_addr=0
-    reply_port=0
+    ''' Message header for MP message '''
+    magic = 0x46474653  # FGFS
+    version = 0x00010001
+    msgid = 7
+    msglen = 0
+    reply_addr = 0
+    reply_port = 0
     callsign = None
     
-    def receive(self,unp):
+    def receive(self, unp):
+        ''' unpacks the header data into the Header vars '''
         self.magic = unp.unpack_uint()
         self.version = unp.unpack_uint()
         self.msgid = unp.unpack_uint()
         self.msglen = unp.unpack_uint()
-        unp.unpack_uint() # reply_addr
-        unp.unpack_uint() # reply_port
-        self.callsign = unp.unpack_fstring(8).replace('\0','')
+        unp.unpack_uint()  # reply_addr
+        unp.unpack_uint()  # reply_port
+        self.callsign = unp.unpack_fstring(8).replace('\0', '')
          
     def send(self):
+        ''' packs the Header vars into a buffer '''
         unp = Packer()
         unp.pack_uint(self.magic)
         unp.pack_uint(self.version)
         unp.pack_uint(self.msgid)
         unp.pack_uint(self.msglen)
-        unp.pack_uint(0) # reply_addr y reply_port
-        unp.pack_uint(0) # reply_addr y reply_port
-        unp.pack_fstring(8,self.callsign)
+        unp.pack_uint(0)  # reply_addr y reply_port
+        unp.pack_uint(0)  # reply_addr y reply_port
+        unp.pack_fstring(8, self.callsign)
         return unp.get_buffer()
 
     def __str__(self):
-        return "magic=%s, version=%s, msgid=%s, msglen=%s, addr=%s, port=%s, callsign=%s" % (self.magic,self.version,self.msgid,self.msglen,self.reply_addr,self.reply_port,self.callsign)
+        return "magic=%s, version=%s, msgid=%s, msglen=%s, addr=%s, port=%s, callsign=%s" % (self.magic, self.version, self.msgid, self.msglen, self.reply_addr, self.reply_port, self.callsign)
 
 class PropertyData:
     properties = {}
     def __init__(self):
         self.properties = {}
         
-    def get(self,key):
+    def get(self, key):
         return self.properties.get(key)
-    def get_value(self,key):
+    def get_value(self, key):
         return self.properties.get(key)['value']
-    def set(self,key,prop):
-        self.properties[key]=prop
-    def has_key(self,key):
+    def set(self, key, prop):
+        self.properties[key] = prop
+    def has_key(self, key):
         return self.properties.has_key(key)
-    def set_prop(self,key,value):
+    def set_prop(self, key, value):
         prop = PROPERTIES.get(key)
-        prop['value']=value
-        prop['id']=key
+        prop['value'] = value
+        prop['id'] = key
         self.set(key, prop)
     
-    def receive(self,unp,end):
+    def receive(self, unp, end):
         while unp.get_position() < end:
             prop = decode_node(unp)
-            if prop:# -*- encoding: utf-8 -*-
+            if prop:  # -*- encoding: utf-8 -*-
 
-                self.properties[prop['id']]=prop
-                #print prop
-    def send(self,unp):
+                self.properties[prop['id']] = prop
+                # print prop
+    def send(self, unp):
         for key in self.properties:
             prop = self.get(key)
             encode_node(unp, prop)
@@ -310,75 +340,84 @@ class PosMsg:
     model = None
     time = None
     lag = None
-    position=[0,0,0]
-    orientation=[0.1,0.1,0.1]
-    linear_vel=[0,0,0]
-    angular_vel=[0,0,0]
-    linear_accel=[0,0,0]
-    angular_accel=[0,0,0]
-    sim_time=None
+    position = [0, 0, 0]
+    orientation = [0.1, 0.1, 0.1]
+    linear_vel = [0, 0, 0]
+    angular_vel = [0, 0, 0]
+    linear_accel = [0, 0, 0]
+    angular_accel = [0, 0, 0]
+    sim_time = None
     def __init__(self):
         self.header = Header()
         self.properties = PropertyData()
     
     def get_request(self):
+        ''' gets the player's request '''
         r = self.get_property(PROP_REQUEST)
         if r:
             return r
         return None
         
-    def send_from(self,apt):
-        self.header.callsign=apt.icao
-        self.model="ATC"
+    def send_from(self, apt):
+        ''' updates this PosMsg with data from the airport '''
+        self.header.callsign = apt.icao
+        self.model = "ATC"
         self.time = 0
         self.lag = 0
-        self.position=apt.get_position().get_array_cart()
+        self.position = apt.get_position().get_array_cart()
+
     def addr(self):
-        return (self.header.reply_addr,self.header.reply_port)
+        return (self.header.reply_addr, self.header.reply_port)
+
     def callsign(self):
         return self.header.callsign
+    
     def request(self):
         return self.get_property(PROP_REQUEST)
-    def get_property(self,key):
+    
+    def get_property(self, key):
         return self.properties.get(key)
-    def has_property(self,key):
+    
+    def has_property(self, key):
         return self.properties.has_property(key)
-    def set_property(self,key,value):
+    
+    def set_property(self, key, value):
         self.properties.set(key, value)
-    def receive(self,unp):
+    
+    def receive(self, unp):
         self.header.receive(unp)
         self.model = unp.unpack_fstring(96).strip()
-        self.time=unp.unpack_double()
-        self.lag=unp.unpack_double()
-        self.position=unp.unpack_farray(3, unp.unpack_double)
-        self.orientation=unp.unpack_farray(3, unp.unpack_float)
-        self.linear_vel=unp.unpack_farray(3, unp.unpack_float)
-        self.angular_vel=unp.unpack_farray(3, unp.unpack_float)
-        self.linear_accel=unp.unpack_farray(3, unp.unpack_float)
-        self.angular_accel=unp.unpack_farray(3, unp.unpack_float)
+        self.time = unp.unpack_double()
+        self.lag = unp.unpack_double()
+        self.position = unp.unpack_farray(3, unp.unpack_double)
+        self.orientation = unp.unpack_farray(3, unp.unpack_float)
+        self.linear_vel = unp.unpack_farray(3, unp.unpack_float)
+        self.angular_vel = unp.unpack_farray(3, unp.unpack_float)
+        self.linear_accel = unp.unpack_farray(3, unp.unpack_float)
+        self.angular_accel = unp.unpack_farray(3, unp.unpack_float)
         unp.unpack_uint()
-        #print "pad",pad
-        self.properties.receive(unp,self.header.msglen)
+        # print "pad",pad
+        self.properties.receive(unp, self.header.msglen)
 
     def send(self):
         unp = Packer()
-        unp.pack_fstring(96,self.model)
+        unp.pack_fstring(96, self.model)
         unp.pack_double(self.time)
         unp.pack_double(self.lag)
         unp.pack_farray(3, self.position, unp.pack_double)
-        unp.pack_farray(3, self.orientation,unp.pack_float)
-        unp.pack_farray(3, self.linear_vel,unp.pack_float)
-        unp.pack_farray(3, self.angular_vel,unp.pack_float)
-        unp.pack_farray(3, self.linear_accel,unp.pack_float)
-        unp.pack_farray(3, self.angular_accel,unp.pack_float)
+        unp.pack_farray(3, self.orientation, unp.pack_float)
+        unp.pack_farray(3, self.linear_vel, unp.pack_float)
+        unp.pack_farray(3, self.angular_vel, unp.pack_float)
+        unp.pack_farray(3, self.linear_accel, unp.pack_float)
+        unp.pack_farray(3, self.angular_accel, unp.pack_float)
         unp.pack_uint(0)
         self.properties.send(unp)
         msgbuf = unp.get_buffer()
         headbuf = self.header.send()
-        self.header.msglen=len(headbuf+msgbuf)
-        #print "setting len=",self.header.msglen
+        self.header.msglen = len(headbuf + msgbuf)
+        # print "setting len=",self.header.msglen
         headbuf = self.header.send()
         return headbuf + msgbuf
         
     def __str__(self):
-        return "time=%s, position=%s, model=%s" % (self.time,self.position,self.model)
+        return "time=%s, position=%s, model=%s" % (self.time, self.position, self.model)

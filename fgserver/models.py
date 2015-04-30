@@ -85,7 +85,12 @@ class Runway(Model):
     altitude =0
         
     def position(self):
+        ''' alias'''
+        return self.get_position()
+        
+    def get_position(self):
         return Position(float(self.lat),float(self.lon),self.altitude)
+    
     def __unicode__(self):
         return self.name
     
@@ -111,16 +116,16 @@ class Aircraft(Model):
         return None
 
     def get_position(self):
-        return Position(self.lat, self.lon, self.altitude)
+        return Position(float(self.lat), float(self.lon), float(self.altitude))
     
     def __unicode__(self):
         return self.callsign
 
 class Request(Model):
     date = DateTimeField()
-    sender = ForeignKey(Aircraft)
+    sender = ForeignKey(Aircraft, related_name='requests')
     request = CharField(max_length=255)
-
+    
     def get_request(self):
         if self.request:
             return type('new_dict', (object,),{p.split('=')[0]:p.split('=')[1] for p in self.request.split(';')})
@@ -128,18 +133,22 @@ class Request(Model):
     
 class Order(Model):
     date = DateTimeField()
-    receiver = ForeignKey(Aircraft)
-    sender = ForeignKey(Airport)
+    receiver = ForeignKey(Aircraft, related_name='orders')
+    sender = ForeignKey(Airport, related_name='orders')
     order = CharField(max_length=255)
     message = CharField(max_length=255)
     confirmed = BooleanField(default=False)
 
-    _order={}
     PARAM_ORDER='ord'
     PARAM_RUNWAY='rwy'
     PARAM_PARKING='park'
     PARAM_AIRPORT='apt'
+    PARAM_CIRCUIT_WP='cirw'
+    PARAM_CIRCUIT_TYPE='cirt'
+    PARAM_LINEUP='lnup'
+    PARAM_NUMBER='number'
     PARAM_HOLD='hld'
+    PARAM_SHORT='short'
     PARAM_REPEAT='repeat'
     PARAM_ALTITUDE='alt'
     PARAM_LEG='leg'
@@ -151,6 +160,10 @@ class Order(Model):
 
     def get_param(self,key,default=None):
         return self._order.get(key,default)
+  
+    def get_instruction(self):
+        return self.get_param(Order.PARAM_ORDER)
+    
     def get_order(self):
         ret = {}
         for (k, v) in self._order.items():
@@ -158,19 +171,24 @@ class Order(Model):
                 v = str(v)
             ret[k]=v
         return str(ret)
+
+    def short(self):
+        return self.get_param(Order.PARAM_SHORT, 0)
+    
+    def hold(self):
+        return self.get_param(Order.PARAM_HOLD, 0)
     
     def __init__(self, *args, **kwargs):
         super(Order, self).__init__(*args, **kwargs)
-        if self._order:
-            try:
-                self._order = eval(self.order)
-            except:
-                pass
-
+        try:
+            self._order = eval(self.order)
+        except:
+            self._order = {} 
+        
     def save(self, *args, **kwargs):
         self.order=str(self._order)
         super(Order, self).save(*args, **kwargs)
             
     def __unicode__(self):
-        return self.order
+        return "%s: to %s = %s" %( self.id,self.receiver,self.order)
 
