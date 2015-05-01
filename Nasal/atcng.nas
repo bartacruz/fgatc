@@ -16,6 +16,7 @@ var atcnode=nil;
 var atclistener = nil;
 var selected_runway="";
 var last_order=nil;
+var last_order_string=nil;
 var viewnode = "depart";
 var CONFIG_DLG = 0;
 
@@ -76,6 +77,9 @@ var parse_message = func(tag) {
 var sendmessage = func(message="",dlg=1){
 	var msg = parse_message(message);
 	var request = sprintf("req=%s;apt=%s",message,airport.id);
+	if (message=='roger' and last_order != nil){
+		request = sprintf("%s;laor=%s",request,last_order['ord']);
+	}
 	print(sprintf("Sendmessage: %s, %s",request , msg));
 	setprop(pilotchannel,request);
 	setprop(chatchannel,msg);
@@ -133,8 +137,10 @@ var readmessage = func(node=nil) {
 	print("readmessage: " ~ order);
 	if (order == '') {
 		last_order = nil;
+		last_order_string=nil;
 		return;
 	}
+	last_order_string=order;
 	var aux=sprintf("return %s",order);
 	var ff = call(compile,[aux],var err=[]);
 	if (!size(err)) {
@@ -155,21 +161,17 @@ var readmessage = func(node=nil) {
 }
 
 var get_dialog_column=func(tag){
-	var legend= parse_message(tag);
-	print("get_dialog_column");
-	debug.dump(tag);
-	debug.dump(legend);
-	
+	var legend= parse_message(tag);	
 	var col ={ type: "button", legend: legend, code: tag, halign: "right", callback: "atcng.sendmessage" };
 	return col;
 }
 var dialog_columns=func(){
 	var cols = [];
-	print (sprintf("dialog_cols. view=%s, last_order=%s",viewnode,last_order));
+	# print (sprintf("dialog_cols. view=%s, last_order=%s",viewnode,last_order));
 	if (last_order != nil and last_order != "") {
 		append(cols,get_dialog_column('roger'));
 	}
-	if (viewnode == 'depart') {
+	if (viewnode == 'flow') {
 		if (last_order == nil or last_order == "")  {
 			append(cols,get_dialog_column('startup'));
 			append(cols,get_dialog_column('readytaxi'));
@@ -181,6 +183,12 @@ var dialog_columns=func(){
 		 		append(cols,get_dialog_column('readytko'));
 	     	}
 	    }
+	} else if (viewnode == 'depart') {
+
+		append(cols,get_dialog_column('startup'));
+		append(cols,get_dialog_column('readytaxi'));
+		 append(cols,get_dialog_column('holdingshort'));
+		 append(cols,get_dialog_column('readytko'));
 	} else if (viewnode == 'arrival') {
 		append(cols,get_dialog_column('inbound'));
     	append(cols,get_dialog_column('transition'));
@@ -189,9 +197,7 @@ var dialog_columns=func(){
     	append(cols,get_dialog_column('base'));
     	append(cols,get_dialog_column('final'));
     	append(cols,get_dialog_column('straight'));
-    	append(cols,get_dialog_column('clearrw'));
-    	
-    	
+    	append(cols,get_dialog_column('clearrw'));    	
     }
      return cols;
 }
@@ -202,6 +208,7 @@ var set_comm = func(apt,comm) {
 	setprop(atcng.aptcode_node, apt.id);
 	setprop(atcng.aptname_node, apt.name);
 	print("ATCNG set_comm " ~ atcng.comm.ident);
+	screen.log.write(sprintf("Tunned to %s", atcng.comm.ident),0.7, 1.0, 0.7);
 					
 };
 var update = func {
@@ -285,6 +292,9 @@ var dialog = {
 		b1.node.setValues({ type: "button", legend: "Reset", code: "reset", halign: "right", callback: "atcng.reset" });
         b1.setBinding("nasal", 'atcng.reset()');		
         b2 = options.addChild("button");
+		b2.node.setValues({ type: "button", legend: "Flow", code: "flow", halign: "right", callback: "atcng.setview" });
+        b2.setBinding("nasal", 'atcng.setview("flow")');		
+        b2 = options.addChild("button");
 		b2.node.setValues({ type: "button", legend: "Depart", code: "depart", halign: "right", callback: "atcng.setview" });
         b2.setBinding("nasal", 'atcng.setview("depart")');		
         b2 = options.addChild("button");
@@ -323,6 +333,10 @@ var dialog = {
     
 #################################################################
     show : func {
+    	if (atcng.airport == nil) {
+    		print("Not tunned to an ATC.");
+    		return;
+    	}
         if (!CONFIG_DLG) {
             CONFIG_DLG = 1;
             me.init();
@@ -332,7 +346,6 @@ var dialog = {
 	}
 };
 
-atcng.update();
 setlistener("/ai/models/model-added",func settimer(atcng.check_model,1));
-setlistener("/instrumentation/comm/frequencies/selected-mhz",atcng.update);
+setlistener("/instrumentation/comm/frequencies/selected-mhz",atcng.update,1,0);
 print("ATCNG started");

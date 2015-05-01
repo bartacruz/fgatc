@@ -12,8 +12,8 @@ The project contains:
   For instance, you can send a message like 
 
 > San Francisco Tower, Ready to taxi, YOURCALLSIGN 
- 
-    and the AI ATC that you are tunned in will respond with something like 
+
+  and the AI ATC that you are tunned in will respond with something like 
  
 > YOURCALLSIGN, Taxi to runway 28 and hold short
  
@@ -83,7 +83,7 @@ and runway information into the database from FlightGear's apt-dat.gz (or any X-
   * Create airports and runways
   * Create AI Aircrafts.
 3. Run the server: `$ python server.py`
-4. Start Flightgear and use the server address as a multiplayer server.
+4. Start Flightgear and use the server address as a multiplayer server. Tune the radio to some controller's freq.
   Now you can use the menu with the key `'` and communicate with the towers.
 5. Access the interactive map in `/map/` (i.e.: <http://localhost:8000/map/>). 
   With no other parameters, it will show the SABE area (Buenos Aires). 
