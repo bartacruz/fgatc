@@ -5,15 +5,16 @@ Created on Apr 13, 2015
 @author: bartacruz
 '''
 
-from math import sqrt, fabs, atan2, pi, sin, cos, asin, acos, atan
+from math import sqrt, fabs, atan2, pi, sin, cos, asin, acos
 from fgserver.settings import METAR_URL
 from metar.Metar import Metar
 import urllib
 from geographiclib.geodesic import Geodesic
 from scipy import rint
-from __builtin__ import float
+from __builtin__ import float, min
 from random import randint
 from fgserver import units
+from fgserver.units import ERAD, RAD, EPSILON
 
 LETTERS = [
 "alpha", "bravo", "charlie", "delta", "echo",
@@ -22,10 +23,6 @@ LETTERS = [
 "papa", "quebec", "romeo", "sierra", "tango",
 "uniform", "victor", "whiskey", "xray", "yankee", "zulu"
 ]
-orders = []
-ERAD = 6378138.12
-RAD = 180 / pi
-EPSILON = 0.0000000000001
 
     
 def short_callsign(callsign):
@@ -47,7 +44,31 @@ def normalize(a):
     while a < 0:
         a += 360
     return a
-    
+
+def angle_diff(a,b):
+    d1 = normalize(a-b)
+    d2 = normalize(b-a)
+    return min(d1, d2)
+
+def point_inside_polygon(x,y,poly):
+
+    n = len(poly)
+    inside =False
+
+    p1x,p1y = poly[0]
+    for i in range(n+1):
+        p2x,p2y = poly[i % n]
+        if y > min(p1y,p2y):
+            if y <= max(p1y,p2y):
+                if x <= max(p1x,p2x):
+                    if p1y != p2y:
+                        xinters = (y-p1y)*(p2x-p1x)/(p2y-p1y)+p1x
+                    if p1x == p2x or x <= xinters:
+                        inside = not inside
+        p1x,p1y = p2x,p2y
+
+    return inside
+
 def geod2cart(geod):
     
     _SQUASH = 0.9966471893352525192801545
@@ -340,9 +361,8 @@ class Quaternion():
         nn = angle_axis.scale(sin(angle) / naxis)
         return Quaternion(cos(angle), nn.x, nn.y, nn.z)
         
-
-meter = 1
-def get_distance(fro, to, unit=meter):
+    
+def get_distance(fro, to, unit=units.M):
     info = Geodesic.WGS84.Inverse(fro.x, fro.y, to.x, to.y)
     return info['s12'] * unit
 

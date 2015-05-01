@@ -4,8 +4,10 @@ from fgserver.messages import PosMsg, PROP_CHAT
 from fgserver import units
 from __builtin__ import round, min
 from fgserver.units import FT
-from fgserver.models import Aircraft, Request, Airport
+from fgserver.models import Aircraft, Request, Airport, Order
 from django.utils import timezone
+from datetime import timedelta
+from random import randint
 
 class PlaneInfo():
     
@@ -27,6 +29,10 @@ class PlaneInfo():
     CIRCUIT_BASE=13
     CIRCUIT_FINAL=14
     CIRCUIT_STRAIGHT=15
+    SHORT=16
+    LINED_UP=17
+    
+    TUNNED=18
     
     CHOICES = (
         (0,'None'),               
@@ -45,8 +51,32 @@ class PlaneInfo():
         (CIRCUIT_BASE,'Base'),
         (CIRCUIT_FINAL,'Final'),
         (CIRCUIT_STRAIGHT,'Straight'),
+        (SHORT,'Short of runway'),
+        (LINED_UP,'Lined up'),
+        (TUNNED,'Tunned'),
     )
-            
+    CHOICES_STR = (
+        ('0','None'),               
+        (str(STOPPED),'Stopped'),
+        (str(PUSHBACK),'Pushback'),
+        (str(TAXIING),'Taxiing'),
+        (str(DEPARTING),'Departing'),
+        (str(TURNING),'Turning'),
+        (str(CLIMBING),'Climbing'),
+        (str(CRUISING),'Cruising'),
+        (str(APPROACHING),'Approaching'),
+        (str(LANDING),'Landing'),
+        (str(TOUCHDOWN),'Touchdown'),
+        (str(CIRCUIT_CROSSWIND),'Crosswind'),
+        (str(CIRCUIT_DOWNWIND),'Downwind'),
+        (str(CIRCUIT_BASE),'Base'),
+        (str(CIRCUIT_FINAL),'Final'),
+        (str(CIRCUIT_STRAIGHT),'Straight'),
+        (str(SHORT),'Short of runway'),
+        (str(LINED_UP),'Lined up'),
+        (str(TUNNED),'Tunned'),
+    )
+         
 class AIPlane():
     circuit = None
     state = 0
@@ -57,7 +87,7 @@ class AIPlane():
     speed=0 #in M/s
     linear_velocity=None
     vertical_speed=0
-    turn_rate=0
+    turn_rate=1
     bank_sense=0
     message=""
     target_course=0
@@ -73,28 +103,38 @@ class AIPlane():
         self.position = self.waypoint.get_position()
         self.orientation = Position()
         self.linear_velocity = Position()
-        self.set_state(self.waypoint.status)
-        self.update_aircraft()
-        print "AIPlane %s created" % self.callsign()
+        #self.set_state(self.waypoint.status)
+        #self.update_aircraft()
+        self.log("created")
         
+    def log(self,*argv):
+        msg = "[AI %s]" % self.callsign()
+        for arg in argv:
+            msg += " %s" % arg
+        print msg
+
     def set_state(self,state):
         if state <=0:
             return
         changed = False
         if self.state != state:
-            print "State changed from %s to %s" % (self.state, state)
+            self.log("State changed from %s to %s" % (PlaneInfo.CHOICES[self.state][1],PlaneInfo.CHOICES[state][1]))
             changed = True
         self.state=state
-        if state == PlaneInfo.STOPPED or state == PlaneInfo.PUSHBACK:
+        laor = self.circuit.last_order()
+        
+        if state in [PlaneInfo.STOPPED, PlaneInfo.PUSHBACK]\
+                or (state==PlaneInfo.SHORT and laor.short())\
+                or (state==PlaneInfo.LINED_UP and laor.hold()):
             self.speed=0
             self.vertical_speed=0
             self.turn_rate=1
             self.target_vertical_speed=1
-        elif state == PlaneInfo.TAXIING:
+        elif state == PlaneInfo.TAXIING or (state==PlaneInfo.SHORT and not laor.short()):
             self.turn_rate = 40
             self.speed = 20*units.KNOTS
             self.target_vertical_speed=1
-        elif state == PlaneInfo.DEPARTING:
+        elif state == PlaneInfo.DEPARTING or (state==PlaneInfo.LINED_UP and laor.hold()):
             self.speed = 70*units.KNOTS
             self.target_vertical_speed=100*units.FPM
         elif state == PlaneInfo.CLIMBING:
@@ -128,16 +168,20 @@ class AIPlane():
 
     def aircraft(self):
         return self.circuit.aircraft
+    
     def send_request(self,req,msg):
         self.message=msg
-        request = Request(sender=self.aircraft(),date=timezone.now(),request=req)
+        date=timezone.now()
+        request = Request(sender=self.aircraft(),date=date,request=req)
+        self.log("Sending request",request)
         request.save()
-        
+
     def check_request(self):
-        print "check_request",self.waypoint.type
+        self.log("check_request",self.waypoint.type)
         from fgserver.ai.models import WayPoint
         if not self.airport():
             return
+        laor = self.circuit.last_order()
         if self.state == PlaneInfo.CIRCUIT_CROSSWIND:
             req = "req=crosswind;apt=%s" % self.airport().icao
             msg="%s Tower, %s, Crosswind for runway %s" % (self.airport().name, self.callsign(),self.airport().active_runway())
@@ -156,22 +200,19 @@ class AIPlane():
             self.send_request(req,msg)    
         elif self.state == PlaneInfo.PUSHBACK:
             req = "req=readytaxi;apt=%s" % self.airport().icao
-            request = Request(sender=self.aircraft(),date=timezone.now(),request=req)
-            self.message="%s Tower, %s, ready to taxi" % (self.airport().name, self.callsign())
-            print req,self.message
-            request.save()
-        elif self.state == PlaneInfo.TAXIING:
+            msg="%s Tower, %s, ready to taxi" % (self.airport().name, self.callsign())
+            self.send_request(req,msg)
+        elif self.state == PlaneInfo.LINED_UP:
             req = "req=readytko;apt=%s" % self.airport().icao
-            request = Request(sender=self.aircraft(),date=timezone.now(),request=req)
-            self.message="%s Tower, %s, ready for takeoff" % (self.airport().name, self.callsign())
-            print req,self.message
-            request.save()
+            msg="%s Tower, %s, ready for takeoff" % (self.airport().name, self.callsign())
+            self.send_request(req,msg)
+        elif self.state == PlaneInfo.SHORT:
+            req = "req=holdingshort;apt=%s" % self.airport().icao
+            msg="%s Tower, %s, holding short of runway %s" % (self.airport().name, self.callsign(),self.airport().active_runway())
+            self.send_request(req,msg)
         elif self.state== PlaneInfo.STOPPED and self.waypoint.type == WayPoint.PARKING:
             req = "req=tunein;apt=%s" % self.airport().icao
-            request = Request(sender=self.aircraft(),date=timezone.now(),request=req)
-            self.message=""
-            print req,self.message
-            request.save()
+            self.send_request(req,'')
 
     def move(self,course,distance,dt):
         self.target_course=course
