@@ -10,9 +10,6 @@ https://docs.djangoproject.com/en/1.6/ref/settings/
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 import os
-import djcelery
-
-djcelery.setup_loader()
 
 METAR_URL='http://weather.noaa.gov/pub/data/observations/metar/stations'
 METAR_UPDATE = 60*30 # in seconds
@@ -48,6 +45,7 @@ INSTALLED_APPS = (
     'django.contrib.staticfiles',
     'fgserver',
     'fgserver.ai',
+    'fgserver.atc',
     'south',
 )
 
@@ -97,9 +95,6 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/1.6/howto/static-files/
 
 STATIC_URL = '/static/'
-
-# Caches for the server.
-
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
@@ -127,3 +122,51 @@ CACHES = {
         'LOCATION': 'airports'
     },
 }
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'mail_admins': {
+            'level': 'ERROR',
+            'class': 'django.utils.log.AdminEmailHandler',
+        },
+        'console':{
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'debugfile':{
+           'class':'logging.handlers.WatchedFileHandler',
+            'filename': '/tmp/operaciones-debug.log',
+            'formatter': 'verbose',
+        },
+    },
+   'loggers': {
+        'django.request': {
+            'handlers': ['mail_admins'],
+            'level': 'ERROR',
+            'propagate': True,
+        },
+        'fgserver': {
+            'handlers': ['console', 'debugfile'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+       'django': {
+            'handlers': ['console','debugfile'],
+            'level': 'ERROR',
+            'propagate': True,
+        },
+
+    },
+    'formatters': {
+        'verbose': {
+            'format' : "[%(asctime)s] %(levelname)s %(message)s",
+            'datefmt' : "%Y-%m-%d %H:%M:%S"
+        },
+        'simple': {
+            'format': '%(levelname)s %(message)s'
+        },
+    },
+}
+

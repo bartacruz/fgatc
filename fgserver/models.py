@@ -17,6 +17,7 @@ from django.db.models.signals import post_save
 from random import randint
 from time import sleep
 from django.utils import timezone
+from fgserver import llogger, debug
 
 
 class Airport(Model):
@@ -48,12 +49,12 @@ class Airport(Model):
                     vmax = v
                     rwy = curr
             rwy.altitude = self.altitude
-            print "selected runway: ",rwy
+            debug(self.icao,"selected runway: ",rwy)
             return rwy
         else:
             rwy = self.runways.all().first()
             rwy.altitude = self.altitude
-            print "default runway: ",rwy
+            debug(self.icao,"default runway: ",rwy)
             return rwy
     def check_metar(self):
         try:
@@ -130,7 +131,10 @@ class Request(Model):
         if self.request:
             return type('new_dict', (object,),{p.split('=')[0]:p.split('=')[1] for p in self.request.split(';')})
         return None
-    
+
+    def __unicode__(self):
+        return "%s: from %s = %s" %( self.id,self.sender,self.request)
+
 class Order(Model):
     date = DateTimeField()
     receiver = ForeignKey(Aircraft, related_name='orders')
