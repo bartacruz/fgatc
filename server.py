@@ -16,7 +16,7 @@ from fgserver.models import Order, Aircraft, Request, Airport
 from django.utils import timezone
 from fgserver.atc.models import Tower, ATC, Departure, Approach
 from random import randint
-from fgserver import units
+from fgserver import units, llogger
 from django.core.cache import  get_cache
 import os 
 from fgserver.ai.models import Circuit
@@ -32,7 +32,19 @@ _aaa={}
 _circuits={}
 
 _last_orders={}
-                    
+
+def log(*argv):
+    msg = "[Server]"
+    for arg in argv:
+        msg += " %s" % arg
+    llogger.info(msg)
+
+def error(*argv):
+    msg = "[Server]"
+    for arg in argv:
+        msg += " %s" % arg
+    llogger.error(msg)
+
 def get_airport(icao):
     a = get_cache('airports').get(icao)
     if not a:
@@ -40,15 +52,15 @@ def get_airport(icao):
             a = Airport.objects.get(icao=icao)
             get_cache('airports').set(icao,a)
         except Airport.DoesNotExist as e:
-            print "ERROR. Airport not found:",icao,e
+            error("ERROR. Airport not found:",icao,e)
     return a
 
 def set_circuit(circuit):
     if circuit:
-        #print "storing circuit",circuit.__dict__
+        #log("storing circuit",circuit.__dict__)
         #get_cache('circuits').set(circuit.name,circuit)
         if not _circuits.has_key(circuit.name):
-            print "storing circuit"
+            log("storing circuit",circuit.name)
             _circuits[circuit.name]=circuit
         
 def get_circuit(name):
@@ -61,40 +73,41 @@ def load_circuits(airport):
             circuit.init()
             set_aircraft(circuit.aircraft)
             set_circuit(circuit)
-            print "Circuit %s added" % circuit
+            log("Circuit %s added" % circuit)
              
 def get_controller(airport):
     a,create=ATC.objects.get_or_create(airport=airport)
     if create:
-        print "Creating controller for %s" % airport
+        log("Creating controller for %s" % airport)
         Departure.objects.create(atc=a,name="%s Departure" % airport.name)
         Approach.objects.create(atc=a,name="%s Approach" % airport.name)
         Tower.objects.create(atc=a,name="%s Tower" % airport.name)
     load_circuits(airport)
-    #print "get_controller. returning %s" % a
+    #log("get_controller. returning %s" % a)
     return a
 
 def get_aicraft(callsign):
     #a = get_cache('aircrafts').get(callsign)
     a = _aaa.get(callsign)
+    #log(callsign,"a",a,"_aaa",_aaa)
     if not a:
         try:
             a,create = Aircraft.objects.get_or_create(callsign=pos.callsign())
             if create:
-                print "New Plane:", a
+                log("New Plane:", a)
             else:
-                print "Loaded plane",a
+                log("Loaded plane",a)
             a.state = 1
             set_aircraft(a)
         except Exception as e:
-            print "ERROR. Can't find or create aircraft:",callsign,e
+            log("ERROR. Can't find or create aircraft:",callsign,e)
     return a
 
 def set_aircraft(aircraft):
     _aaa[aircraft.callsign]=aircraft
     #get_cache('aircrafts').set(aircraft.callsign,aircraft)
     if not _aircrafts.count(aircraft.callsign):
-        print "adding aircraft to cache: %s" % aircraft.callsign
+        log("adding aircraft to cache: %s" % aircraft.callsign)
         _aircrafts.append(aircraft.callsign)
 
 def get_pos(callsign):
@@ -109,7 +122,7 @@ def set_pos(pos):
         get_cache('positions').set(pos.callsign(),pos)
     
 def queue_order(order):
-    print "queue_order.",order,order.date
+    log("queue_order.",order,order.date)
     orders.setdefault(order.sender.icao,[]).append(order)
     
         
@@ -121,12 +134,12 @@ def process_queues():
             if dif > 1:
                 o = orders[apt].pop(0)
                 o.confirmed=True
-                print "activating order ",o
+                log("activating order ",o)
                 o.save()
                 _last_orders[o.sender.icao]=o
                 if not o.receiver.ip:
                     c = get_circuit(o.receiver.callsign)
-                    print "processint order",o
+                    log("processint order",o)
                     c.process_order(o)
                     set_circuit(c)
                 
@@ -136,12 +149,12 @@ def save_cache():
         for callsign in _aircrafts:
             p = get_pos(callsign)
             a = get_aicraft(callsign)
-            #print "saving aircraft %s" % a.__dict__
+            #log("saving aircraft %s" % a.__dict__)
             if p and sim_time() - p.sim_time > 10:
-                print "Deactivating aircraft: %s" % callsign, sim_time(),p.sim_time
+                log("Deactivating aircraft: %s" % callsign, sim_time(),p.sim_time)
                 _aircrafts.remove(callsign)
                 a.state=0
-            #print "saving aircraft", a.callsign, a.lat,a.lon,a.altitude
+            #log("saving aircraft", a.callsign, a.lat,a.lon,a.altitude)
             a.save()
         get_cache('default').set('last_update',timezone.now())
 @receiver(post_save,sender=Order)
@@ -160,21 +173,26 @@ def process_request(sender, instance, **kwargs):
 #     if order:
 #         order.sender = airport
 #         order.save()
-#         print "saving order",order,order.date,timezone.now()
+#         log("saving order",order,order.date,timezone.now())
 
 def get_mpplanes(aircraft):
     planes = []
     sw = move(aircraft.get_position(),-135,50*units.NM,aircraft.altitude)
     ne = move(aircraft.get_position(),45,50*units.NM,aircraft.altitude)
-    afs = Aircraft.objects.filter(state__gte=1,lat__lte=ne.x, lat__gte=sw.x,lon__lte=ne.y,lon__gte=sw.y)
-    for af in afs:
-        if af.callsign != aircraft.callsign:
+    #afs = Aircraft.objects.filter(state__gte=1,lat__lte=ne.x, lat__gte=sw.x,lon__lte=ne.y,lon__gte=sw.y)
+    for af in _aaa.itervalues():
+        if af.callsign != aircraft.callsign and af.state >= 1 \
+        and af.lat<=ne.x and af.lat>=sw.x\
+        and af.lon<=ne.y and af.lon>=sw.y:
             planes.append(af)
     return planes
+    #return []
 
 def send_pos(callsign):
-    aircraft = Aircraft.objects.get(callsign=callsign)
-    request = Request.objects.filter(sender=aircraft).order_by('-date').first()
+    #aircraft = Aircraft.objects.get(callsign=callsign)
+    #request = Request.objects.filter(sender=aircraft).order_by('-date').first()
+    aircraft = get_aicraft(callsign)
+    request = aircraft.requests.last()
     if request:
         req = request.get_request()
         apt = Airport.objects.get(icao=req.apt)
@@ -189,7 +207,7 @@ def send_pos(callsign):
             msg.properties.set_prop(PROP_ORDER, order.get_order())
             msg.properties.set_prop(PROP_CHAT,order.message )
             
-            #print "sending to",order.sender.get_position(),msg.position,msg.orientation
+            #log("sending to",order.sender.get_position(),msg.position,msg.orientation)
             sendto(msg.send(), aircraft.get_addr())
         else:
             msg = PosMsg()
@@ -219,7 +237,7 @@ def send_pos(callsign):
         if pos:
             pos.time = sim_time()
             pos.lag=0.1
-            #print "sending mp",pos.__dict__
+            #log("sending mp",pos.__dict__)
             sendto(pos.send(),aircraft.get_addr())
             
                 
@@ -232,7 +250,7 @@ def sendto(data,addr):
         fgsock.sendto(data,addr)
     except:
         pass
-        #print "Error sending to", addr
+        #log("Error sending to", addr)
 
 def process_pos(pos):
     
@@ -259,14 +277,14 @@ def process_pos(pos):
     if request_p:
         request = request_p['value']
         if request != aircraft.last_request:
-            print "aircraft %s requests %s at %s" % (aircraft.callsign, request, freq) 
+            log("aircraft %s requests %s at %s. last=%s" % (aircraft.callsign, request, freq,aircraft.last_request) )
             aircraft.last_request = request
             set_aircraft(aircraft)
-            request = Request(sender=aircraft,date=timezone.now(),request=request)
-            request.save()
+            req = Request(sender=aircraft,date=timezone.now(),request=request)
+            req.save()
     return True
 #     except Exception as e:
-#         print "ERROR al procesar posicion",e,pos
+#         log("ERROR al procesar posicion",e,pos)
 #         return False
 
 #t = threading.Thread(target=processor, name='Servicio')
@@ -295,4 +313,4 @@ while cont:
     resp = process_pos(pos)
     save_cache()
     process_queues()
-    send_pos(pos.callsign)
+    send_pos(pos.callsign())
