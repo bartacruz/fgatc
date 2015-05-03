@@ -1,6 +1,6 @@
 from fgserver.helper import Position, get_distance, get_heading_to, Vector3D,\
     move, normdeg, Quaternion, geod2cart, normalize
-from fgserver.messages import PosMsg, PROP_CHAT
+from fgserver.messages import PosMsg, PROP_CHAT, alias
 from fgserver import units
 from __builtin__ import round, min
 from fgserver.units import FT
@@ -8,6 +8,7 @@ from fgserver.models import Aircraft, Request, Airport, Order
 from django.utils import timezone
 from datetime import timedelta
 from random import randint
+import fgserver
 
 class PlaneInfo():
     
@@ -108,10 +109,7 @@ class AIPlane():
         self.log("created")
         
     def log(self,*argv):
-        msg = "[AI %s]" % self.callsign()
-        for arg in argv:
-            msg += " %s" % arg
-        print msg
+        fgserver.info("AI %s" % self.callsign(),*argv)
 
     def set_state(self,state):
         if state <=0:
@@ -121,45 +119,45 @@ class AIPlane():
             self.log("State changed from %s to %s" % (PlaneInfo.CHOICES[self.state][1],PlaneInfo.CHOICES[state][1]))
             changed = True
         self.state=state
-        laor = self.circuit.last_order()
-        
+        laor = getattr(self.circuit,'_last_order',None)
+        if laor:
+            self.log(laor,laor.short(),laor.hold())
         if state in [PlaneInfo.STOPPED, PlaneInfo.PUSHBACK]\
-                or (state==PlaneInfo.SHORT and laor.short())\
-                or (state==PlaneInfo.LINED_UP and laor.hold()):
+                or (state==PlaneInfo.SHORT and laor and laor.short())\
+                or (state==PlaneInfo.LINED_UP and laor and laor.get_param(Order.PARAM_LINEUP)):
             self.speed=0
             self.vertical_speed=0
             self.turn_rate=1
             self.target_vertical_speed=1
         elif state == PlaneInfo.TAXIING or (state==PlaneInfo.SHORT and not laor.short()):
-            self.turn_rate = 40
+            self.turn_rate = 10
             self.speed = 20*units.KNOTS
             self.target_vertical_speed=1
         elif state == PlaneInfo.DEPARTING or (state==PlaneInfo.LINED_UP and laor.hold()):
+            self.turn_rate = 3
             self.speed = 70*units.KNOTS
             self.target_vertical_speed=100*units.FPM
         elif state == PlaneInfo.CLIMBING:
-            knots = self.speed/units.KNOTS
-            self.turn_rate = 49000/(knots*knots)
+            self.turn_rate = 3
             self.speed = 100*units.KNOTS
             self.target_vertical_speed=900*units.FPM
         elif state == PlaneInfo.CRUISING:
-            knots = self.speed/units.KNOTS
-            self.turn_rate = 49000/(knots*knots)
+            self.turn_rate = 3
             self.speed = 140*units.KNOTS
             self.target_vertical_speed=200*units.FPM
         elif state == PlaneInfo.LANDING:
             knots = self.speed/units.KNOTS
-            self.turn_rate = 19000/(knots*knots)
+            self.turn_rate = 1.5
             self.speed = 70*units.KNOTS
             self.target_vertical_speed=300*units.FPM
         elif state == PlaneInfo.TOUCHDOWN:
-            self.turn_rate=1
+            self.turn_rate=1.5
             self.speed=40*units.KNOTS
         else:
-            knots = self.speed/units.KNOTS
-            self.turn_rate = 49000/(knots*knots)
+            self.turn_rate = 3
             self.speed = 80*units.KNOTS
             self.target_vertical_speed=400*units.FPM
+        self.log("turn_rate",self.turn_rate,"speed",self.speed,"target_vs",self.target_vertical_speed)
         if changed:
             self.check_request()
     
@@ -181,7 +179,7 @@ class AIPlane():
         from fgserver.ai.models import WayPoint
         if not self.airport():
             return
-        laor = self.circuit.last_order()
+        laor = getattr(self.circuit,'_last_order',None)
         if self.state == PlaneInfo.CIRCUIT_CROSSWIND:
             req = "req=crosswind;apt=%s" % self.airport().icao
             msg="%s Tower, %s, Crosswind for runway %s" % (self.airport().name, self.callsign(),self.airport().active_runway())
@@ -202,17 +200,21 @@ class AIPlane():
             req = "req=readytaxi;apt=%s" % self.airport().icao
             msg="%s Tower, %s, ready to taxi" % (self.airport().name, self.callsign())
             self.send_request(req,msg)
-        elif self.state == PlaneInfo.LINED_UP:
+        elif self.state == PlaneInfo.LINED_UP and laor.get_param(Order.PARAM_LINEUP):
             req = "req=readytko;apt=%s" % self.airport().icao
             msg="%s Tower, %s, ready for takeoff" % (self.airport().name, self.callsign())
             self.send_request(req,msg)
-        elif self.state == PlaneInfo.SHORT:
+        elif self.state == PlaneInfo.SHORT and laor.short():
             req = "req=holdingshort;apt=%s" % self.airport().icao
             msg="%s Tower, %s, holding short of runway %s" % (self.airport().name, self.callsign(),self.airport().active_runway())
             self.send_request(req,msg)
         elif self.state== PlaneInfo.STOPPED and self.waypoint.type == WayPoint.PARKING:
             req = "req=tunein;apt=%s" % self.airport().icao
             self.send_request(req,'')
+
+        elif self.state== PlaneInfo.CLIMBING:
+            req = "req=leaving;apt=%s" % self.airport().icao
+            self.send_request(req,"%s Tower, %s, leaving airfield" % (self.airport().name, self.callsign()))
 
     def move(self,course,distance,dt):
         self.target_course=course
@@ -227,8 +229,9 @@ class AIPlane():
         q1 = Quaternion.fromLatLon(newpos.x, newpos.y)
         coursediff=abs(newcourse - course)
         roll = 0
-        if not self.state in [PlaneInfo.TAXIING,PlaneInfo.PUSHBACK] and coursediff >= 0.01:
-            roll = (self.turn_rate*self.bank_sense)/dt
+        if not self.state in [PlaneInfo.TAXIING,PlaneInfo.PUSHBACK, PlaneInfo.DEPARTING] and coursediff >= 0.01:
+            roll = (self.turn_rate*self.bank_sense)*10
+            #self.log("tr",self.turn_rate,"roll",roll,"bank",self.bank_sense)
         q2 = Quaternion.fromYawPitchRoll(newcourse, 0, roll)
         
         self.position = newpos
@@ -274,14 +277,14 @@ class AIPlane():
     def heading_to(self,to):
         return get_heading_to(self.position, to)
     def on_ground(self):
-        return self.state in [PlaneInfo.STOPPED,PlaneInfo.TAXIING,PlaneInfo.DEPARTING]
+        return self.state in [PlaneInfo.STOPPED,PlaneInfo.TAXIING,PlaneInfo.DEPARTING,PlaneInfo.LINED_UP,PlaneInfo.SHORT, PlaneInfo.TOUCHDOWN]
 
     
     def _fill_properties(self,pos):
         props = pos.properties
         props.set_prop(302,self.speed*50)
         props.set_prop(312,self.speed*50)
-        if self.on_ground():
+        if self.on_ground() or self.state == PlaneInfo.LANDING:
             props.set_prop(1004,1)
             props.set_prop(201,1)
             props.set_prop(211,1)

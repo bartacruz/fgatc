@@ -4,8 +4,8 @@ Created on Apr 24, 2015
 @author: bartacruz
 '''
 from fgserver.helper import Position, get_distance, move, normdeg, Quaternion,\
-    elevate
-from fgserver import units
+    elevate, get_heading_to, angle_diff
+from fgserver import units, llogger
 from __builtin__ import min
 from django.db.models.base import Model
 from django.db.models.fields.related import ForeignKey
@@ -35,10 +35,10 @@ class FlightPlan(Model):
         return self.name
     
     def log(self,*argv):
-        msg = "[%s]" % self.name
+        msg = "[FP %s]" % self.name
         for arg in argv:
             msg += " %s" % arg
-        print msg
+        llogger.info(msg)
     
 class Circuit(FlightPlan):
     ''' A standard left-circuit over an airfield ''' 
@@ -47,13 +47,11 @@ class Circuit(FlightPlan):
     radius.description="Radius of the circuit (in meters)"
     altitude=FloatField(default=1000*units.FT)
     altitude.description="Altitude of the circuit (in meters)"   
-    
-    aiplane = None
-    _waypoint=0
-    _time=0
-    _waiting=0
-    
+        
     def init(self):
+        self._waypoint=0
+        self._time=0
+        self._waiting=0
         self.waypoints.all().delete()
         self.aircraft.state=2
         self.aircraft.save()
@@ -134,7 +132,10 @@ class Circuit(FlightPlan):
         if self.waypoints.all().count() > self._waypoint:
             return self.waypoints.all().order_by('id')[self._waypoint]
         return None
-    
+    def next_waypoint(self):
+        if self.waypoints.all().count() > self._waypoint + 1:
+            return self.waypoints.all().order_by('id')[self._waypoint+1]
+        return None
     def update(self,time):
         #if self.aircraft.state < 1:
         #    return
@@ -157,18 +158,26 @@ class Circuit(FlightPlan):
         dist_to=get_distance(plane.position, wp.get_position())
         #self.log("course: %s, dist:%s, dist_to:%s" % (course,dist,dist_to)
         seconds_before=0
+        nang=0
         if self.waypoints.count()-1 > self._waypoint:
-            seconds_before = 60/plane.turn_rate
-        turn_dist = dist_to - dist*seconds_before*dt
+            ncourse = get_heading_to(wp.get_position(), self.next_waypoint().get_position())
+            nang = angle_diff(course, ncourse) 
+            seconds_before = nang/plane.turn_rate
+        turn_dist = dist_to - dist*seconds_before/(dt*2)
+        #self.log("sec before",seconds_before,'turn_dist',turn_dist)
         step = False
-        if dist >= turn_dist:
+        if dist >= abs(turn_dist):
             self.log("reached waypoint %s" % wp)
+            self.log(nang,seconds_before,dist,dist_to,turn_dist)
+            
             dist = min(dist,dist_to)
             plane.course = course
             step = True
         plane.move(course,dist,dt)
         if step:
             plane.set_state(wp.status)
+            if wp.type == WayPoint.HOLD:
+                self._waiting=5
             self._waypoint += 1
             self.log("Next wp:",self._waypoint,self.waypoint())
             if self.waypoint():
@@ -191,11 +200,14 @@ class Circuit(FlightPlan):
                 self.aiplane.set_state(PlaneInfo.PUSHBACK)
             elif order in [alias.TAXI_TO, alias.LINEUP]:
                 self.aiplane.set_state(PlaneInfo.TAXIING)
+                self._waiting=10
             elif order == alias.CLEAR_TK:
                 self.aiplane.set_state(PlaneInfo.DEPARTING)
+                self._waiting=10
             else:
                 self.log("Circuit",self.aircraft.callsign,', order ignored', instance)
-            
+            self._last_order = instance
+
 class WayPoint(Model):
     POINT=0
     AIRPORT=1
