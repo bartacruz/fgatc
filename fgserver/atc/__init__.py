@@ -1,6 +1,6 @@
 import re
 
-from fgserver.helper import short_callsign
+from fgserver.helper import short_callsign, say_number
 from fgserver.messages import alias
 from fgserver.models import Order
 
@@ -24,7 +24,7 @@ def get_message(order):
         return None
     msg = re.sub(r'{cs}',short_callsign(order.receiver.callsign),msg)
     msg = re.sub(r'{icao}',order.sender.icao,msg)
-    msg = re.sub(r'{rwy}',str(order.get_param(Order.PARAM_RUNWAY,'')),msg)
+    msg = re.sub(r'{rwy}',say_number(order.get_param(Order.PARAM_RUNWAY,'')),msg)
     msg = re.sub(r'{alt}',str(order.get_param(Order.PARAM_ALTITUDE,'')),msg)
     msg = re.sub(r'{cirt}',order.get_param(Order.PARAM_CIRCUIT_TYPE,''),msg)
     msg = re.sub(r'{cirw}',order.get_param(Order.PARAM_CIRCUIT_WP,''),msg)

@@ -23,13 +23,27 @@ LETTERS = [
 "papa", "quebec", "romeo", "sierra", "tango",
 "uniform", "victor", "whiskey", "xray", "yankee", "zulu"
 ]
-
+NUMBERS=['zero','one','two','three','four','five','six','seven','eight','niner']
     
 def short_callsign(callsign):
         return "%s %s %s" % (LETTERS[ord(callsign[0].lower()) - ord('a')],
                              LETTERS[ord(callsign[1].lower()) - ord('a')],
                              LETTERS[ord(callsign[2].lower()) - ord('a')]
                              )
+def say_number(number):
+    ns = str(number)
+    ret = ''
+    for i in range(len(ns)):
+        idx = ns[i]
+        if idx.upper() == 'R':
+            ret +=" right"
+        elif idx.upper() == 'L':
+            ret +=" left"
+        elif idx == '.':
+            ret +=" point"
+        elif idx.isdigit(): 
+            ret += ' %s' % NUMBERS[int(idx)]
+    return ret.strip()
 
 def normdeg(a):
     while a >= 180:

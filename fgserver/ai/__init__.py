@@ -1,5 +1,5 @@
 from fgserver.helper import Position, get_distance, get_heading_to, Vector3D,\
-    move, normdeg, Quaternion, geod2cart, normalize
+    move, normdeg, Quaternion, geod2cart, normalize, say_number
 from fgserver.messages import PosMsg, PROP_CHAT, alias
 from fgserver import units
 from __builtin__ import round, min
@@ -167,6 +167,12 @@ class AIPlane():
     def aircraft(self):
         return self.circuit.aircraft
     
+    def say_runway(self,runway=None):
+        ''' returns the numbers of the runway designation. i.e. "one niner right" for 19R'''
+        if not runway:
+            runway = self.airport().active_runway()
+        return say_number(runway.name)
+    
     def send_request(self,req,msg):
         self.message=msg
         date=timezone.now()
@@ -182,19 +188,19 @@ class AIPlane():
         laor = getattr(self.circuit,'_last_order',None)
         if self.state == PlaneInfo.CIRCUIT_CROSSWIND:
             req = "req=crosswind;apt=%s" % self.airport().icao
-            msg="%s Tower, %s, Crosswind for runway %s" % (self.airport().name, self.callsign(),self.airport().active_runway())
+            msg="%s Tower, %s, Crosswind for runway %s" % (self.airport().name, self.callsign(),self.say_runway())
             self.send_request(req,msg)
         elif self.state == PlaneInfo.CIRCUIT_DOWNWIND:
             req = "req=downwind;apt=%s" % self.airport().icao
-            msg="%s Tower, %s, Downwind for runway %s" % (self.airport().name, self.callsign(),self.airport().active_runway())
+            msg="%s Tower, %s, Downwind for runway %s" % (self.airport().name, self.callsign(),self.say_runway())
             self.send_request(req,msg)
         elif self.state == PlaneInfo.CIRCUIT_BASE:
             req = "req=base;apt=%s" % self.airport().icao
-            msg="%s Tower, %s, Turning base for runway %s" % (self.airport().name, self.callsign(),self.airport().active_runway())
+            msg="%s Tower, %s, Turning base for runway %s" % (self.airport().name, self.callsign(),self.say_runway())
             self.send_request(req,msg)
         elif self.state == PlaneInfo.CIRCUIT_FINAL:
             req = "req=final;apt=%s" % self.airport().icao
-            msg="%s Tower, %s, Final for runway %s" % (self.airport().name, self.callsign(),self.airport().active_runway())
+            msg="%s Tower, %s, Final for runway %s" % (self.airport().name, self.callsign(),self.say_runway())
             self.send_request(req,msg)    
         elif self.state == PlaneInfo.PUSHBACK:
             req = "req=readytaxi;apt=%s" % self.airport().icao
@@ -206,7 +212,7 @@ class AIPlane():
             self.send_request(req,msg)
         elif self.state == PlaneInfo.SHORT and laor.short():
             req = "req=holdingshort;apt=%s" % self.airport().icao
-            msg="%s Tower, %s, holding short of runway %s" % (self.airport().name, self.callsign(),self.airport().active_runway())
+            msg="%s Tower, %s, holding short of runway %s" % (self.airport().name, self.callsign(),self.say_runway())
             self.send_request(req,msg)
         elif self.state== PlaneInfo.STOPPED and self.waypoint.type == WayPoint.PARKING:
             req = "req=tunein;apt=%s" % self.airport().icao

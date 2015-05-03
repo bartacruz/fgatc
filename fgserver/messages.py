@@ -192,6 +192,7 @@ class alias():
     CLEAR_CROSS='clearcross'
     CLEAR_LAND='clearland'
     CLEAR_TK='cleartk'
+    LEAVING='leaving'
     INBOUND_APPROACH='inbound'
     JOIN_CIRCUIT='join'
     GO_AROUND='around'
