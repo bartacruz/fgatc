@@ -13,6 +13,7 @@ from numpy.random.mtrand import set_state
 from fgserver import units
 import math
 from math import sqrt
+import fgserver
 '''
 Created on Apr 17, 2015
 
@@ -96,11 +97,13 @@ class ATC(Model):
         self.log("check_waiting:",landing,lined,short)
         if lined.count():
             '''there's someone taking-off'''
-            a = lined.first().aircraft
-            if not self.on_runway(a):
-                ''' nop, there isn't'''
-                self.set_status(a, 0, 0)
-                return self.check_waiting() #check again
+            for ll in lined.all():
+                a = ll.aircraft
+                if not self.on_runway(a):
+                    ''' nop, there isn't'''
+                    self.log("acft not in runway. removing LINED_UP state",a)
+                    self.set_status(a, 0, 0)
+                    return self.check_waiting() #check again
             if landing.count():
                 l = landing.first().aircraft
                 request = Request(sender=l,date=timezone.now(),request="req=go_around;apt=%s"%self.airport.icao)
@@ -108,14 +111,16 @@ class ATC(Model):
                 response.save()
         elif landing.count():
             '''there's someone landing and no one departing'''
-            l = landing.first().aircraft
-            dist = get_distance(l.get_position(),runway.get_position())
-            head = get_heading_to(l.get_position(),runway.get_position())
-            adiff = angle_diff(head, - l.heading)
-            if dist > 1*units.NM or adiff > 2 :
-                ''' nop, there isn't'''
-                self.set_status(l,0,0)
-                return self.check_waiting() #check again
+            for ll in landing.all():
+                l = landing.first().aircraft
+                dist = get_distance(l.get_position(),runway.get_position())
+                head = get_heading_to(l.get_position(),runway.get_position())
+                adiff = angle_diff(head, - l.heading)
+                if dist > 1*units.NM or adiff > 5 :
+                    ''' nop, he isn't'''
+                    self.log("acft not in runway. removing LINED_UP state",l)
+                    self.set_status(l,0,0)
+                    return self.check_waiting() #check again
         elif short.count():
             s = short.first()
             self.log("Short number",s.number)
@@ -126,11 +131,7 @@ class ATC(Model):
                 self.manage(s.aircraft.requests.all().last())
                 
     def log(self,*argv):
-        msg = "[ATC %s]" % self.airport.icao
-        for arg in argv:
-            msg += " %s" % arg
-        print msg
-    
+        fgserver.info("ATC %s" % self.airport.icao,*argv)
     
     def __unicode__(self):
         return self.airport.icao
@@ -139,9 +140,9 @@ class ATC(Model):
         d=timezone.now()
         if self.last_order_date:
             d = max([self.last_order_date,d])
-        self.last_order_date= d + timedelta(seconds=randint(8,15))
+        self.last_order_date= d + timedelta(seconds=randint(5,12))
         self.save()
-        print "LAST ORDER DATE",self.last_order_date
+        #print "LAST ORDER DATE",self.last_order_date
         return self.last_order_date
                 
     def airport_name(self):
@@ -154,10 +155,7 @@ class Controller(Model):
     objects = InheritanceManager()
     
     def log(self,*argv):
-        msg = "[%s]" % self.name
-        for arg in argv:
-            msg += " %s" % arg
-        print msg
+        fgserver.info(self.name,*argv)
 
     def active_runway(self):
         return self.atc.airport.active_runway()
@@ -178,7 +176,7 @@ class Controller(Model):
         order = Order(sender=self.atc.airport,receiver=request.sender,date=self.atc.next_order_date())
         order.add_param(Order.PARAM_AIRPORT,self.atc.airport.icao)
         order.add_param(Order.PARAM_RECEIVER,request.sender.callsign)
-        self.log("init response devuelve",order)
+        #self.log("init response devuelve",order)
         return order
     
     def set_status(self,aircraft,status,number=None):
@@ -220,6 +218,42 @@ class Controller(Model):
         return response
                     
 class Tower(Controller):
+
+    def holdingshort(self,request):
+        response=self._init_response(request)
+        response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
+        count = self.atc.tags.filter(status=PlaneInfo.SHORT).exclude(aircraft=request.sender).count()
+        count_others = self.atc.tags.filter(status__in=[PlaneInfo.LINED_UP,PlaneInfo.LANDING]).exclude(aircraft=request.sender).count()
+        self.set_status(request.sender, PlaneInfo.SHORT,count)
+        tag = self.get_tag(request.sender)
+        
+        if count_others or (tag.number > 1 and count) :
+            response.add_param(Order.PARAM_ORDER, alias.WAIT)
+            response.add_param(Order.PARAM_HOLD, 1)
+            response.add_param(Order.PARAM_SHORT, 1)
+            response.add_param(Order.PARAM_NUMBER, count+count_others+1)
+            self.set_status(request.sender, PlaneInfo.SHORT,count+count_others+1)
+        elif randint(0,2)==1:
+            response.add_param(Order.PARAM_ORDER, alias.LINEUP)
+            response.add_param(Order.PARAM_HOLD, 1)
+            response.add_param(Order.PARAM_NUMBER, 1)
+            response.add_param(Order.PARAM_LINEUP, 1)
+        else:
+            response.add_param(Order.PARAM_ORDER, alias.CLEAR_TK)
+            response.add_param(Order.PARAM_NUMBER, 1)
+        response.message=get_message(response)
+        return response
+    
+    def readytko(self,request):
+        response=self._init_response(request)
+        response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
+        response.add_param(Order.PARAM_ORDER, alias.CLEAR_TK)
+        response.message=get_message(response)
+        self.set_status(request.sender, PlaneInfo.LINED_UP)
+        return response
+    
+    def leaving(self,request):
+        self.set_status(request.sender, PlaneInfo.CLIMBING)
         
     def downind(self,request):
         response=self._init_response(request)
@@ -273,15 +307,18 @@ class Departure(Controller):
         response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
         count = self.atc.tags.filter(status=PlaneInfo.SHORT).count()
         count_others = self.atc.tags.filter(status__in=[PlaneInfo.LINED_UP,PlaneInfo.LANDING]).count()
-        
+        self.log("readytaxi",count,count_others)
         if count or count_others:
             response.add_param(Order.PARAM_HOLD, 1)
             response.add_param(Order.PARAM_SHORT, 1)
-            response.add_param(Order.PARAM_NUMBER, count+1)
+            num = count +1
         else:
             response.add_param(Order.PARAM_LINEUP,1)
+            num = 1
+            
+        response.add_param(Order.PARAM_NUMBER, num)
         response.message=get_message(response)
-        self.set_status(request.sender, PlaneInfo.TAXIING,count)
+        self.set_status(request.sender, PlaneInfo.TAXIING,num)
         return response
 
     def startup(self,request):
@@ -291,36 +328,6 @@ class Departure(Controller):
         self.set_status(request.sender, PlaneInfo.STOPPED)
         return response
     
-    def holdingshort(self,request):
-        response=self._init_response(request)
-        response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
-        count = self.atc.tags.filter(status=PlaneInfo.SHORT).exclude(aircraft=request.sender).count()
-        count_others = self.atc.tags.filter(status__in=[PlaneInfo.LINED_UP,PlaneInfo.LANDING]).exclude(aircraft=request.sender).count()
-        self.set_status(request.sender, PlaneInfo.SHORT,count)
-        tag = self.get_tag(request.sender)
-        
-        if tag.number > 1 and (count or count_others) :
-            response.add_param(Order.PARAM_ORDER, alias.WAIT)
-            response.add_param(Order.PARAM_HOLD, 1)
-            response.add_param(Order.PARAM_SHORT, 1)
-            response.add_param(Order.PARAM_NUMBER, count+count_others+1)
-        elif randint(0,2)==1:
-            response.add_param(Order.PARAM_ORDER, alias.LINEUP)
-            response.add_param(Order.PARAM_HOLD, 1)
-            response.add_param(Order.PARAM_NUMBER, 1)
-        else:
-            response.add_param(Order.PARAM_ORDER, alias.CLEAR_TK)
-            response.add_param(Order.PARAM_NUMBER, 1)
-        response.message=get_message(response)
-        return response
-    
-    def readytko(self,request):
-        response=self._init_response(request)
-        response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
-        response.add_param(Order.PARAM_ORDER, alias.CLEAR_TK)
-        response.message=get_message(response)
-        self.set_status(request.sender, PlaneInfo.LINED_UP)
-        return response
     
 class Approach(Controller):
     pass_alt = IntegerField(default=8000)
