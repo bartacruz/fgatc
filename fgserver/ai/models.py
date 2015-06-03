@@ -99,15 +99,15 @@ class Circuit(FlightPlan):
         self.create_waypoint(position, "Cruising", WayPoint.POINT, PlaneInfo.CRUISING)
         position = move(position,normdeg(straight+40),self.radius*0.8,apalt+self.altitude)
         self.create_waypoint(position, "Cruising 2", WayPoint.POINT, PlaneInfo.CRUISING)
-        position = move(position,normdeg(straight+80),self.radius*0.8,apalt+self.altitude)
+        position = move(position,normdeg(straight+80),self.radius*0.7,apalt+self.altitude)
         self.create_waypoint(position, "Cruising 3", WayPoint.POINT, PlaneInfo.CRUISING)
-        position = move(position,normdeg(straight+120),self.radius*0.8,apalt+self.altitude)
+        position = move(position,normdeg(straight+120),self.radius*0.7,apalt+self.altitude)
         self.create_waypoint(position, "Cruising 4", WayPoint.POINT, PlaneInfo.CRUISING)
-        position = move(position,normdeg(straight+150),self.radius*0.8,apalt+self.altitude)
+        position = move(position,normdeg(straight+150),self.radius*0.7,apalt+self.altitude)
         self.create_waypoint(position, "Cruising 5", WayPoint.POINT, PlaneInfo.CRUISING)
-        position = move(position,normdeg(straight+190),self.radius*0.8,apalt+self.altitude)
+        position = move(position,normdeg(straight+190),self.radius*0.7,apalt+self.altitude)
         self.create_waypoint(position, "Cruising 5", WayPoint.POINT, PlaneInfo.CRUISING)
-        position = move(position,normdeg(straight+230),self.radius*0.8,apalt+self.altitude)
+        position = move(position,normdeg(straight+230),self.radius*0.7,apalt+self.altitude)
         self.create_waypoint(position, "Cruising 6", WayPoint.POINT, PlaneInfo.CRUISING)
         position = move(rwyend,right,self.radius,apalt+self.altitude+1000*units.FT)
         self.create_waypoint(position, "Crosswind %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_CROSSWIND)
@@ -159,7 +159,7 @@ class Circuit(FlightPlan):
         #self.log("course: %s, dist:%s, dist_to:%s" % (course,dist,dist_to)
         seconds_before=0
         nang=0
-        if self.waypoints.count()-1 > self._waypoint:
+        if self.waypoints.count()-1 > self._waypoint and not plane.on_ground():
             ncourse = get_heading_to(wp.get_position(), self.next_waypoint().get_position())
             nang = angle_diff(course, ncourse) 
             seconds_before = nang/plane.turn_rate
@@ -171,7 +171,7 @@ class Circuit(FlightPlan):
             self.log(nang,seconds_before,dist,dist_to,turn_dist)
             
             dist = min(dist,dist_to)
-            plane.course = course
+            #plane.course = course
             step = True
         plane.move(course,dist,dt)
         if step:
@@ -183,9 +183,9 @@ class Circuit(FlightPlan):
             if self.waypoint():
                 plane.waypoint = self.waypoint()
                 plane.target_altitude=self.waypoint().get_position().z
-                 
-                self.log("target altitude %sm" % plane.target_altitude)
-                self.log("heading",plane.course,plane.heading_to(wp.get_position()))
+                self.log("NEXT COURSE",course,plane.course,plane.target_course,plane.next_course(0.1))
+#                self.log("target altitude %sm" % plane.target_altitude)
+#                self.log("heading",plane.course,plane.heading_to(wp.get_position()))
             else:
                 self.circuit.end()
         self._time = time

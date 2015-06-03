@@ -120,8 +120,6 @@ class AIPlane():
             changed = True
         self.state=state
         laor = getattr(self.circuit,'_last_order',None)
-        if laor:
-            self.log(laor,laor.short(),laor.hold())
         if state in [PlaneInfo.STOPPED, PlaneInfo.PUSHBACK]\
                 or (state==PlaneInfo.SHORT and laor and laor.short())\
                 or (state==PlaneInfo.LINED_UP and laor and laor.get_param(Order.PARAM_LINEUP)):
@@ -157,7 +155,7 @@ class AIPlane():
             self.turn_rate = 3
             self.speed = 80*units.KNOTS
             self.target_vertical_speed=400*units.FPM
-        self.log("turn_rate",self.turn_rate,"speed",self.speed,"target_vs",self.target_vertical_speed)
+        #self.log("turn_rate",self.turn_rate,"speed",self.speed,"target_vs",self.target_vertical_speed)
         if changed:
             self.check_request()
     
@@ -235,7 +233,7 @@ class AIPlane():
         q1 = Quaternion.fromLatLon(newpos.x, newpos.y)
         coursediff=abs(newcourse - course)
         roll = 0
-        if not self.state in [PlaneInfo.TAXIING,PlaneInfo.PUSHBACK, PlaneInfo.DEPARTING] and coursediff >= 0.01:
+        if not self.on_ground() and coursediff >= 0.01:
             roll = (self.turn_rate*self.bank_sense)*10
             #self.log("tr",self.turn_rate,"roll",roll,"bank",self.bank_sense)
         q2 = Quaternion.fromYawPitchRoll(newcourse, 0, roll)
@@ -275,13 +273,14 @@ class AIPlane():
         if sumc > 360:
             sumc -= 360
         self.bank_sense=1.0
-        if abs(sumc - self.target_course) > 0.0001:
+        if abs(sumc - self.target_course) > 0.01:
             self.bank_sense = -1.0
         nc =normdeg(self.course + self.bank_sense*min(hdiff, self.turn_rate*dt))
         return nc
     
     def heading_to(self,to):
         return get_heading_to(self.position, to)
+    
     def on_ground(self):
         return self.state in [PlaneInfo.STOPPED,PlaneInfo.TAXIING,PlaneInfo.DEPARTING,PlaneInfo.LINED_UP,PlaneInfo.SHORT, PlaneInfo.TOUCHDOWN]
 
