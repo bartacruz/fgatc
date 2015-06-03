@@ -254,25 +254,27 @@ class Tower(Controller):
     
     def leaving(self,request):
         self.set_status(request.sender, PlaneInfo.CLIMBING)
-        
-    def downind(self,request):
+    
+    def _report_circuit(self,request,cur_circuit,report_circuit):
         response=self._init_response(request)
         response.add_param(Order.PARAM_ORDER,alias.REPORT_CIRCUIT)
-        response.add_param(Order.PARAM_CIRCUIT_WP,alias.CIRCUIT_BASE)
-        response.message=get_message(response)
-        self.set_status(request.sender, PlaneInfo.CIRCUIT_DOWNWIND)
-        count = self.atc.tags.filter(status=PlaneInfo.CIRCUIT_DOWNWIND).count()
+        response.add_param(Order.PARAM_CIRCUIT_WP,report_circuit)
+        count = self.atc.tags.filter(status=cur_circuit).exclude(aircraft__callsign=request.sender.callsign()).count()
         response.add_param(Order.PARAM_NUMBER,count+1)
+        response.message=get_message(response)
+        self.set_status(request.sender, cur_circuit)
+        return response
+
+    def crosswind(self,request):
+        response=self._report_circuit(request,PlaneInfo.CIRCUIT_CROSSWIND,alias.CIRCUIT_DOWNWIND)
+        return response
+            
+    def downind(self,request):
+        response=self._report_circuit(request,PlaneInfo.CIRCUIT_DOWNWIND,alias.CIRCUIT_BASE)
         return response
         
     def base(self,request):
-        response=self._init_response(request)
-        response.add_param(Order.PARAM_ORDER,alias.REPORT_CIRCUIT)
-        response.add_param(Order.PARAM_CIRCUIT_WP,alias.CIRCUIT_FINAL)
-        self.set_status(request.sender, PlaneInfo.CIRCUIT_BASE)
-        count = self.atc.tags.filter(status=PlaneInfo.CIRCUIT_BASE).count()
-        response.add_param(Order.PARAM_NUMBER,count+1)
-        response.message=get_message(response)
+        response=self._report_circuit(request,PlaneInfo.CIRCUIT_BASE,alias.CIRCUIT_FINAL)
         return response
 
     def final(self,request):
@@ -348,7 +350,7 @@ class Approach(Controller):
         response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
         response.add_param(Order.PARAM_ALTITUDE,self.circuit_alt )
         response.add_param(Order.PARAM_CIRCUIT_TYPE, self.circuit_type)
-        response.add_param(Order.PARAM_CIRCUIT_WP,alias.CIRCUIT_DOWNWIND)
+        response.add_param(Order.PARAM_CIRCUIT_WP,[alias.CIRCUIT_CROSSWIND,alias.CIRCUIT_DOWNWIND][randint(0,1)])
         response.message=get_message(response)        
         self.set_status(request.sender, PlaneInfo.APPROACHING)
         return response
