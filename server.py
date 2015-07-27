@@ -2,7 +2,7 @@
 '''
 Created on Apr 14, 2015
 
-@author: bartacruz
+@author: bartacruz@gmail.com
 '''
 import socket
 from xdrlib import Unpacker
