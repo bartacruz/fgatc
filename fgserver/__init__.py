@@ -43,6 +43,12 @@ def fetch_metar(icao):
     llogger.debug("No METAR station for %s" % icao)
     return None
 
+def get_qnh(apt):
+    metar = get_metar(apt)
+    if metar:
+        return round(metar.press.value('in'),2)
+    return None
+
 def get_metar(apt):
     icao = apt.icao
     if CACHE.has_key(icao):
@@ -53,7 +59,7 @@ def get_metar(apt):
             return cached_metar
         diff = datetime.now() - cached_metar.time
         if diff.total_seconds() > METAR_UPDATE:
-            llogger.debug('Refreshing metar for %s because %s. (%s, %s)' % (apt,diff.total_seconds(),datetime.now(),cached_metar.time))
+            llogger.debug('Refreshing metar for %s' % apt)
             CACHE.pop(icao)
             return get_metar(apt)
         #llogger.debug("Cached METAR for %s" % apt)
@@ -61,7 +67,8 @@ def get_metar(apt):
     else:
         metar = get_closest_metar(apt)
         CACHE[icao]=metar
-        llogger.debug("METAR for %s fetched and cached=%s" % (apt,metar))
+        if metar:
+            llogger.debug("METAR for %s fetched and cached=%s" % (apt,metar.code))
         return metar
 
 def get_closest_metar(apt,max_range=50,unit=units.NM):

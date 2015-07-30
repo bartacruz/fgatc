@@ -20,8 +20,26 @@ var last_order_string=nil;
 var viewnode = "depart";
 var CONFIG_DLG = 0;
 
+var LETTERS = [
+"alpha", "bravo", "charlie", "delta", "echo",
+"foxtrot", "golf", "hotel", "india", "juliet",
+"kilo", "lima", "mike", "november", "oscar",
+"papa", "quebec", "romeo", "sierra", "tango",
+"uniform", "victor", "whiskey", "xray", "yankee", "zulu"
+];
+
+var NUMBERS=['zero','one','two','three','four','five','six','seven','eight','niner'];
+
+var short_callsign=func(callsign){
+	var base='a';
+	var cs = string.lc(callsign);
+    return sprintf("%s %s %s", LETTERS[cs[0] - base[0]],
+                             LETTERS[cs[1] - base[0]],
+                             LETTERS[cs[2] - base[0]]
+                             );
+};
 var messages = {
-	roger:'{ack}, {cs}',
+	roger:'{ack}{qnh}, {cs}',
 	repeat:'{apt}, {cs}, say again',
 	startup: '{apt} tower, {cs}, request startup clearance',
 	readytaxi: '{apt} tower, {cs}, ready to taxi',
@@ -48,8 +66,9 @@ var parse_message = func(tag) {
 	if (msg == nil or msg == "") {
 		return "";
 	}
-	print (sprintf("parse_message. tag=%s, msg=%s",tag,msg));
-	msg = string.replace(msg,'{cs}',callsign);
+	# print (sprintf("parse_message. tag=%s, msg=%s",tag,msg));
+	var sc = short_callsign(callsign);
+	msg = string.replace(msg,'{cs}',sc);
 	msg = string.replace(msg,'{rwy}',selected_runway);
 	msg = string.replace(msg,'{rwyto}', "to runway " ~ selected_runway);
 	msg = string.replace(msg,'{rwyof}', "of runway  " ~ selected_runway);
@@ -66,8 +85,26 @@ var parse_message = func(tag) {
 			msg = string.replace(msg,'{ack}','Cleared for takeoff');
 		} else if(last_order['ord'] == 'startup') {
 			msg = string.replace(msg,'{ack}','start up approved');
+		} else if(last_order['ord'] == 'join') {
+			var ack = sprintf("%s for %s at %s",last_order['cirw'],last_order['rwy'],last_order['alt']);
+			msg = string.replace(msg,'{ack}',ack);
+		} else if(last_order['ord'] == 'cirrep') {
+			var ack = sprintf("report on %s",last_order['cirw']);
+			if (last_order['number'] > 1) {
+				var nm =sprintf(" number %s",last_order['number']); 
+				ack ~= nm;
+			}
+			msg = string.replace(msg,'{ack}',ack);
+		} else if(last_order['ord'] == 'clearland') {
+			var ack = sprintf("clear to land runway %s",last_order['rwy']);
+			msg = string.replace(msg,'{ack}',ack);
 		} else {
 			msg = string.replace(msg,'{ack}','Roger');
+		}
+		if (last_order['qnh'] != nil) {
+			msg = string.replace(msg,'{qnh}', sprintf(" QNH %s",last_order['qnh']));
+		} else {
+			msg = string.replace(msg,'{qnh}', '');
 		}
 	}
 	return msg;
@@ -80,7 +117,7 @@ var sendmessage = func(message="",dlg=1){
 	if (message=='roger' and last_order != nil){
 		request = sprintf("%s;laor=%s",request,last_order['ord']);
 	}
-	print(sprintf("Sendmessage: %s, %s",request , msg));
+	print(sprintf("Sendmessage: %s | %s",request , msg));
 	setprop(pilotchannel,request);
 	setprop(chatchannel,msg);
 	if (dlg) {
@@ -105,7 +142,9 @@ var check_model = func(node=nil) {
         	continue;
         }
         var callsign =  n.getNode("callsign").getValue();
-		if (callsign == airport.id) {
+        print("AIRPORT");
+        debug.dump(airport);
+		if (airport != nil and callsign == airport.id) {
 			print(sprintf("ATC for %s found in %s",airport.id,n.getPath()));
 			atcnode = n;
 			if (atclistener) {
@@ -232,7 +271,7 @@ var update = func {
 }
 
 var reset = func() {
-	sendmessage('tunein',0);
+	update();
 	dialog.destroy();
 }
 var setview = func(view = nil) {

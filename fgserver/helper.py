@@ -21,7 +21,7 @@ LETTERS = [
 "papa", "quebec", "romeo", "sierra", "tango",
 "uniform", "victor", "whiskey", "xray", "yankee", "zulu"
 ]
-NUMBERS=['zero','one','two','three','four','five','six','seven','eight','niner']
+NUMBERS=['zeero','one','too','tree','fower','fife','six','seven','eight','niner']
     
 def short_callsign(callsign):
         return "%s %s %s" % (LETTERS[ord(callsign[0].lower()) - ord('a')],
@@ -38,7 +38,7 @@ def say_number(number):
         elif idx.upper() == 'L':
             ret +=" left"
         elif idx == '.':
-            ret +=" point"
+            ret +=" decimal"
         elif idx.isdigit(): 
             ret += ' %s' % NUMBERS[int(idx)]
     return ret.strip()

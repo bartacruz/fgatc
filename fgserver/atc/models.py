@@ -10,7 +10,7 @@ from model_utils.choices import Choices
 from fgserver.ai import PlaneInfo
 from datetime import timedelta
 from numpy.random.mtrand import set_state
-from fgserver import units, llogger
+from fgserver import units, llogger, get_qnh
 import math
 from math import sqrt
 import fgserver
@@ -219,7 +219,8 @@ class Controller(Model):
         else:
             response.message = order.message.replace(',', ', I say again,',1)
         return response
-                    
+     
+
 class Tower(Controller):
 
     def holdingshort(self,request):
@@ -272,7 +273,7 @@ class Tower(Controller):
         response=self._report_circuit(request,PlaneInfo.CIRCUIT_CROSSWIND,alias.CIRCUIT_DOWNWIND)
         return response
             
-    def downind(self,request):
+    def downwind(self,request):
         response=self._report_circuit(request,PlaneInfo.CIRCUIT_DOWNWIND,alias.CIRCUIT_BASE)
         return response
         
@@ -291,6 +292,8 @@ class Tower(Controller):
         else:
             response.add_param(Order.PARAM_ORDER,alias.CLEAR_LAND)
             response.add_param(Order.PARAM_NUMBER,landing+1)
+            response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
+            response.add_param(Order.PARAM_QNH, str(get_qnh(self.atc.airport)))
             self.set_status(request.sender, PlaneInfo.LANDING)
         response.message=get_message(response)
         return response
@@ -329,6 +332,7 @@ class Departure(Controller):
     def startup(self,request):
         response=self._init_response(request)
         response.add_param(Order.PARAM_ORDER, alias.STARTUP)
+        response.add_param(Order.PARAM_QNH, str(get_qnh(self.atc.airport)))
         response.message=get_message(response)
         self.set_status(request.sender, PlaneInfo.STOPPED)
         return response
@@ -354,6 +358,8 @@ class Approach(Controller):
         response.add_param(Order.PARAM_ALTITUDE,self.circuit_alt )
         response.add_param(Order.PARAM_CIRCUIT_TYPE, self.circuit_type)
         response.add_param(Order.PARAM_CIRCUIT_WP,[alias.CIRCUIT_CROSSWIND,alias.CIRCUIT_DOWNWIND][randint(0,1)])
+        response.add_param(Order.PARAM_QNH, str(get_qnh(self.atc.airport)))
+
         response.message=get_message(response)        
         self.set_status(request.sender, PlaneInfo.APPROACHING)
         return response
