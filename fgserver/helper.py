@@ -6,15 +6,13 @@ Created on Apr 13, 2015
 '''
 
 from math import sqrt, fabs, atan2, pi, sin, cos, asin, acos
-from fgserver.settings import METAR_URL
-from metar.Metar import Metar
-import urllib
 from geographiclib.geodesic import Geodesic
 from scipy import rint
 from __builtin__ import float, min
 from random import randint
-from fgserver import units
+from fgserver import units, llogger
 from fgserver.units import ERAD, RAD, EPSILON
+
 
 LETTERS = [
 "alpha", "bravo", "charlie", "delta", "echo",
@@ -160,19 +158,6 @@ def cart2geod(cart):
     alt = (k + e2 - 1) * sqrtDDpZZ / k
     return [lat, lon, alt]
 
-def fetch_metar(icao):
-    try:
-        url = "%s/%s.TXT" % (METAR_URL, icao)
-        urlh = urllib.urlopen(url)
-        for line in urlh:
-            if line.startswith(icao):
-                obs = Metar(line)
-                # print obs
-                return obs
-    except:
-        pass
-    print "NO METAR FOR %s" % icao
-    return None
 
 class Vector3D():
     x = 0
@@ -378,7 +363,7 @@ class Quaternion():
     
 def get_distance(fro, to, unit=units.M):
     info = Geodesic.WGS84.Inverse(fro.x, fro.y, to.x, to.y)
-    return info['s12'] * unit
+    return info['s12'] / unit
 
 def get_heading_to(fro, to):
     info = Geodesic.WGS84.Inverse(fro.x, fro.y, to.x, to.y)
@@ -387,4 +372,5 @@ def get_heading_to(fro, to):
 
 def random_callsign():
     return "%s%s-%s%s%s" % (chr(randint(65, 90)), chr(randint(65, 90)), chr(randint(65, 90)), chr(randint(65, 90)), chr(randint(65, 90)))
-    
+
+

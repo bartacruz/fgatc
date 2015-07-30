@@ -8,16 +8,9 @@ from django.db.models.base import Model
 from django.db.models.fields import CharField, DecimalField, IntegerField,\
     DateTimeField, BooleanField, FloatField
 from django.db.models.fields.related import ForeignKey
-from fgserver.settings import METAR_URL, METAR_UPDATE
-from fgserver.helper import normdeg, fetch_metar, Position
+from fgserver.helper import normdeg, Position, get_distance
 from __builtin__ import abs
-from datetime import datetime
-from django.dispatch.dispatcher import receiver
-from django.db.models.signals import post_save
-from random import randint
-from time import sleep
-from django.utils import timezone
-from fgserver import llogger, debug
+from fgserver import llogger, debug, units, get_metar
 
 
 class Airport(Model):
@@ -26,8 +19,7 @@ class Airport(Model):
     lat=DecimalField(default=0,max_digits=10,decimal_places=6)
     lon=DecimalField(default=0,max_digits=10,decimal_places=6)
     altitude=IntegerField(default=0)
-    metar = None
-    has_metar = True
+    
     
     def get_position(self):
         return Position(float(self.lat),float(self.lon),float(self.altitude))
@@ -35,11 +27,12 @@ class Airport(Model):
         return self.icao
     
     def active_runway(self):
-        if self.get_metar():
+        metar = get_metar(self)
+        if metar:
             wind_from = 270
-            wind_speed = self.metar.wind_speed
-            if wind_speed and self.metar.wind_dir:
-                wind_from=self.metar.wind_dir.value()
+            wind_speed = metar.wind_speed
+            if wind_speed and metar.wind_dir:
+                wind_from=metar.wind_dir.value()
             vmax = -1
             rwy = None
             for curr in self.runways.all():
@@ -56,24 +49,19 @@ class Airport(Model):
             rwy.altitude = self.altitude
             debug(self.icao,"default runway: ",rwy)
             return rwy
-    def check_metar(self):
-        try:
-            diff = datetime.now() - self.metar.time
-            if diff.total_seconds > METAR_UPDATE:
-                self.metar = fetch_metar(self.icao)
-                self.has_metar = self.metar != None
-        except:
-            pass
-            
-    def get_metar(self):
-        if self.has_metar: 
-            if not self.metar:
-                self.metar = fetch_metar(self.icao)
-                self.has_metar = self.metar != None
-            else:
-                self.check_metar()
-        return self.metar
-        
+
+
+def airportsWithinRange(pos,max_range, unit=units.NM):
+    apts = Airport.objects.all()
+    within = [None]*max_range
+    for apt in apts:
+        apt_pos=apt.get_position()
+        d =get_distance(pos, apt_pos, unit)
+        if d <= max_range:
+            within.insert(int(d),apt)
+    within = [item for item in within if item] # sorting vodoo
+    return within
+
 
 class Runway(Model):
     airport=ForeignKey(Airport,related_name='runways')

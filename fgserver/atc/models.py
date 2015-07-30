@@ -10,7 +10,7 @@ from model_utils.choices import Choices
 from fgserver.ai import PlaneInfo
 from datetime import timedelta
 from numpy.random.mtrand import set_state
-from fgserver import units
+from fgserver import units, llogger
 import math
 from math import sqrt
 import fgserver
@@ -42,11 +42,14 @@ class ATC(Model):
     def manage(self, request):
         for controller in self.controllers.all().select_subclasses():
             #print "Controller:",type(controller),controller
-            ret = controller.manage(request)
-            if ret:
-                ret.save()
-                self.log("Order saved",ret)
-                break        
+            try:
+                ret = controller.manage(request)
+                if ret:
+                    ret.save()
+                    self.log("Order saved",ret)
+                    break
+            except:
+                llogger.exception("Error processing request : %s" % request)        
         self.check_waiting()
 
     def active_runway(self):
@@ -259,7 +262,7 @@ class Tower(Controller):
         response=self._init_response(request)
         response.add_param(Order.PARAM_ORDER,alias.REPORT_CIRCUIT)
         response.add_param(Order.PARAM_CIRCUIT_WP,report_circuit)
-        count = self.atc.tags.filter(status=cur_circuit).exclude(aircraft__callsign=request.sender.callsign()).count()
+        count = self.atc.tags.filter(status=cur_circuit).exclude(aircraft__callsign=request.sender.callsign).count()
         response.add_param(Order.PARAM_NUMBER,count+1)
         response.message=get_message(response)
         self.set_status(request.sender, cur_circuit)

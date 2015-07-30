@@ -32,7 +32,7 @@ def rwys_from_aptdat(airport,line):
     r.length = line[5]
     r.width = line[8]
     runways.append(r)
-    #print r.__dict__
+    print r.__dict__
     rwy_match = re.compile("(\d+)([RL]*)").match(r.name) # e.g.:31x, 18R, 8xx
     
     ''' If it's not an helipad, calculate the opposite runway '''
@@ -40,7 +40,8 @@ def rwys_from_aptdat(airport,line):
         oname,oside = rwy_match.groups()
         obearing = normalize(float(r.bearing)+180) # the opposite bearing
         oname = str(int(normalize(float(oname)*10+180)/10)) #the opposite name
-        oname +={'R':'L','L':'R'}.get(oside) # rwy side vodoo ;-) 
+        if oside:
+            oname +={'R':'L','L':'R'}.get(oside) # rwy side vodoo ;-) 
         rinv = Runway(airport=airport, name=oname)
         rinv.bearing = obearing
         ''' The original runway lat/lon mark the center of the rwy, which is the same for the opposite.''' 
@@ -97,4 +98,4 @@ def import_apts(file):
                 Runway.objects.bulk_create(runways)
                 print airport.icao, airport.name, airport.lat, airport.lon,airport.altitude, len(runways)
 
-#import_apts("../data/apt.dat.gz")
+import_apts("../data/apt.dat.gz")
