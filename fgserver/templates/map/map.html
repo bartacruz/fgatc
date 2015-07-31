@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <title>FGServer map</title>
 <script src="https://code.jquery.com/jquery-1.11.1.min.js"></script>
+<script
+	src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
 <script src="{{STATIC_URL}}js/jQueryRotateCompressed.js"></script>
 <link rel="stylesheet"
 	href="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.css" />
@@ -11,18 +13,83 @@
 <script src="{{STATIC_URL}}js/rotated-marker.js"></script>
 <script src="{{STATIC_URL}}js/map.js"></script>
 
+<link rel="stylesheet"
+	href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
 <link rel="stylesheet" href="{{STATIC_URL}}css/style.css">
 <style type="text/css">
-#map { height:400px; }
+#map {
+	height: 100%;
+	width: 100%;
+}
+
+#lat {
+	min-width: 150px;
+	text-align: right;
+	background-color: #ded;
+	padding-right: 5px;
+	border-radius: 4px;
+	margin-left: 0px;
+}
+
+#lon {
+	min-width: 150px;
+	text-align: right;
+	background-color: #edd;
+	padding-right: 5px;
+	border-radius: 4px;
+	margin-left: 0px;
+}
+
+body {
+	padding-top: 50px;
+}
 </style>
 </head>
 <body>
- <div id="map"></div>
- <button type="button" onclick="start();">Start</button><button type="button" onclick="stop();">Stop</button><button type="button" onclick="get_wps();">wps</button>
-<script type="text/javascript">
-var ll = [{{ airport.lat }}, {{airport.lon}}];
-var static_url='{{ STATIC_URL }}';
-initMap(ll);
+
+	<div id="map"></div>
+	<div class="navbar navbar-default navbar-fixed-top">
+		<div class="container-fluid">
+			<div class="navbar-header">
+				<a class="navbar-brand">FG Server Map</a>
+			</div>
+			<ul class="nav navbar-nav">
+				
+			</ul>
+			<div class="nav navbar-nav navbar-right">
+				<li class="dropdown">
+					<a href="#" class="dropdown-toggle"
+					data-toggle="dropdown" role="button" aria-haspopup="true"
+					aria-expanded="false">Aircrafts<span class="caret"></span></a>
+					<ul class="dropdown-menu" id="aircraft_list">
+						
+					</ul>
+				</li>
+				<p class="navbar-text" id="lat">&nbsp;</p>
+				<p class="navbar-text" id="lon">&nbsp;</p>
+			</div>
+		</div>
+	</div>
+	<script type="text/javascript">
+	var ll = [{{ airport.lat }}, {{airport.lon}}];
+	var static_url='{{ STATIC_URL }}';
+	function resize_map() {
+		var w = $(window).width();
+		var h = $(window).height()-50;
+		
+		$('#map').css({
+			width:w,
+	    	height:h
+		});
+		console.debug('resize',w,h);
+	}
+	$( document ).ready(function() {
+		resize_map();
+		initMap(ll);
+		start();
+		$(window).resize(resize_map);
+		$('#aircraft_list').on("click","li",pan_callsign);
+	});
 </script>
 
 </body>

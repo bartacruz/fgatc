@@ -3,14 +3,38 @@ var planes={};
 var _handler=null;
 var _follow=null;
 var _route=null;
+var _spot=null;
+var callsigns=[];
+
+function showcords(a,b,c){
+	$('#lat').html(a.latlng.lat);
+	$('#lon').html(a.latlng.lng);
+	var pos = [a.latlng.lat,a.latlng.lng]
+	if (_spot == null) {
+		var wpicon = L.icon({
+		    iconUrl: static_url + 'images/wp.png',
+		    className: "spot",
+		    iconSize:[25,25],
+		    iconAnchor:[13,25],
+		});
+		
+		_spot = L.marker(pos,{icon:wpicon,title:"spot"}).addTo(map);
+	} else {
+		_spot.setLatLng(pos);
+	}
+}
+
 function initMap(ll) {
 	map = L.map('map').setView(ll,13);
+	map.on({click:showcords,});
 	L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png?{foo}', {foo: 'bar'}).addTo(map);	
 }
+
 function show_plan(ev) {
 	console.debug(ev.target.options);
 	get_wps(ev.target.options.title);
 }
+
 function updatePlane(fields) {
 	marker = planes[fields.callsign];
 	if (_follow == fields.callsign) {
@@ -40,19 +64,33 @@ function start() {
 function stop() {
 	clearInterval(_handler);
 }
+function pan_callsign(a,b,c) {
+	var cs = $( this ).text();
+	var plane = planes[cs];
+	console.debug('pan callsign', cs, plane );
+	map.panTo([plane._latlng.lat,plane._latlng.lng]);
+	
+}
 function update_aircrafts(data,textStatus,jqXHR) {
 	//console.debug("update aircraft",data);
+	var ceeses=[]
+	var cslist=$('#aircraft_list');
 	for (i in data.aircrafts) {
-		
 		var acft= data.aircrafts[i];
 		//console.debug(i,acft);
 		if (planes[acft.fields.callsign]) {
 			updatePlane(acft.fields);
+			ceeses.push(callsigns.pop(acft.fields.callsign));
 		} else {
 			addPlane(acft.fields);
+			ceeses.push(acft.fields.callsign);
+			cslist.append("<li class='cs_li' id='cs_"+acft.fields.callsign+"'><a href='#'>"+acft.fields.callsign+"</a></li>");
 		}
-		
 	}
+	for (i in callsigns) {
+		$('#cs_'+callsigns[i]).remove();
+	}
+	callsigns = ceeses;
 }
 function update_error(XHR, textStatus, errorThrow) {
 	console.debug("ERROR",textStatus,errorThrow);
@@ -76,7 +114,7 @@ function fg_update(){
 	});
 }
 function update_plan(data,textStatus,jqXHR) {
-	console.debug("update plan",data);
+	//console.debug("update plan",data);
 	var path =[]
 	var markers=[]
 	for (i in data.waypoints) {
