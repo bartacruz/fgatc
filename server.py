@@ -28,6 +28,7 @@ orders = {}
 
 UPDATE_RATE=2
 _aircrafts=[]
+POSITIONS = {}
 _aaa={}
 _circuits={}
 
@@ -111,7 +112,7 @@ def set_aircraft(aircraft):
         _aircrafts.append(aircraft.callsign)
 
 def get_pos(callsign):
-    pos = get_cache('positions').get(callsign)
+    pos = POSITIONS.get(callsign)
     # TODO: if doesn't exists, see if we can recreate it from the aircraft.
     return pos
 
@@ -119,7 +120,7 @@ def get_pos(callsign):
 def set_pos(pos):
     if pos:
         pos.sim_time = sim_time()
-        get_cache('positions').set(pos.callsign(),pos)
+        POSITIONS[pos.callsign()]=pos
     
 def queue_order(order):
     log("queue_order.",order,order.date)
@@ -154,6 +155,8 @@ def save_cache():
                 log("Deactivating aircraft: %s" % callsign, sim_time(),p.sim_time)
                 _aircrafts.remove(callsign)
                 a.state=0
+            else:
+                a.state=1
             #log("saving aircraft", a.callsign, a.lat,a.lon,a.altitude)
             a.save()
         get_cache('default').set('last_update',timezone.now())
