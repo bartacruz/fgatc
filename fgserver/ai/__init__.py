@@ -1,5 +1,6 @@
 from fgserver.helper import Position, get_distance, get_heading_to, Vector3D,\
-    move, normdeg, Quaternion, geod2cart, normalize, say_number
+    move, normdeg, Quaternion, geod2cart, normalize, say_number,\
+    get_heading_to_360
 from fgserver.messages import PosMsg, PROP_CHAT, alias
 from fgserver import units
 from __builtin__ import round, min
@@ -128,19 +129,19 @@ class AIPlane():
             self.turn_rate=1
             self.target_vertical_speed=1
         elif state == PlaneInfo.TAXIING or (state==PlaneInfo.SHORT and not laor.short()):
-            self.turn_rate = 10
-            self.speed = 20*units.KNOTS
+            self.turn_rate = 50
+            self.speed = 10*units.KNOTS
             self.target_vertical_speed=1
         elif state == PlaneInfo.DEPARTING or (state==PlaneInfo.LINED_UP and laor.hold()):
             self.turn_rate = 3
             self.speed = 70*units.KNOTS
             self.target_vertical_speed=100*units.FPM
         elif state == PlaneInfo.CLIMBING:
-            self.turn_rate = 3
+            self.turn_rate = 5
             self.speed = 100*units.KNOTS
             self.target_vertical_speed=900*units.FPM
         elif state == PlaneInfo.CRUISING:
-            self.turn_rate = 3
+            self.turn_rate = 5
             self.speed = 140*units.KNOTS
             self.target_vertical_speed=200*units.FPM
         elif state == PlaneInfo.LANDING:
@@ -234,7 +235,7 @@ class AIPlane():
         coursediff=abs(newcourse - course)
         roll = 0
         if not self.on_ground() and coursediff >= 0.01:
-            roll = (self.turn_rate*self.bank_sense)*10
+            roll = (self.turn_rate*self.bank_sense)*2
             #self.log("tr",self.turn_rate,"roll",roll,"bank",self.bank_sense)
         q2 = Quaternion.fromYawPitchRoll(newcourse, 0, roll)
         
@@ -264,22 +265,20 @@ class AIPlane():
         return na
 
     def next_course(self,dt):
-        hdiff = abs(self.course - self.target_course)
+        diff = normdeg(self.course - self.target_course)
+        hdiff = abs(diff)
         if self.speed == 0 or hdiff < 0.01:
             return self.target_course
-        if hdiff > 180:
-            hdiff = abs(hdiff-360)
-        sumc = self.course +hdiff
-        if sumc > 360:
-            sumc -= 360
+        
         self.bank_sense=1.0
-        if abs(sumc - self.target_course) > 0.01:
+        if diff > 0.01:
             self.bank_sense = -1.0
-        nc =normdeg(self.course + self.bank_sense*min(hdiff, self.turn_rate*dt))
+        nc =normalize(self.course + self.bank_sense*min(hdiff, self.turn_rate*dt))
         return nc
     
     def heading_to(self,to):
-        return get_heading_to(self.position, to)
+        return get_heading_to_360(self.position, to)
+        
     
     def on_ground(self):
         return self.state in [PlaneInfo.STOPPED,PlaneInfo.TAXIING,PlaneInfo.DEPARTING,PlaneInfo.LINED_UP,PlaneInfo.SHORT, PlaneInfo.TOUCHDOWN]

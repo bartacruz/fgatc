@@ -54,9 +54,10 @@ class Circuit(FlightPlan):
         self._waiting=0
         self.waypoints.all().delete()
         self.aircraft.state=2
-        self.aircraft.save()
         self.generate_waypoints()
         self.aiplane = AIPlane(self)
+        self.aiplane.update_aircraft()
+        self.aircraft.save()
         self.log(self.name,": init called")
     
     def end(self):
@@ -139,6 +140,7 @@ class Circuit(FlightPlan):
     def update(self,time):
         #if self.aircraft.state < 1:
         #    return
+
         dt = time-self._time
         plane = self.aiplane
         if not plane:
@@ -156,13 +158,13 @@ class Circuit(FlightPlan):
         course = plane.heading_to(wp.get_position())
         dist = plane.speed * dt
         dist_to=get_distance(plane.position, wp.get_position())
-        #self.log("course: %s, dist:%s, dist_to:%s" % (course,dist,dist_to)
+        #self.log("course: %s, dist:%s, dist_to:%s" % (course,dist,dist_to))
         seconds_before=0
         nang=0
         if self.waypoints.count()-1 > self._waypoint and not plane.on_ground():
             ncourse = get_heading_to(wp.get_position(), self.next_waypoint().get_position())
             nang = angle_diff(course, ncourse) 
-            seconds_before = nang/plane.turn_rate
+            seconds_before = nang/plane.turn_rate+2
         turn_dist = dist_to - dist*seconds_before/(dt*2)
         #self.log("sec before",seconds_before,'turn_dist',turn_dist)
         step = False
