@@ -1,0 +1,94 @@
+# -*- coding: utf-8 -*-
+from south.utils import datetime_utils as datetime
+from south.db import db
+from south.v2 import SchemaMigration
+from django.db import models
+
+
+class Migration(SchemaMigration):
+
+    def forwards(self, orm):
+        # Adding field 'Request.receiver'
+        db.add_column(u'fgserver_request', 'receiver',
+                      self.gf('django.db.models.fields.related.ForeignKey')(blank=True, related_name='requests', null=True, to=orm['fgserver.Comm']),
+                      keep_default=False)
+
+
+        # Changing field 'Order.sender'
+        db.alter_column(u'fgserver_order', 'sender_id', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['fgserver.Comm']))
+
+    def backwards(self, orm):
+        # Deleting field 'Request.receiver'
+        db.delete_column(u'fgserver_request', 'receiver_id')
+
+
+        # Changing field 'Order.sender'
+        db.alter_column(u'fgserver_order', 'sender_id', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['fgserver.Airport']))
+
+    models = {
+        u'fgserver.aircraft': {
+            'Meta': {'object_name': 'Aircraft'},
+            'altitude': ('django.db.models.fields.IntegerField', [], {'default': '0'}),
+            'callsign': ('django.db.models.fields.CharField', [], {'max_length': '8'}),
+            'freq': ('django.db.models.fields.CharField', [], {'max_length': '10', 'null': 'True', 'blank': 'True'}),
+            'heading': ('django.db.models.fields.FloatField', [], {'default': '0'}),
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'ip': ('django.db.models.fields.CharField', [], {'max_length': '15', 'null': 'True', 'blank': 'True'}),
+            'last_order': ('django.db.models.fields.CharField', [], {'max_length': '60', 'null': 'True', 'blank': 'True'}),
+            'last_request': ('django.db.models.fields.CharField', [], {'max_length': '60', 'null': 'True', 'blank': 'True'}),
+            'lat': ('django.db.models.fields.DecimalField', [], {'default': '0', 'max_digits': '10', 'decimal_places': '6'}),
+            'lon': ('django.db.models.fields.DecimalField', [], {'default': '0', 'max_digits': '10', 'decimal_places': '6'}),
+            'model': ('django.db.models.fields.CharField', [], {'max_length': '96', 'null': 'True', 'blank': 'True'}),
+            'port': ('django.db.models.fields.CharField', [], {'max_length': '5', 'null': 'True', 'blank': 'True'}),
+            'state': ('django.db.models.fields.IntegerField', [], {'default': '0'})
+        },
+        u'fgserver.airport': {
+            'Meta': {'object_name': 'Airport'},
+            'altitude': ('django.db.models.fields.IntegerField', [], {'default': '0'}),
+            'icao': ('django.db.models.fields.CharField', [], {'max_length': '4', 'db_index': 'True'}),
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'lat': ('django.db.models.fields.DecimalField', [], {'default': '0', 'max_digits': '10', 'decimal_places': '6'}),
+            'lon': ('django.db.models.fields.DecimalField', [], {'default': '0', 'max_digits': '10', 'decimal_places': '6'}),
+            'name': ('django.db.models.fields.CharField', [], {'max_length': '255'})
+        },
+        u'fgserver.comm': {
+            'Meta': {'object_name': 'Comm'},
+            'airport': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "'comms'", 'to': u"orm['fgserver.Airport']"}),
+            'frequency': ('django.db.models.fields.IntegerField', [], {}),
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'identifier': ('django.db.models.fields.CharField', [], {'max_length': '60'}),
+            'name': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
+            'type': ('django.db.models.fields.IntegerField', [], {})
+        },
+        u'fgserver.order': {
+            'Meta': {'object_name': 'Order'},
+            'confirmed': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
+            'date': ('django.db.models.fields.DateTimeField', [], {}),
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'message': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
+            'order': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
+            'receiver': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "'orders'", 'to': u"orm['fgserver.Aircraft']"}),
+            'sender': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "'orders'", 'to': u"orm['fgserver.Comm']"})
+        },
+        u'fgserver.request': {
+            'Meta': {'object_name': 'Request'},
+            'date': ('django.db.models.fields.DateTimeField', [], {}),
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'receiver': ('django.db.models.fields.related.ForeignKey', [], {'blank': 'True', 'related_name': "'requests'", 'null': 'True', 'to': u"orm['fgserver.Comm']"}),
+            'request': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
+            'sender': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "'requests'", 'to': u"orm['fgserver.Aircraft']"})
+        },
+        u'fgserver.runway': {
+            'Meta': {'object_name': 'Runway'},
+            'airport': ('django.db.models.fields.related.ForeignKey', [], {'related_name': "'runways'", 'to': u"orm['fgserver.Airport']"}),
+            'bearing': ('django.db.models.fields.DecimalField', [], {'default': '0', 'max_digits': '5', 'decimal_places': '2'}),
+            u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'lat': ('django.db.models.fields.DecimalField', [], {'default': '0', 'max_digits': '10', 'decimal_places': '6'}),
+            'length': ('django.db.models.fields.IntegerField', [], {'default': '0'}),
+            'lon': ('django.db.models.fields.DecimalField', [], {'default': '0', 'max_digits': '10', 'decimal_places': '6'}),
+            'name': ('django.db.models.fields.CharField', [], {'max_length': '3'}),
+            'width': ('django.db.models.fields.IntegerField', [], {'default': '0'})
+        }
+    }
+
+    complete_apps = ['fgserver']

@@ -1,6 +1,6 @@
 #FlightGear AI ATC and Aircraft multiplayer server
 
-**In early-alpha stage**
+**In alpha stage**
 
 The project contains:
 * Nasal script that detects COMM frequency and tune in to AI ATC in the server. 
@@ -90,15 +90,17 @@ and runway information into the database from FlightGear's apt-dat.gz (or any X-
   Use the `icao` parameter to customize the startup location of the map. (i.e.: <http://localhost:8000/map/?icao=KSFO>) 
 
 ## Planned/ToDo
-* Enhance AI tower's traffic management. 
-* Create more AI traffic types (currently there's only a left circuit)
-* Implement ground routes directions using Dijkstra's shortest path algorithm.
-* Relay positions to FlightGear's official MP servers.
-* Enhance map interactions
-* Implement [RAAS] (http://wiki.flightgear.org/Runway_Awareness_and_Advisory_System)
-* ATIS service
-* Transponder code
-* Use [OpenRadar] (http://wiki.flightgear.org/OpenRadar) aliases for ATC responses
+[x] Enhance METAR loading and caching.
+[x] List of pilots on map (and click-to-pan to the pilot, of course!) 
+[ ] Enhance AI tower's traffic management. 
+[ ] Create more AI traffic types (currently there's only a left circuit)
+[ ] Implement ground routes directions using Dijkstra's shortest path algorithm.
+[ ] Relay positions to FlightGear's official MP servers.
+[ ] Enhance map interactions
+[ ] Implement [RAAS] (http://wiki.flightgear.org/Runway_Awareness_and_Advisory_System)
+[ ] ATIS service
+[ ] Transponder code
+[ ] Use [OpenRadar] (http://wiki.flightgear.org/OpenRadar) aliases for ATC responses
 
 
 ## NOTE
