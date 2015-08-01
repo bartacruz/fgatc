@@ -16,7 +16,8 @@ templates={
            alias.REPORT_CIRCUIT: '{cs}, report on {cirw}, number {num}',
            alias.STARTUP: "{cs}, start up approved{qnh}. Call when ready to taxi.",
            alias.TAXI_TO: "{cs}, taxi to runway {rwy} {via}{hld}{short}{lineup}",
-           alias.WAIT: "{cs}, wait until advised",     
+           alias.WAIT: "{cs}, wait until advised",
+           alias.TUNE_TO: "{cs}, contact {conn} on {freq}",     
     }
     
 def get_message(order):
@@ -24,12 +25,14 @@ def get_message(order):
     if not msg:
         return None
     msg = re.sub(r'{cs}',short_callsign(order.receiver.callsign),msg)
-    msg = re.sub(r'{icao}',order.sender.icao,msg)
+    msg = re.sub(r'{icao}',order.sender.airport.icao,msg)
     msg = re.sub(r'{rwy}',say_number(order.get_param(Order.PARAM_RUNWAY,'')),msg)
     msg = re.sub(r'{alt}',str(order.get_param(Order.PARAM_ALTITUDE,'')),msg)
     msg = re.sub(r'{cirt}',order.get_param(Order.PARAM_CIRCUIT_TYPE,''),msg)
     msg = re.sub(r'{cirw}',order.get_param(Order.PARAM_CIRCUIT_WP,''),msg)
     msg = re.sub(r'{num}',str(order.get_param(Order.PARAM_NUMBER,'')),msg)
+    msg = re.sub(r'{freq}',str(order.get_param(Order.PARAM_FREQUENCY,'')),msg)
+    msg = re.sub(r'{conn}',str(order.get_param(Order.PARAM_CONTROLLER,'')),msg)
     if order.get_param(Order.PARAM_NUMBER):
         msg = re.sub(r'{onum}',', number %s' % order.get_param(Order.PARAM_NUMBER),msg)
     if order.get_param(Order.PARAM_LINEUP):
@@ -38,7 +41,7 @@ def get_message(order):
         msg = re.sub(r'{hld}',' and hold',msg)
     if order.get_param(Order.PARAM_SHORT):
         msg = re.sub(r'{short}',' short',msg)
-    metar = get_metar(order.sender)
+    metar = get_metar(order.sender.airport)
     if metar:
         msg = re.sub(r'{qnh}','. QNH %s' % say_number(round(metar.press.value('in'),2)),msg)
     else:

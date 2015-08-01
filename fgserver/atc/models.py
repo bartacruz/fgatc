@@ -22,7 +22,7 @@ Created on Apr 17, 2015
 from random import randint
 from fgserver.helper import short_callsign, get_distance, move, normdeg,\
     get_heading_to, angle_diff, normalize, point_inside_polygon
-from fgserver.models import Order, Airport, Aircraft, Request
+from fgserver.models import Order, Airport, Aircraft, Request, Comm
 from django.utils import timezone
 from fgserver.messages import alias
 import re
@@ -368,10 +368,10 @@ class Approach(Controller):
 class Tag(StatusModel):
     STATUS = PlaneInfo.CHOICES_STR
     
-    atc = ForeignKey(ATC, related_name='tags')
+    comm = ForeignKey(Comm, related_name='tags')
     aircraft=ForeignKey(Aircraft,related_name='tags')
     number = IntegerField(default=1)
     ack_order=CharField(max_length=255,null=True,blank=True)
 
     def __unicode__(self):
-        return "%s - %s [%s]" % (self.atc.airport.icao,self.aircraft.callsign,self.status)
+        return "%s - %s [%s]" % (self.comm,self.aircraft.callsign,self.status)

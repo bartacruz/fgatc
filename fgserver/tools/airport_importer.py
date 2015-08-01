@@ -4,9 +4,10 @@ Created on Apr 24, 2015
 
 @author: bartacruz
 '''
-from fgserver.models import Airport, Runway
+from fgserver.models import Airport, Runway, Comm
 from fgserver.helper import normalize
 import re
+from fgserver import llogger
 
 
 def rwys_from_aptdat(airport,line):
@@ -32,7 +33,7 @@ def rwys_from_aptdat(airport,line):
     r.length = line[5]
     r.width = line[8]
     runways.append(r)
-    print r.__dict__
+    #print r.__dict__
     rwy_match = re.compile("(\d+)([RL]*)").match(r.name) # e.g.:31x, 18R, 8xx
     
     ''' If it's not an helipad, calculate the opposite runway '''
@@ -76,6 +77,7 @@ def import_apts(file):
                 airport.save()
                 done = False
                 runways=[]
+                comms=[]
                 while not done:
                     l = f.readline()
                     if l == '\n':
@@ -89,13 +91,26 @@ def import_apts(file):
                             airport.lon = al[2]
                         if al[3] != 'xxx':
                             runways += rwys_from_aptdat(airport, al)
-                    if l.startswith('14 '):
+                    elif l.startswith('14 '):
                         #TODO: Generate controller
-                        print "found tower %s " % al[5]
+                        #print "found tower %s " % al[5]
                         airport.lat = al[1]
                         airport.lon = al[2]
+                    elif l.startswith('5'):
+                        #print "found comm %s " % al[2]
+                        comm = Comm(airport=airport, type=al[0],frequency=al[1])
+                        comm.name='%s %s' % (airport.name, al[2])
+                        comm.identifier=comm.name
+                        comms.append(comm)
+                    
                 airport.save()
                 Runway.objects.bulk_create(runways)
-                print airport.icao, airport.name, airport.lat, airport.lon,airport.altitude, len(runways)
+                if len(comms):
+                    try:
+                        Comm.objects.bulk_create(comms)
+                    except:
+                        llogger.exception("Error saving comms for %s" % airport)
+                        llogger.debug("comms= %s" % comms)
+                print airport.icao, airport.name, airport.lat, airport.lon,airport.altitude, len(runways), len(comms)
 
 import_apts("../data/apt.dat.gz")

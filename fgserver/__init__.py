@@ -2,8 +2,9 @@ import logging
 from fgserver.settings import METAR_URL, METAR_UPDATE
 import urllib
 from datetime import datetime
-from fgserver import units
+from fgserver import units, settings
 from metar.Metar import Metar
+from django.utils.module_loading import import_by_path
 
 llogger = logging.getLogger("fgserver")
 llogger.setLevel(logging.DEBUG)
@@ -27,7 +28,27 @@ def debug(sender,*argv):
         msg += " %s" % arg
     llogger.debug(msg)
 
-CACHE = {}
+CONTROLLERS = {}
+METARS = {}
+
+def get_controller(comm):
+    controller =  CONTROLLERS.get(comm.id)
+    if not controller:
+        try:
+            llogger.debug("Creating controller for %s" % comm)
+            clazz = import_by_path(settings.DEFAULT_CONTROLLERS.get(comm.type))
+            llogger.debug("class=%s" % clazz)
+            controller = clazz(comm)
+            CONTROLLERS[comm.id]=controller
+        except:
+            llogger.exception("Error al crerar un controller para %s" % comm)
+    return controller
+
+def get_controllers(airport):
+    controllers = []
+    for comm in airport.comms.all():
+        controllers.append(get_controller(comm))
+    return controllers
 
 def fetch_metar(icao):
     try:
@@ -51,27 +72,28 @@ def get_qnh(apt):
 
 def get_metar(apt):
     icao = apt.icao
-    if CACHE.has_key(icao):
-        cached_metar= CACHE.get(icao)
+    if METARS.has_key(icao):
+        cached_metar= METARS.get(icao)
         if not cached_metar:
             # no metar for this station
             #llogger.debug("Null METAR cached for %s" % apt)
             return cached_metar
         diff = datetime.now() - cached_metar.time
         if diff.total_seconds() > METAR_UPDATE:
+            llogger.debug("recacheando: %s, %s, %s" % (datetime.now(),cached_metar.time,diff.total_seconds()))
             llogger.debug('Refreshing metar for %s' % apt)
-            CACHE.pop(icao)
+            METARS.pop(icao)
             return get_metar(apt)
         #llogger.debug("Cached METAR for %s" % apt)
         return cached_metar
     else:
         metar = get_closest_metar(apt)
-        CACHE[icao]=metar
+        METARS[icao]=metar
         if metar:
             llogger.debug("METAR for %s fetched and cached=%s" % (apt,metar.code))
         return metar
 
-def get_closest_metar(apt,max_range=50,unit=units.NM):
+def get_closest_metar(apt,max_range=80,unit=units.NM):
     from fgserver.models import airportsWithinRange
     obs = fetch_metar(apt.icao)
     if not obs:

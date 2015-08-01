@@ -153,7 +153,7 @@ class Circuit(FlightPlan):
             return plane.get_pos_message()
         wp = self.waypoint()
         if not wp:
-            self.log("ERROR: No waypoint set.")
+            self.log("ERROR: No waypoint set. %s" % self._waypoint)
             return plane.get_pos_message()
         course = plane.heading_to(wp.get_position())
         dist = plane.speed * dt

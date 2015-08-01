@@ -8,7 +8,7 @@ from django.db.models.base import Model
 from django.db.models.fields import CharField, DecimalField, IntegerField,\
     DateTimeField, BooleanField, FloatField
 from django.db.models.fields.related import ForeignKey
-from fgserver.helper import normdeg, Position, get_distance
+from fgserver.helper import normdeg, Position, get_distance, move
 from __builtin__ import abs
 from fgserver import llogger, debug, units, get_metar
 
@@ -82,6 +82,40 @@ class Runway(Model):
     
     def __unicode__(self):
         return self.name
+
+class Comm(Model):
+    
+    # Radio types according to apt.dat v1000
+    RECORDED = 50 #AWOS, ASOS or ATIS
+    UNICOM = 51 # Unicom (US), CTAF (US), Radio (UK)
+    CLD = 52 #  Clearance Delivery
+    GND = 53 # Ground
+    TWR = 54 # Tower
+    APP = 55 # Approach
+    DEP = 56 # Departure
+    TYPES = (
+        (RECORDED,'AWOS, ASOS or ATIS'),
+        (UNICOM, 'Unicom'),
+        (CLD, 'Clearance Delivery'),
+        (GND,'Ground Control'),
+        (TWR, 'Tower'),
+        (APP, 'Approach'),
+        (DEP, 'Departure'),
+    )
+    airport = ForeignKey(Airport, related_name="comms")
+    type = IntegerField(choices=TYPES)
+    frequency = IntegerField()
+    frequency.help_text="Frequency in MhZ * 100 (eg. 12345 for 123.45 Mhz)"
+    name = CharField(max_length=255)
+    identifier=CharField(max_length=60)
+    identifier.help_text="The name used in ATC communications"
+    
+    def get_FGfreq(self):
+        sf = str(self.frequency)
+        return "%s.%s" % (sf[:3],sf[3:])
+    
+    def __unicode__(self):
+        return "%s@%s" %(self.name, self.frequency)
     
 class Aircraft(Model):
     callsign = CharField(max_length=8)
@@ -113,6 +147,7 @@ class Aircraft(Model):
 class Request(Model):
     date = DateTimeField()
     sender = ForeignKey(Aircraft, related_name='requests')
+    receiver = ForeignKey(Comm, related_name='requests', null=True,blank=True)
     request = CharField(max_length=255)
     
     def get_request(self):
@@ -126,12 +161,13 @@ class Request(Model):
 class Order(Model):
     date = DateTimeField()
     receiver = ForeignKey(Aircraft, related_name='orders')
-    sender = ForeignKey(Airport, related_name='orders')
+    sender = ForeignKey(Comm, related_name='orders')
     order = CharField(max_length=255)
     message = CharField(max_length=255)
     confirmed = BooleanField(default=False)
 
     PARAM_ORDER='ord'
+    PARAM_FREQUENCY='freq'
     PARAM_RUNWAY='rwy'
     PARAM_PARKING='park'
     PARAM_AIRPORT='apt'
@@ -147,6 +183,7 @@ class Order(Model):
     PARAM_LEG='leg'
     PARAM_ATIS='atis'
     PARAM_RECEIVER='to'
+    PARAM_CONTROLLER='atc'
     
     def add_param(self,key,val):
         self._order[key]=val
@@ -158,6 +195,7 @@ class Order(Model):
         return self.get_param(Order.PARAM_ORDER)
     
     def get_order(self):
+        self.add_param('oid', self.id)
         ret = {}
         for (k, v) in self._order.items():
             if type(v) == unicode:

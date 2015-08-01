@@ -1,14 +1,16 @@
 var airport=nil;
-var selected_runway=nil;
-var comm = nil;
+var frequency = nil;
+var controller=nil;
 var callsign = getprop("/sim/multiplay/callsign");
 var root="/sim/atcng";
 var freq_node= root ~ "/" ~ "frequency";
 var aptname_node= root ~ "/" ~ "aptname";
 var aptcode_node= root ~ "/" ~ "aptcode";
+var controller_node= root ~ "/" ~ "controller";
 var chatchannel="/sim/messages/pilot";
 var chataichannel="/sim/messages/ai-plane";
 var atcchannel="/sim/messages/atc";
+var freqchannel="sim/multiplay/transmission-freq-hz";
 var pilotchannel="sim/multiplay/generic/string[17]";
 var serverchannel="sim/multiplay/generic/string[18]";
 var servermsgchannel="sim/multiplay/generic/string[16]";
@@ -38,22 +40,154 @@ var short_callsign=func(callsign){
                              LETTERS[cs[2] - base[0]]
                              );
 };
+var get_controller=func() {
+	return getprop(controller_node);
+}
+var set_controller=func(cont) {
+	controller = cont;
+	setprop(controller_node,controller);
+}
+var get_freq=func() {
+	return getprop(freq_node);
+}
+var set_freq=func(freq) {
+	frequency = freq;
+	setprop(freq_node,freq);
+}
+
+var sendmessage = func(message="",dlg=1){
+	var msg = parse_message(message);
+	var request = sprintf("req=%s;freq=%.2f;mid=%s",message,frequency,int(rand()*10000));
+	if (message=='roger' and last_order != nil){
+		request = sprintf("%s;laor=%s",request,last_order['ord']);
+	}
+	print(sprintf("Sendmessage: %s | %s",request , msg));
+	setprop(pilotchannel,request);
+	setprop(chatchannel,msg);
+	if (dlg) {
+		dialog.destroy();
+	}
+};
+var repeat = func() {
+	print("ATCNg: repeat");
+	atcng.sendmessage("repeat");
+}
+var _ml={};
+
+var check_model = func(node=nil) {
+	foreach (var n; props.globals.getNode("ai/models", 1).getChildren("multiplayer")) {
+		debug.dump(n);
+		if ((var valid = n.getNode("valid")) == nil or (!valid.getValue())) {
+        	print("check_model: continue 1");
+        	continue;
+        }
+        if ((var callsign = n.getNode("callsign")) == nil or !(callsign = callsign.getValue())) {
+            print("check_model: continue 2");
+        	continue;
+        }
+        var callsign =  n.getNode("callsign").getValue();
+        var model =  n.getNode("sim/model/path").getValue();
+        var freq =  n.getNode(freqchannel).getValue();
+        if (airport==nil and model == "ATC" and freq == frequency) {
+        	print(sprintf("ATC controller for %s found in %s",frequency,n.getPath()));
+        	atcnode = n;
+			var sc = atcnode.getNode(serverchannel).getPath();
+			print("ATCNG listening in " ~ sc);
+			atclistener = setlistener(sc, readmessage, 1, 0);
+   		} else {
+			print("checking ai-plane " ~ callsign);
+			if (!contains(_ml,callsign)){
+				print("ATCNG adding ai-plane " ~ callsign);
+				var nnode=n;
+				var aic=nnode.getNode(servermsgchannel).getPath();
+				_ml[callsign]=setlistener(aic,readaimessage,0,0);	
+			}
+		}
+	}
+}
+
+
+
+var readaimessage= func(node=nil){
+	var msg = node.getValue();
+	if (msg != nil){
+		setprop(chataichannel,msg);
+	}
+}
+var readmessage = func(node=nil) {
+	var order = node.getValue();
+	if (order == nil or order == '') {
+		last_order = nil;
+		last_order_string=nil;
+		return;
+	}
+	print("readmessage: " ~ order);
+	last_order_string=order;
+	var aux=sprintf("return %s",order);
+	var ff = call(compile,[aux],var err=[]);
+	if (!size(err)) {
+		var laor = ff();
+		if (laor['to'] != callsign){
+			print(sprintf("ignoring order for %s",laor['ord']));
+		} else {
+			last_order = laor;
+			if (last_order['rwy']){
+				selected_runway=last_order['rwy'];
+			}
+			if (last_order['ord']=='tuneok') {
+				set_comm(last_order['apt'],last_order['atc']);
+			}
+			print(sprintf("ATCNG incoming order=%s",order));
+		}
+	}
+	var msg = atcnode.getNode(servermsgchannel).getValue();
+	if (msg != nil and msg != '') {
+		print(sprintf("ATCNG incoming message=%s",msg));
+		setprop(atcchannel,msg);
+	}
+}
+
+var set_comm = func(icao,controller) {
+	airport=findAirportsByICAO(icao)[0];
+	set_controller(controller);
+	setprop(aptcode_node, airport.id);
+	setprop(aptname_node, airport.name);
+	print("ATCNG set_comm " ~ controller);
+	screen.log.write(sprintf("Tunned to %s", controller),0.7, 1.0, 0.7);
+					
+};
+var update = func {
+	var frq = getprop("/instrumentation/comm/frequencies/selected-mhz");
+	print("FREQ=",frq);
+	if (frq != frequency) {
+		airport=nil;
+		if (atclistener) {
+			print("Removing old listener");
+			removelistener(atclistener);
+			atclistener=nil;
+		}	
+		set_freq(frq);
+		sendmessage('tunein',0);
+		settimer(atcng.check_model, 5);
+	}
+}
+
 var messages = {
 	roger:'{ack}{qnh}, {cs}',
 	repeat:'{apt}, {cs}, say again',
-	startup: '{apt} tower, {cs}, request startup clearance',
-	readytaxi: '{apt} tower, {cs}, ready to taxi',
-	holdingshort: '{apt} tower, {cs}, holding short {rwyof}',
-	readytko: '{apt} tower, {cs}, ready for takeoff',
-	transition: '{apt} tower, {cs} to transition your airspace',
-	inbound: '{apt} tower, {cs} for inbound approach',
-	crosswind: '{apt} tower, {cs}, crosswind for runway {rwy}',
-	downwind: '{apt} tower, {cs}, downwind for runway {rwy}',
-	base: '{apt} tower, {cs}, turning base for runway {rwy}',
-	final: '{apt} tower, {cs}, turning final for runway {rwy}',
-	straight: '{apt} tower, {cs}, straight for runway {rwy}',
-	clearrw: '{apt} tower, {cs}, clear {rwyof}',
-	around: '{apt} tower, {cs}, going around',
+	startup: '{apt}, {cs}, request startup clearance',
+	readytaxi: '{apt}, {cs}, ready to taxi',
+	holdingshort: '{apt}, {cs}, holding short {rwyof}',
+	readytko: '{apt}, {cs}, ready for takeoff',
+	transition: '{apt}, {cs} to transition your airspace',
+	inbound: '{apt}, {cs} for inbound approach',
+	crosswind: '{apt}, {cs}, crosswind for runway {rwy}',
+	downwind: '{apt}, {cs}, downwind for runway {rwy}',
+	base: '{apt}, {cs}, turning base for runway {rwy}',
+	final: '{apt}, {cs}, turning final for runway {rwy}',
+	straight: '{apt}, {cs}, straight for runway {rwy}',
+	clearrw: '{apt}, {cs}, clear {rwyof}',
+	around: '{apt}, {cs}, going around',
 	tunein: '',
 	
 };
@@ -72,7 +206,7 @@ var parse_message = func(tag) {
 	msg = string.replace(msg,'{rwy}',selected_runway);
 	msg = string.replace(msg,'{rwyto}', "to runway " ~ selected_runway);
 	msg = string.replace(msg,'{rwyof}', "of runway  " ~ selected_runway);
-	msg = string.replace(msg,'{apt}',airport.name);
+	msg = string.replace(msg,'{apt}',get_controller());
 	
 	if (tag == "roger") {
 		if(last_order['ord'] == 'taxito') {
@@ -110,95 +244,11 @@ var parse_message = func(tag) {
 	return msg;
 };
 
-
-var sendmessage = func(message="",dlg=1){
-	var msg = parse_message(message);
-	var request = sprintf("req=%s;apt=%s",message,airport.id);
-	if (message=='roger' and last_order != nil){
-		request = sprintf("%s;laor=%s",request,last_order['ord']);
-	}
-	print(sprintf("Sendmessage: %s | %s",request , msg));
-	setprop(pilotchannel,request);
-	setprop(chatchannel,msg);
-	if (dlg) {
-		dialog.destroy();
-	}
-};
-var repeat = func() {
-	print("ATCNg: repeat");
-	atcng.sendmessage("repeat");
+##### Dialog
+var reset = func() {
+	update();
+	dialog.destroy();
 }
-var _ml={};
-
-var check_model = func(node=nil) {
-	foreach (var n; props.globals.getNode("ai/models", 1).getChildren("multiplayer")) {
-		debug.dump(n);
-		if ((var valid = n.getNode("valid")) == nil or (!valid.getValue())) {
-        	print("check_model: continue 1");
-        	continue;
-        }
-        if ((var callsign = n.getNode("callsign")) == nil or !(callsign = callsign.getValue())) {
-            print("check_model: continue 2");
-        	continue;
-        }
-        var callsign =  n.getNode("callsign").getValue();
-        print("AIRPORT");
-        debug.dump(airport);
-		if (airport != nil and callsign == airport.id) {
-			print(sprintf("ATC for %s found in %s",airport.id,n.getPath()));
-			atcnode = n;
-			if (atclistener) {
-				print("Removing old listener");
-				removelistener(atclistener);
-			}
-			var sc = atcnode.getNode(serverchannel).getPath();
-			print("ATCNG listening in " ~ sc);
-			atclistener = setlistener(sc, readmessage, 0, 0);
-		} else {
-			print("checking ai-plane " ~ callsign);
-			if (!contains(_ml,callsign)){
-				print("ATCNG adding ai-plane " ~ callsign);
-				var nnode=n;
-				var aic=nnode.getNode(servermsgchannel).getPath();
-				_ml[callsign]=setlistener(aic,readaimessage,0,0);	
-			}
-		}
-	}
-}
-var readaimessage= func(node=nil){
-	var msg = node.getValue();
-	if (msg != nil){
-		setprop(chataichannel,msg);
-	}
-}
-var readmessage = func(node=nil) {
-	var order = node.getValue();
-	print("readmessage: " ~ order);
-	if (order == '') {
-		last_order = nil;
-		last_order_string=nil;
-		return;
-	}
-	last_order_string=order;
-	var aux=sprintf("return %s",order);
-	var ff = call(compile,[aux],var err=[]);
-	if (!size(err)) {
-		var laor = ff();
-		if (laor['to'] != callsign){
-			print(sprintf("ignoring order for %s",laor['ord']));
-		} else {
-			last_order = laor;
-			if (last_order['rwy']){
-				selected_runway=last_order['rwy'];
-			}
-			print(sprintf("ATCNG incoming order=%s",order));
-		}
-	}
-	var msg = atcnode.getNode(servermsgchannel).getValue();
-	print(sprintf("ATCNG incoming message=%s",msg));
-	setprop(atcchannel,msg);
-}
-
 var get_dialog_column=func(tag){
 	var legend= parse_message(tag);	
 	var col ={ type: "button", legend: legend, code: tag, halign: "right", callback: "atcng.sendmessage" };
@@ -240,40 +290,7 @@ var dialog_columns=func(){
     }
      return cols;
 }
-var set_comm = func(apt,comm) {
-	debug.dump(comm);
-	atcng.airport = apt;
-	atcng.comm = comm;
-	setprop(atcng.aptcode_node, apt.id);
-	setprop(atcng.aptname_node, apt.name);
-	print("ATCNG set_comm " ~ atcng.comm.ident);
-	screen.log.write(sprintf("Tunned to %s", atcng.comm.ident),0.7, 1.0, 0.7);
-					
-};
-var update = func {
-	var airps = findAirportsWithinRange(50);
-	var frq = getprop("/instrumentation/comm/frequencies/selected-mhz");
-	print("FREQ=",frq);
-	foreach(var apt;airps){
-   		var com = apt.comms();
-	   	if (size(com) > 0) {
-			foreach(var f;com) {
-				if(frq == f.frequency) {
-					atcng.set_comm(apt,f);
-					print(frq, apt.id, f.ident,f.frequency);
-					settimer(atcng.check_model, 5);
-					sendmessage('tunein',0);
-					return;
-				}
-			}
-		}
-	}
-}
 
-var reset = func() {
-	update();
-	dialog.destroy();
-}
 var setview = func(view = nil) {
 	print("setview" ~ view);
 	viewnode = view;

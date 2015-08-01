@@ -7,19 +7,18 @@ Created on Apr 14, 2015
 import socket
 from xdrlib import Unpacker
 from fgserver.messages import PROP_REQUEST, PROP_FREQ, PosMsg, PROP_CHAT,\
-    PROP_ORDER
+    PROP_ORDER, alias
 from fgserver.helper import cart2geod, Quaternion, Vector3D,\
     move
 from django.db.models.signals import post_save
 from django.dispatch.dispatcher import receiver
-from fgserver.models import Order, Aircraft, Request, Airport
+from fgserver.models import Order, Aircraft, Request, Airport,\
+    airportsWithinRange
 from django.utils import timezone
 from fgserver.atc.models import Tower, ATC, Departure, Approach
-from random import randint
-from fgserver import units, llogger
+from fgserver import units, llogger, messages, get_controller
 from django.core.cache import  get_cache
 import os 
-from fgserver.ai.models import Circuit
 from __builtin__ import Exception, max
 os.environ['DJANGO_SETTINGS_MODULE'] = 'fgserver.settings' 
 import django
@@ -46,15 +45,15 @@ def error(*argv):
         msg += " %s" % arg
     llogger.error(msg)
 
-def get_airport(icao):
-    a = get_cache('airports').get(icao)
-    if not a:
-        try:
-            a = Airport.objects.get(icao=icao)
-            get_cache('airports').set(icao,a)
-        except Airport.DoesNotExist as e:
-            error("ERROR. Airport not found:",icao,e)
-    return a
+# def get_airport(icao):
+#     a = get_cache('airports').get(icao)
+#     if not a:
+#         try:
+#             a = Airport.objects.get(icao=icao)
+#             get_cache('airports').set(icao,a)
+#         except Airport.DoesNotExist as e:
+#             error("ERROR. Airport not found:",icao,e)
+#     return a
 
 def set_circuit(circuit):
     if circuit:
@@ -76,16 +75,16 @@ def load_circuits(airport):
             set_circuit(circuit)
             log("Circuit %s added" % circuit)
              
-def get_controller(airport):
-    a,create=ATC.objects.get_or_create(airport=airport)
-    if create:
-        log("Creating controller for %s" % airport)
-        Departure.objects.create(atc=a,name="%s Departure" % airport.name)
-        Approach.objects.create(atc=a,name="%s Approach" % airport.name)
-        Tower.objects.create(atc=a,name="%s Tower" % airport.name)
-    load_circuits(airport)
-    #log("get_controller. returning %s" % a)
-    return a
+# def get_controller(airport):
+#     a,create=ATC.objects.get_or_create(airport=airport)
+#     if create:
+#         log("Creating controller for %s" % airport)
+#         Departure.objects.create(atc=a,name="%s Departure" % airport.name)
+#         Approach.objects.create(atc=a,name="%s Approach" % airport.name)
+#         Tower.objects.create(atc=a,name="%s Tower" % airport.name)
+#     load_circuits(airport)
+#     #log("get_controller. returning %s" % a)
+#     return a
 
 def get_aicraft(callsign):
     #a = get_cache('aircrafts').get(callsign)
@@ -124,7 +123,7 @@ def set_pos(pos):
     
 def queue_order(order):
     log("queue_order.",order,order.date)
-    orders.setdefault(order.sender.icao,[]).append(order)
+    orders.setdefault(order.sender.id,[]).append(order)
     
         
 def process_queues():
@@ -137,7 +136,7 @@ def process_queues():
                 o.confirmed=True
                 log("activating order ",o)
                 o.save()
-                _last_orders[o.sender.icao]=o
+                _last_orders[o.sender.id]=o
                 if not o.receiver.ip:
                     c = get_circuit(o.receiver.callsign)
                     log("processint order",o)
@@ -160,18 +159,20 @@ def save_cache():
             #log("saving aircraft", a.callsign, a.lat,a.lon,a.altitude)
             a.save()
         get_cache('default').set('last_update',timezone.now())
+
 @receiver(post_save,sender=Order)
 def process_order(sender, instance, **kwargs):
     if not instance.confirmed:
         queue_order(instance)
 
-
 @receiver(post_save,sender=Request)
 def process_request(sender, instance, **kwargs):
-    req = instance.get_request()
-    airport = get_airport(req.apt)
-    controller = get_controller(airport)
-    controller.manage(instance)
+    if instance.receiver:
+        log("Processing request %s " % instance)
+        controller = get_controller(instance.receiver)
+        controller.manage(instance)
+    else:
+        log("Ignoring request without receiver %s " % instance)
 #     order= 
 #     if order:
 #         order.sender = airport
@@ -196,17 +197,14 @@ def send_pos(callsign):
     #request = Request.objects.filter(sender=aircraft).order_by('-date').first()
     aircraft = get_aicraft(callsign)
     request = aircraft.requests.last()
-    if request:
-        req = request.get_request()
-        apt = Airport.objects.get(icao=req.apt)
-        order = _last_orders.get(apt.icao)
-        #order = apt.orders.filter(confirmed=True).exclude(message='').order_by('-date').first()
-        #order = Order.objects.filter(sender=apt, confirmed=True).exclude(message='').order_by('-date').first()
+    if aircraft.freq and request and request.receiver:
+        order = _last_orders.get(request.receiver.id)
         if order:
             msg = PosMsg()
-            msg.send_from(order.sender)
+            msg.send_from(order.sender.airport)
             msg.time = sim_time()
             msg.lag=0.1
+            msg.properties.set_prop(PROP_FREQ, str(order.sender.get_FGfreq()))
             msg.properties.set_prop(PROP_ORDER, order.get_order())
             msg.properties.set_prop(PROP_CHAT,order.message )
             
@@ -214,9 +212,10 @@ def send_pos(callsign):
             sendto(msg.send(), aircraft.get_addr())
         else:
             msg = PosMsg()
-            msg.send_from(apt)
+            msg.send_from(request.receiver.airport)
             msg.time = sim_time()
             msg.lag=0.1
+            msg.properties.set_prop(PROP_FREQ, request.receiver.get_FGfreq())
             sendto(msg.send(), aircraft.get_addr())
     ''' send mp and ai planes positions to player ''' 
     for mp in get_mpplanes(aircraft):
@@ -255,6 +254,26 @@ def sendto(data,addr):
         pass
         #log("Error sending to", addr)
 
+def find_comm(request):
+    
+    # fgfs sends integer freqs in Mhz but apt.dat has freqs in 1/100 Mhz (integers) 
+    freq = request.get_request().freq
+    freq = freq.replace('.','').ljust(5,'0') # replace the dot and add padding
+    comm = get_cache('controllers').get("%s-%s" % (request.sender.callsign,freq))
+    if comm:
+        print "RETURNING CACHED COMM for %s" % freq
+        return comm
+    print "FINDING COMM for %s" % freq
+    apts = airportsWithinRange(request.sender.get_position(), 50, units.NM)
+    print "Airports in range=%s " % apts
+    for apt in apts:
+        c = apt.comms.filter(frequency=freq)
+        if c.count():
+            get_cache('controllers').set("%s-%s" % (request.sender.callsign,freq),c.first().id)
+            return c.first().id
+    return None
+
+
 def process_pos(pos):
     
     set_pos(pos)
@@ -284,6 +303,8 @@ def process_pos(pos):
             aircraft.last_request = request
             set_aircraft(aircraft)
             req = Request(sender=aircraft,date=timezone.now(),request=request)
+            req.receiver_id = find_comm(req)
+            log("receiver=%s" % req.receiver )
             req.save()
     return True
 #     except Exception as e:

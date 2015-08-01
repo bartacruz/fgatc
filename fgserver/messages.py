@@ -206,6 +206,7 @@ class alias():
     TRANSITION='transiton'
     TUNE_IN='tunein'
     TUNE_OK='tuneok'
+    TUNE_TO='tuneto'
     
     CIRCUIT_LEFT='left'
     CIRCUIT_RIGHT='right'
