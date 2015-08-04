@@ -24,7 +24,13 @@ class Controller(object):
     
     def __init__(self,comm):
         self.comm = comm
-        llogger.info("Controller for %s created" % comm)
+        self.configure()
+        llogger.info("Controller type %s for %s created" % (type(self).__name__, comm))
+    
+    
+    def configure(self):
+        ''' Called from init. Subclasses can implement it '''
+        pass
     
     def runway_boundaries(self):        
         if self._runway_boundaries:
@@ -164,10 +170,13 @@ class Controller(object):
         if c:
             response=self._init_response(request)
             response.add_param(Order.PARAM_ORDER,alias.TUNE_TO)
-            response.add_param(Order.PARAM_FREQUENCY,c.comm.get_FGfreq())
-            response.add_param(Order.PARAM_CONTROLLER,c.comm.identifier)
+            self.pass_control(response, c)
             response.message=get_message(response)
             return response
+    
+    def pass_control(self,response,controller):
+        response.add_param(Order.PARAM_FREQUENCY,controller.comm.get_FGfreq())
+        response.add_param(Order.PARAM_CONTROLLER,controller.comm.identifier)
         
     def roger(self,request):
         tag=self.comm.tags.get(aircraft=request.sender)
@@ -204,6 +213,8 @@ class Ground(Controller):
         response=self._init_response(request)
         response.add_param(Order.PARAM_ORDER,'taxito')
         response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
+        twr = get_controllers(self.comm.airport, Comm.TWR)[0]
+        self.pass_control(response, twr)
         count = self.comm.tags.filter(status=PlaneInfo.SHORT).count()
         count_others = self.comm.tags.filter(status__in=[PlaneInfo.LINED_UP,PlaneInfo.LANDING]).count()
         self.log("readytaxi",count,count_others)
@@ -230,6 +241,25 @@ class Ground(Controller):
 
 
 class Tower(Controller):
+    
+    helpers = []
+    
+    def configure(self):
+        Controller.configure(self)
+        self.log("creating helpers...")
+        self.helpers.append(Ground(self.comm))
+        self.helpers.append(Departure(self.comm))
+        self.helpers.append(Approach(self.comm))
+    
+    def manage(self, request):
+        if Controller.manage(self, request):
+            return True
+        self.log("Trying with helpers")
+        for c in self.helpers:
+            if c.manages(request.get_request().req):
+                self.log("Helper found: %s " % c )
+                return c.manage(request)
+        return False
 
     def holdingshort(self,request):
         response=self._init_response(request)
@@ -306,6 +336,10 @@ class Tower(Controller):
         response.message=get_message(response)
         return response
 
+    def straight(self,request):
+        ''' alias for "final" '''
+        return self.final(request)
+
     def go_around(self,request):
         aircraft = request.sender
         response = self._init_response(request)
@@ -363,11 +397,12 @@ class Approach(Controller):
         response=self._init_response(request)
         response.add_param(Order.PARAM_ORDER, alias.JOIN_CIRCUIT)
         response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
-        response.add_param(Order.PARAM_ALTITUDE,self.circuit_alt )
+        response.add_param(Order.PARAM_ALTITUDE,str(self.circuit_alt) )
         response.add_param(Order.PARAM_CIRCUIT_TYPE, self.circuit_type)
         response.add_param(Order.PARAM_CIRCUIT_WP,[alias.CIRCUIT_CROSSWIND,alias.CIRCUIT_DOWNWIND][randint(0,1)])
         response.add_param(Order.PARAM_QNH, str(get_qnh(self.comm.airport)))
-
+        twr = get_controllers(self.comm.airport, Comm.TWR)[0]
+        self.pass_control(response, twr)
         response.message=get_message(response)        
         self.set_status(request.sender, PlaneInfo.APPROACHING)
         return response

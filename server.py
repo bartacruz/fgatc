@@ -7,7 +7,7 @@ Created on Apr 14, 2015
 import socket
 from xdrlib import Unpacker
 from fgserver.messages import PROP_REQUEST, PROP_FREQ, PosMsg, PROP_CHAT,\
-    PROP_ORDER, alias
+    PROP_ORDER, alias, PROP_CHAT2, PROP_ORDER2, PROP_OID
 from fgserver.helper import cart2geod, Quaternion, Vector3D,\
     move
 from django.db.models.signals import post_save
@@ -32,6 +32,7 @@ _aaa={}
 _circuits={}
 
 _last_orders={}
+_received_orders = {}
 
 def log(*argv):
     msg = "[Server]"
@@ -139,10 +140,25 @@ def process_queues():
                 _last_orders[o.sender.id]=o
                 if not o.receiver.ip:
                     c = get_circuit(o.receiver.callsign)
-                    log("processint order",o)
+                    log("processing order",o)
                     c.process_order(o)
                     set_circuit(c)
-                
+                    
+def receive_order(aircraft,oid):
+    if not is_order_received(aircraft,oid):
+        o = aircraft.orders.filter(pk=oid).last()
+        print "RECEIVE",oid,o,aircraft
+        o.received=True
+        o.save()
+        _received_orders[str(aircraft.id)]=int(oid)
+        log("order received for %d : %s" %(aircraft.id, oid))
+        return True
+    return False
+
+def is_order_received(aircraft,oid):
+    last = _received_orders.get(str(aircraft.id),0)
+    return int(oid) <= int(last)
+    
 def save_cache():
     _last_update = get_cache('default').get('last_update')
     if not _last_update or (timezone.now() - _last_update).total_seconds() > UPDATE_RATE:
@@ -198,21 +214,49 @@ def send_pos(callsign):
     aircraft = get_aicraft(callsign)
     request = aircraft.requests.last()
     if aircraft.freq and request and request.receiver:
+        #log("aircraft.freq =%s, receiver.freq=%s" % (aircraft.freq,request.receiver.get_FGfreq()))
         order = _last_orders.get(request.receiver.id)
         if order:
-            msg = PosMsg()
-            msg.send_from(order.sender.airport)
-            msg.time = sim_time()
-            msg.lag=0.1
-            msg.properties.set_prop(PROP_FREQ, str(order.sender.get_FGfreq()))
-            msg.properties.set_prop(PROP_ORDER, order.get_order())
-            msg.properties.set_prop(PROP_CHAT,order.message )
-            
-            #log("sending to",order.sender.get_position(),msg.position,msg.orientation)
-            sendto(msg.send(), aircraft.get_addr())
+            try:
+                msg = PosMsg()
+                msg.send_from_comm(order.sender)
+                msg.time = sim_time()
+                msg.lag=0.1
+                msg.properties.set_prop(PROP_FREQ, str(order.sender.get_FGfreq()))
+                #print 'CHK',order.id,aircraft.id,_received_orders
+                if not is_order_received(aircraft, order.id):
+                    ostring = order.get_order()
+                    ostring2=''
+                    if len(ostring) >=121:
+                        ostring2 = ostring[120:]
+                        msg.properties.set_prop(PROP_ORDER2, ostring2)
+                        ostring=ostring[:120]
+                    msg.properties.set_prop(PROP_ORDER, ostring)                    
+                else:
+                    msg.properties.set_prop(PROP_ORDER, "{'oid':'%d'}" % order.id)    
+                    chat = order.message
+                    chat2=''
+                    if len(chat) >=121:
+                        chat2 = chat[120:]
+                        msg.properties.set_prop(PROP_CHAT2,chat2 )
+                        chat=chat[:120]
+                    
+                    if chat:
+                        msg.properties.set_prop(PROP_CHAT,chat )
+                
+                #log("sending to",order.sender.get_position(),msg.position,msg.orientation)
+                buff = msg.send()
+                if len(buff) > 1200: 
+                    log("ERROR msg size=%d. Not sending", len(buff))
+                else:
+                    sendto(buff, aircraft.get_addr())
+                
+                
+            except:
+                llogger.exception("Sending msg")
         else:
             msg = PosMsg()
-            msg.send_from(request.receiver.airport)
+            msg.send_from_comm(request.receiver)
             msg.time = sim_time()
             msg.lag=0.1
             msg.properties.set_prop(PROP_FREQ, request.receiver.get_FGfreq())
@@ -306,6 +350,9 @@ def process_pos(pos):
             req.receiver_id = find_comm(req)
             log("receiver=%s" % req.receiver )
             req.save()
+    oid_p = pos.get_property(PROP_OID)
+    if oid_p:
+        receive_order(aircraft, oid_p['value'])
     return True
 #     except Exception as e:
 #         log("ERROR al procesar posicion",e,pos)

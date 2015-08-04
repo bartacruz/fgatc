@@ -10,5 +10,6 @@ encoding//fgserver/map/views.py=utf-8
 encoding//fgserver/messages.py=utf-8
 encoding//fgserver/models.py=utf-8
 encoding//fgserver/tools/airport_importer.py=utf-8
+encoding//fgserver/tools/make_parkings.py=utf-8
 encoding/<project>=UTF-8
 encoding/server.py=utf-8

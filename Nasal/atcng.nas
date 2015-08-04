@@ -11,9 +11,12 @@ var chatchannel="/sim/messages/pilot";
 var chataichannel="/sim/messages/ai-plane";
 var atcchannel="/sim/messages/atc";
 var freqchannel="sim/multiplay/transmission-freq-hz";
+var oidnode="sim/multiplay/generic/string[10]";
 var pilotchannel="sim/multiplay/generic/string[17]";
 var serverchannel="sim/multiplay/generic/string[18]";
+var serverchannel2="sim/multiplay/generic/string[15]";
 var servermsgchannel="sim/multiplay/generic/string[16]";
+var servermsgchannel2="sim/multiplay/generic/string[14]";
 var atcnode=nil;
 var atclistener = nil;
 var selected_runway="";
@@ -53,6 +56,7 @@ var get_freq=func() {
 var set_freq=func(freq) {
 	frequency = freq;
 	setprop(freq_node,freq);
+	setprop(freqchannel,freq);
 }
 
 var sendmessage = func(message="",dlg=1){
@@ -75,6 +79,8 @@ var repeat = func() {
 var _ml={};
 
 var check_model = func(node=nil) {
+	print("Starting check_model");
+	var ainodes=[];
 	foreach (var n; props.globals.getNode("ai/models", 1).getChildren("multiplayer")) {
 		debug.dump(n);
 		if ((var valid = n.getNode("valid")) == nil or (!valid.getValue())) {
@@ -91,19 +97,28 @@ var check_model = func(node=nil) {
         if (airport==nil and model == "ATC" and freq == frequency) {
         	print(sprintf("ATC controller for %s found in %s",frequency,n.getPath()));
         	atcnode = n;
+        	if (contains(_ml, callsign)) {
+        		print(sprintf("removing AI plane of new ATC %s",callsign));
+        		removelistener(_ml[callsign]);
+        		delete(_ml,callsign);
+        	}
 			var sc = atcnode.getNode(serverchannel).getPath();
 			print("ATCNG listening in " ~ sc);
-			atclistener = setlistener(sc, readmessage, 1, 0);
+			atclistener = setlistener(sc, atcng.readmessage, 0, 0);
    		} else {
 			print("checking ai-plane " ~ callsign);
-			if (!contains(_ml,callsign)){
+			if (!contains(_ml,callsign) and (atcnode == nil or n.getPath() != atcnode.getPath()) and freq == frequency){
 				print("ATCNG adding ai-plane " ~ callsign);
 				var nnode=n;
 				var aic=nnode.getNode(servermsgchannel).getPath();
-				_ml[callsign]=setlistener(aic,readaimessage,0,0);	
+				_ml[callsign]=setlistener(aic,readaimessage,0,0);
+				append(ainodes,aic);
+					
 			}
-		}
+		} 
 	}
+	print(sprintf("check_model end. atc=%s, ml=%s",atcnode,size(ainodes)));
+	
 }
 
 
@@ -111,11 +126,19 @@ var check_model = func(node=nil) {
 var readaimessage= func(node=nil){
 	var msg = node.getValue();
 	if (msg != nil){
+		print("Incomming AI message " ~ msg);
 		setprop(chataichannel,msg);
 	}
 }
 var readmessage = func(node=nil) {
 	var order = node.getValue();
+	var order2= atcnode.getNode(serverchannel2).getValue();
+	if (order2 != nil and order2 != '') {
+			print("ATCNG: concatenating order");
+			print(order);
+			print(order2);
+			order = order ~ order2;
+	}
 	if (order == nil or order == '') {
 		last_order = nil;
 		last_order_string=nil;
@@ -129,6 +152,8 @@ var readmessage = func(node=nil) {
 		var laor = ff();
 		if (laor['to'] != callsign){
 			print(sprintf("ignoring order for %s",laor['ord']));
+		} else if (last_order != nil and laor['oid'] == last_order['oid']) {
+			print("Order already received");
 		} else {
 			last_order = laor;
 			if (last_order['rwy']){
@@ -137,11 +162,16 @@ var readmessage = func(node=nil) {
 			if (last_order['ord']=='tuneok') {
 				set_comm(last_order['apt'],last_order['atc']);
 			}
+			setprop(oidnode,sprintf("%s",last_order['oid']));
 			print(sprintf("ATCNG incoming order=%s",order));
 		}
 	}
 	var msg = atcnode.getNode(servermsgchannel).getValue();
 	if (msg != nil and msg != '') {
+		var msg2 = atcnode.getNode(servermsgchannel2).getValue();
+		if (msg2 != nil and msg2 != '') {
+			msg = msg ~ msg2;
+		}
 		print(sprintf("ATCNG incoming message=%s",msg));
 		setprop(atcchannel,msg);
 	}

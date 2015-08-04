@@ -43,6 +43,10 @@ def say_number(number):
             ret += ' %s' % NUMBERS[int(idx)]
     return ret.strip()
 
+# def say_number(number):
+#     ns = str(number)
+#     return ' '.join(ns)
+
 def normdeg(a):
     while a >= 180:
         a -= 360

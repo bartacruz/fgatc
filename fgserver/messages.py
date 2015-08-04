@@ -5,11 +5,19 @@ Created on Apr 16, 2015
 @author: bartacruz
 '''
 from xdrlib import Packer
+from fgserver import llogger
+
 
 PROP_FREQ = 10001
+
+PROP_ORDER2 = 10115
 PROP_CHAT = 10116
 PROP_REQUEST = 10117
 PROP_ORDER = 10118
+PROP_CHAT2 = 10114
+
+PROP_OID=10110
+
 
 # FlightGear's MP messages properties.(from v2.12)
 PROPERTIES = {
@@ -359,7 +367,11 @@ class PosMsg:
         if r:
             return r
         return None
-        
+    
+    def send_from_comm(self,comm):
+        self.send_from(comm.airport)
+        self.header.callsign = '%s%s' % (comm.airport.icao,comm.type)
+            
     def send_from(self, apt):
         ''' updates this PosMsg with data from the airport '''
         self.header.callsign = apt.icao
@@ -402,24 +414,27 @@ class PosMsg:
         self.properties.receive(unp, self.header.msglen)
 
     def send(self):
-        unp = Packer()
-        unp.pack_fstring(96, self.model)
-        unp.pack_double(self.time)
-        unp.pack_double(self.lag)
-        unp.pack_farray(3, self.position, unp.pack_double)
-        unp.pack_farray(3, self.orientation, unp.pack_float)
-        unp.pack_farray(3, self.linear_vel, unp.pack_float)
-        unp.pack_farray(3, self.angular_vel, unp.pack_float)
-        unp.pack_farray(3, self.linear_accel, unp.pack_float)
-        unp.pack_farray(3, self.angular_accel, unp.pack_float)
-        unp.pack_uint(0)
-        self.properties.send(unp)
-        msgbuf = unp.get_buffer()
-        headbuf = self.header.send()
-        self.header.msglen = len(headbuf + msgbuf)
-        # print "setting len=",self.header.msglen
-        headbuf = self.header.send()
-        return headbuf + msgbuf
+        try:
+            unp = Packer()
+            unp.pack_fstring(96, self.model)
+            unp.pack_double(self.time)
+            unp.pack_double(self.lag)
+            unp.pack_farray(3, self.position, unp.pack_double)
+            unp.pack_farray(3, self.orientation, unp.pack_float)
+            unp.pack_farray(3, self.linear_vel, unp.pack_float)
+            unp.pack_farray(3, self.angular_vel, unp.pack_float)
+            unp.pack_farray(3, self.linear_accel, unp.pack_float)
+            unp.pack_farray(3, self.angular_accel, unp.pack_float)
+            unp.pack_uint(0)
+            self.properties.send(unp)
+            msgbuf = unp.get_buffer()
+            headbuf = self.header.send()
+            self.header.msglen = len(headbuf + msgbuf)
+            # print "setting len=",self.header.msglen
+            headbuf = self.header.send()
+            return headbuf + msgbuf
+        except:
+            llogger.exception("ERROR creating msg")
         
     def __str__(self):
         return "time=%s, position=%s, model=%s" % (self.time, self.position, self.model)

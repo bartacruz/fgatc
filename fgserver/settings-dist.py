@@ -13,6 +13,15 @@ import os
 
 METAR_URL='http://weather.noaa.gov/pub/data/observations/metar/stations'
 METAR_UPDATE = 60*30 # in seconds
+DEFAULT_CONTROLLERS = {
+        50:'fgserver.atc.controllers.Controller', # ATIS
+        51: 'fgserver.atc.controllers.Controller', # UNICOM
+        52: 'fgserver.atc.controllers.Controller', # Clearance Delivery
+        53: 'fgserver.atc.controllers.Ground', # Ground Control
+        54: 'fgserver.atc.controllers.Tower', # Tower
+        55: 'fgserver.atc.controllers.Approach', #Approach
+        56: 'fgserver.atc.controllers.Departure', #Departure
+    }
 
 BROKER_URL = 'django://'
 
@@ -26,7 +35,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 SECRET_KEY = '2iqo)@&ls#f#@$8-r)=t%h3u4ri$t$q4ec2h*pc^k=k5v%8_e%'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 TEMPLATE_DEBUG = True
 

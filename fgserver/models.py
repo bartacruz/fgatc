@@ -4,13 +4,21 @@ Created on Apr 15, 2015
 
 @author: bartacruz
 '''
+from __builtin__ import abs
+from threading import Thread
+
 from django.db.models.base import Model
-from django.db.models.fields import CharField, DecimalField, IntegerField,\
+from django.db.models.fields import CharField, DecimalField, IntegerField, \
     DateTimeField, BooleanField, FloatField
 from django.db.models.fields.related import ForeignKey
+from django.dispatch.dispatcher import receiver
+from django.utils import timezone
+
+from fgserver import llogger, debug, units, get_closest_metar
 from fgserver.helper import normdeg, Position, get_distance, move
-from __builtin__ import abs
-from fgserver import llogger, debug, units, get_metar
+from fgserver.settings import METAR_UPDATE
+from django.db.models.signals import post_save
+from metar.Metar import Metar
 
 
 class Airport(Model):
@@ -27,12 +35,13 @@ class Airport(Model):
         return self.icao
     
     def active_runway(self):
-        metar = get_metar(self)
+        metar = self.metar.last()
         if metar:
+            obs = Metar(metar.observation)
             wind_from = 270
-            wind_speed = metar.wind_speed
-            if wind_speed and metar.wind_dir:
-                wind_from=metar.wind_dir.value()
+            wind_speed = obs.wind_speed
+            if wind_speed and obs.wind_dir:
+                wind_from=obs.wind_dir.value()
             vmax = -1
             rwy = None
             for curr in self.runways.all():
@@ -52,13 +61,14 @@ class Airport(Model):
 
 
 def airportsWithinRange(pos,max_range, unit=units.NM):
-    apts = Airport.objects.all()
+    ne = move(pos, 45, max_range*unit, 0)
+    sw = move(pos, 225, max_range*unit, 0)
+    apts = Airport.objects.filter(lat__gte=sw.x, lon__gte=sw.y, lat__lte=ne.x,lon__lte=ne.y)
     within = [None]*max_range
     for apt in apts:
         apt_pos=apt.get_position()
         d =get_distance(pos, apt_pos, unit)
-        if d <= max_range:
-            within.insert(int(d),apt)
+        within.insert(int(d),apt)
     within = [item for item in within if item] # sorting vodoo
     return within
 
@@ -116,6 +126,12 @@ class Comm(Model):
     
     def __unicode__(self):
         return "%s@%s" %(self.name, self.frequency)
+
+class MetarObservation(Model):
+    airport = ForeignKey(Airport,related_name='metar')
+    date = DateTimeField()
+    cycle = IntegerField()
+    observation = CharField(max_length=255)
     
 class Aircraft(Model):
     callsign = CharField(max_length=8)
@@ -164,8 +180,10 @@ class Order(Model):
     sender = ForeignKey(Comm, related_name='orders')
     order = CharField(max_length=255)
     message = CharField(max_length=255)
-    confirmed = BooleanField(default=False)
-
+    confirmed = BooleanField(default=False) # by ATC
+    received = BooleanField(default=False) # by aircraft radio
+    acked = BooleanField(default=False) # by pilot
+    
     PARAM_ORDER='ord'
     PARAM_FREQUENCY='freq'
     PARAM_RUNWAY='rwy'
@@ -184,6 +202,7 @@ class Order(Model):
     PARAM_ATIS='atis'
     PARAM_RECEIVER='to'
     PARAM_CONTROLLER='atc'
+    
     
     def add_param(self,key,val):
         self._order[key]=val
@@ -222,4 +241,40 @@ class Order(Model):
             
     def __unicode__(self):
         return "%s: to %s = %s" %( self.id,self.receiver,self.order)
+
+class MetarUpdater(Thread):
+    apt = None
+    
+    def __init__(self,apt):
+        self.apt = apt
+        super(MetarUpdater,self).__init__()
+    
+    def run(self):
+        obs = get_closest_metar(self.apt)
+        if obs:
+            try:
+                metar= MetarObservation.objects.get(airport=self.apt)
+                llogger.debug("Updating METAR for %s with %s" % (self.apt,obs))
+            except:
+                metar = MetarObservation(airport=self.apt)
+                llogger.debug("Creating METAR for %s with %s" % (self.apt,obs))
+            metar.observation = obs.code
+            metar.date=timezone.now()
+            metar.cycle = obs.cycle
+            metar.save()
+            
+ 
+@receiver(post_save,sender=Order)
+def check_metar(sender, instance, **kwargs):
+    try:
+        metar = MetarObservation.objects.get(airport = instance.sender.airport)
+        diff = timezone.now() - metar.date
+        if diff.total_seconds() <= METAR_UPDATE:
+            return
+    except:
+        llogger.error("Error getting MetarObservation for %s" % instance.sender.airport)
+    llogger.debug("Getting metar for %s" % instance.sender.airport)
+    t = MetarUpdater(instance.sender.airport)
+    t.start()
+
 
