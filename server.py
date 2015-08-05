@@ -157,7 +157,7 @@ def receive_order(aircraft,oid):
 
 def is_order_received(aircraft,oid):
     last = _received_orders.get(str(aircraft.id),0)
-    return int(oid) <= int(last)
+    return int(oid) == int(last)
     
 def save_cache():
     _last_update = get_cache('default').get('last_update')
@@ -227,23 +227,30 @@ def send_pos(callsign):
                 if not is_order_received(aircraft, order.id):
                     ostring = order.get_order()
                     ostring2=''
-                    if len(ostring) >=121:
-                        ostring2 = ostring[120:]
+                    if len(ostring) >=128:
+                        ostring2 = ostring[127:]
                         msg.properties.set_prop(PROP_ORDER2, ostring2)
-                        ostring=ostring[:120]
-                    msg.properties.set_prop(PROP_ORDER, ostring)                    
+                        ostring=ostring[:127]
+                    else:
+                        msg.properties.set_prop(PROP_ORDER2, '')
+                    msg.properties.set_prop(PROP_ORDER, ostring)
+                    msg.properties.set_prop(PROP_CHAT, '')
+                    msg.properties.set_prop(PROP_CHAT2, '')                    
                 else:
                     msg.properties.set_prop(PROP_ORDER, "{'oid':'%d'}" % order.id)    
                     chat = order.message
                     chat2=''
-                    if len(chat) >=121:
-                        chat2 = chat[120:]
+                    if len(chat) >=128:
+                        chat2 = chat[127:]
                         msg.properties.set_prop(PROP_CHAT2,chat2 )
-                        chat=chat[:120]
-                    
+                        chat=chat[:127]
+                    else:
+                        msg.properties.set_prop(PROP_CHAT2,'' )
+                     
                     if chat:
                         msg.properties.set_prop(PROP_CHAT,chat )
-                
+                        msg.properties.set_prop(PROP_ORDER,'')
+                        msg.properties.set_prop(PROP_ORDER2,'')
                 #log("sending to",order.sender.get_position(),msg.position,msg.orientation)
                 buff = msg.send()
                 if len(buff) > 1200: 

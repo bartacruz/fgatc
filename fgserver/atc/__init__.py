@@ -15,10 +15,11 @@ templates={
            #alias.JOIN_CIRCUIT:"{cs}, proceed to {cirw} for {rwy}{qnh} ",
            alias.LINEUP : "{cs}, line up on runway {rwy}{hld}",
            alias.REPORT_CIRCUIT: '{cs}, report on {cirw}, number {num}',
-           alias.STARTUP: "{cs}, start up approved{qnh}. Call when ready to taxi",
+           alias.STARTUP: "{cs}, start up approved{qnh}. Call ready to taxi",
            alias.TAXI_TO: "{cs}, taxi to runway {rwy} {via}{hld}{short}{lineup}",
            alias.WAIT: "{cs}, wait until advised",
-           alias.TUNE_TO: "{cs}, contact {nconn} on {nfreq}",
+           alias.TUNE_TO: "{cs}",
+           alias.SWITCHING_OFF: "{cs} {comm} switching off, good day!",
                 
     }
     
@@ -28,9 +29,10 @@ def get_message(order):
     if not msg:
         return None
     if order.get_param(Order.PARAM_CONTROLLER):
-        msg = "%s. Contact {conn} on {freq}" % msg
+        msg = "%s, contact {conn} on {freq}" % msg
     msg = re.sub(r'{cs}',short_callsign(order.receiver.callsign),msg)
     msg = re.sub(r'{icao}',order.sender.airport.icao,msg)
+    msg = re.sub(r'{comm}',order.sender.identifier,msg)
     msg = re.sub(r'{rwy}',say_number(order.get_param(Order.PARAM_RUNWAY,'')),msg)
     msg = re.sub(r'{alt}',str(order.get_param(Order.PARAM_ALTITUDE,'')),msg)
     msg = re.sub(r'{cirt}',order.get_param(Order.PARAM_CIRCUIT_TYPE,''),msg)

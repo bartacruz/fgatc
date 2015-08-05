@@ -16,6 +16,7 @@ from math import sqrt, atan
 from fgserver.helper import normalize, move, point_inside_polygon, get_distance,\
     get_heading_to, angle_diff
 from datetime import timedelta
+from pip._vendor.requests.models import Response
 
 class Controller(object):
     comm=None    
@@ -295,7 +296,11 @@ class Tower(Controller):
         return response
     
     def leaving(self,request):
+        response=self._init_response(request)
+        response.add_param(Order.PARAM_ORDER,alias.SWITCHING_OFF)
+        response.message=get_message(response)
         self.set_status(request.sender, PlaneInfo.CLIMBING)
+        return response
     
     def _report_circuit(self,request,cur_circuit,report_circuit):
         response=self._init_response(request)
@@ -347,6 +352,10 @@ class Tower(Controller):
         response.add_param(Order.PARAM_CIRCUIT_WP,alias.CIRCUIT_BASE)
         self.set_status(aircraft, PlaneInfo.APPROACHING)
         response.message=get_message(response)
+        return response
+    
+    def around(self,request):
+        response=self._report_circuit(request,PlaneInfo.APPROACHING,alias.CIRCUIT_BASE)
         return response
     
 class Departure(Controller):
@@ -406,4 +415,7 @@ class Approach(Controller):
         response.message=get_message(response)        
         self.set_status(request.sender, PlaneInfo.APPROACHING)
         return response
-
+    
+    def withyou(self,request):
+        return self.inbound(request)
+        

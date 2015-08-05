@@ -208,6 +208,7 @@ class alias():
     WAIT='wait'
     REACH_CIRCUIT='cirreach'
     REPORT_CIRCUIT='cirrep'
+    SWITCHING_OFF='soff'
     STARTUP='startup'
     TAXI_READY='readytaxi'
     TAXI_TO='taxito'

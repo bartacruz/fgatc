@@ -43,6 +43,16 @@ var short_callsign=func(callsign){
                              LETTERS[cs[2] - base[0]]
                              );
 };
+var say_number=func(number) {
+	if (number==nil) {
+		return number;
+	}
+	var arr=split('',""~(number));
+	forindex(n;arr ){
+		arr[n]= NUMBERS[arr[n]];
+	}
+	return string.join(' ', arr);
+}
 var get_controller=func() {
 	return getprop(controller_node);
 }
@@ -77,7 +87,79 @@ var repeat = func() {
 	atcng.sendmessage("repeat");
 }
 var _ml={};
+var orderlisteners={};
+var chatlisteners={};
 
+var _add_model=func(path) {
+	var mporders = sprintf("%s/%s",path,serverchannel);
+	var mpchat = sprintf("%s/%s",path,servermsgchannel);
+	
+	print(sprintf("Adding listener for new MP plane %s",path));
+	orderlisteners[path]=setlistener(mporders, atcng.readorder, 0, 0);
+	chatlisteners[path]=setlistener(mpchat, atcng.readmessage, 0, 0);
+}
+
+var model_added = func(node) {
+	print(sprintf("entering model added with %s",node));
+	debug.dump(node);
+	var path = node.getValue();
+	print("orderlisteners before:");
+	debug.dump(orderlisteners);
+	if (contains(orderlisteners,path)) {
+		print(sprintf("removing old order listener for new MP plane %s",path));
+    	removelistener(orderlisteners[path]);
+    	delete(orderlisteners,path);
+    	print("orderlisteners after:");
+    	debug.dump(orderlisteners);
+	
+	}
+	print(sprintf("chatlisteners before: %s", chatlisteners));
+	debug.dump(chatlisteners);
+	if (contains(chatlisteners,path)) {
+		print(sprintf("removing old chat listener for new MP plane %s",path));
+    	removelistener(chatlisteners[path]);
+    	delete(chatlisteners,path);
+    	print(sprintf("chatlisteners after: %s", chatlisteners));
+		debug.dump(chatlisteners);
+	}
+	#var valid = getprop(path,'valid');
+	#print("valid=");
+	#debug.dump(valid);
+	#if (valid) {
+		#var mpnode = props.globals.getNode(path);
+		#settimer(func{atcng._add_model(mpnode)},1);
+		atcng._add_model(path);
+		debug.dump(orderlisteners);
+		debug.dump(chatlisteners);
+	#} else {
+	#	print(sprintf("ignoring invalid model %s",path));
+	#}
+} 
+
+var model_removed = func(node) {
+	print(sprintf("entering model removed with %s",node));
+	debug.dump(node);
+	var path = node.getValue();
+	debug.dump(orderlisteners);
+	if (contains(orderlisteners,path)) {
+		print(sprintf("removing old order listener for new MP plane %s",path));
+    	removelistener(orderlisteners[path]);
+    	delete(orderlisteners,path);
+	}
+	debug.dump(chatlisteners);
+	if (contains(chatlisteners,path)) {
+		print(sprintf("removing old chat listener for new MP plane %s",path));
+    	removelistener(chatlisteners[path]);
+    	delete(chatlisteners,path);
+	}
+} 
+var check_models = func() {
+	print("Starting check_models");
+	foreach (var n; props.globals.getNode("ai/models", 1).getChildren("multiplayer")) {
+		print(sprintf("Discovered MP plane %s.",n.getPath()));
+		atcng._add_model(n.getPath());
+	}
+}
 var check_model = func(node=nil) {
 	print("Starting check_model");
 	var ainodes=[];
@@ -121,30 +203,28 @@ var check_model = func(node=nil) {
 	
 }
 
-
-
-var readaimessage= func(node=nil){
-	var msg = node.getValue();
-	if (msg != nil){
-		print("Incomming AI message " ~ msg);
-		setprop(chataichannel,msg);
-	}
-}
-var readmessage = func(node=nil) {
-	var order = node.getValue();
-	var order2= atcnode.getNode(serverchannel2).getValue();
-	if (order2 != nil and order2 != '') {
-			print("ATCNG: concatenating order");
-			print(order);
-			print(order2);
-			order = order ~ order2;
-	}
-	if (order == nil or order == '') {
-		last_order = nil;
-		last_order_string=nil;
+var readorder = func(node=nil) {
+	print("INCOME ORDER");
+	var model_path=string.join("/",split("/",node.getPath())[0:3]);
+	var model_freq= getprop(model_path,freqchannel);
+	if (frequency != model_freq) {
+		print(sprintf("my freq=%s, sender's freq=%s",frequency,model_freq));
+		print(sprintf("Wrong frequency %s . Ignoring message: %s",model_freq,order));
 		return;
 	}
-	print("readmessage: " ~ order);
+
+	var order = node.getValue();
+	if (order == nil or order == '') {
+		# last_order = nil;
+		# last_order_string=nil;
+		return;
+	}
+	var order2 = getprop(model_path,serverchannel2);
+	if (order2 != nil and order2 != "") {
+		print("Concatenating order and order2");
+		order= order ~ order2;
+	}
+	print("readorder: " ~ order);
 	last_order_string=order;
 	var aux=sprintf("return %s",order);
 	var ff = call(compile,[aux],var err=[]);
@@ -166,12 +246,26 @@ var readmessage = func(node=nil) {
 			print(sprintf("ATCNG incoming order=%s",order));
 		}
 	}
-	var msg = atcnode.getNode(servermsgchannel).getValue();
+}
+
+var readmessage = func(node=nil) {
+	print("INCOME MESSAGE");
+	var model_path=string.join("/",split("/",node.getPath())[0:3]);
+	var model_freq= getprop(model_path,freqchannel);
+	if (frequency != model_freq) {
+		print(sprintf("my freq=%s, sender's freq=%s",frequency,model_freq));
+		print(sprintf("Wrong frequency %s . Ignoring message: %s",model_freq,msg));
+		return;
+	}
+	
+	var msg = node.getValue();
+	var msg2 = getprop(model_path,servermsgchannel2);
+	if (msg2 != nil and msg2 != "") {
+		print("Concatenating msg and msg2");
+		msg= msg ~ msg2;
+	}
+	
 	if (msg != nil and msg != '') {
-		var msg2 = atcnode.getNode(servermsgchannel2).getValue();
-		if (msg2 != nil and msg2 != '') {
-			msg = msg ~ msg2;
-		}
 		print(sprintf("ATCNG incoming message=%s",msg));
 		setprop(atcchannel,msg);
 	}
@@ -198,17 +292,18 @@ var update = func {
 		}	
 		set_freq(frq);
 		sendmessage('tunein',0);
-		settimer(atcng.check_model, 5);
+		# settimer(atcng.check_model, 5);
 	}
 }
 
 var messages = {
-	roger:'{ack}{qnh}, {cs}',
+	roger:'{ack}{qnh}{tuneto}, {cs}',
 	repeat:'{apt}, {cs}, say again',
 	startup: '{apt}, {cs}, request startup clearance',
 	readytaxi: '{apt}, {cs}, ready to taxi',
 	holdingshort: '{apt}, {cs}, holding short {rwyof}',
 	readytko: '{apt}, {cs}, ready for takeoff',
+	leaving: '{apt}, {cs}, leaving airfield',
 	transition: '{apt}, {cs} to transition your airspace',
 	inbound: '{apt}, {cs} for inbound approach',
 	crosswind: '{apt}, {cs}, crosswind for runway {rwy}',
@@ -218,6 +313,7 @@ var messages = {
 	straight: '{apt}, {cs}, straight for runway {rwy}',
 	clearrw: '{apt}, {cs}, clear {rwyof}',
 	around: '{apt}, {cs}, going around',
+	withyou: '{apt}, {cs}, with you at {alt} feet, heading {heading}',
 	tunein: '',
 	
 };
@@ -237,7 +333,8 @@ var parse_message = func(tag) {
 	msg = string.replace(msg,'{rwyto}', "to runway " ~ selected_runway);
 	msg = string.replace(msg,'{rwyof}', "of runway  " ~ selected_runway);
 	msg = string.replace(msg,'{apt}',get_controller());
-	
+	msg = string.replace(msg,'{alt}',int(getprop("/position/altitude-ft")));
+	msg = string.replace(msg,'{heading}',say_number(int(getprop("/orientation/heading-deg"))));
 	if (tag == "roger") {
 		if(last_order['ord'] == 'taxito') {
 			var ack = sprintf("taxi to %s",last_order['rwy']);
@@ -262,8 +359,17 @@ var parse_message = func(tag) {
 		} else if(last_order['ord'] == 'clearland') {
 			var ack = sprintf("clear to land runway %s",last_order['rwy']);
 			msg = string.replace(msg,'{ack}',ack);
+		} else if(last_order['ord'] == 'transition') {
+			var ack = sprintf("clear to cross at %s",last_order['alt']);
+			msg = string.replace(msg,'{ack}',ack);
 		} else {
 			msg = string.replace(msg,'{ack}','Roger');
+		}
+		if(last_order['atc'] =! nil) {
+			var tuneto = sprintf(", %s on %s",last_order["atc"], last_order['freq']);
+			msg = string.replace(msg,'{tuneto}',tuneto);
+		} else {
+			msg = string.replace(msg,'{tuneto}','');
 		}
 		if (last_order['qnh'] != nil) {
 			msg = string.replace(msg,'{qnh}', sprintf(" QNH %s",last_order['qnh']));
@@ -306,17 +412,21 @@ var dialog_columns=func(){
 
 		append(cols,get_dialog_column('startup'));
 		append(cols,get_dialog_column('readytaxi'));
-		 append(cols,get_dialog_column('holdingshort'));
-		 append(cols,get_dialog_column('readytko'));
+		append(cols,get_dialog_column('holdingshort'));
+		append(cols,get_dialog_column('readytko'));
+		append(cols,get_dialog_column('leaving'));
 	} else if (viewnode == 'arrival') {
 		append(cols,get_dialog_column('inbound'));
-    	append(cols,get_dialog_column('transition'));
     	append(cols,get_dialog_column('downwind'));
     	append(cols,get_dialog_column('crosswind'));
     	append(cols,get_dialog_column('base'));
     	append(cols,get_dialog_column('final'));
     	append(cols,get_dialog_column('straight'));
-    	append(cols,get_dialog_column('clearrw'));    	
+    	append(cols,get_dialog_column('clearrw'));
+    	append(cols,get_dialog_column('around'));    	
+    } else if (viewnode == 'approach') {
+    	append(cols,get_dialog_column('transition'));
+    	append(cols,get_dialog_column('withyou'));
     }
      return cols;
 }
@@ -431,7 +541,16 @@ var dialog = {
 
 	}
 };
-
-setlistener("/ai/models/model-added",func settimer(atcng.check_model,1));
+var multiupdate=func(a=nil,b=nil,c=nil) {
+	print("MULTIUPDATE");
+	debug.dump(a);
+	debug.dump(b);
+	debug.dump(c);
+}
+#setlistener("/sim/signals/multiplayer-updated", multiupdate);
+# setlistener("/ai/models/model-added",func settimer(atcng.check_model,1));
+#check_models();
+setlistener("/ai/models/model-added",atcng.model_added,1,0);
+setlistener("/ai/models/model-removed",atcng.model_removed);
 setlistener("/instrumentation/comm/frequencies/selected-mhz",atcng.update,1,0);
 print("ATCNG started");
