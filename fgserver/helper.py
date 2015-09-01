@@ -280,7 +280,7 @@ class Quaternion():
         w2 = self.w * self.w
         x2 = self.x * self.x
         y2 = self.y * self.y
-        z2 = self.w * self.z
+        z2 = self.z * self.z
         num = 2 * (self.y * self.z + self.w * self.x)
         den = w2 - x2 - y2 + z2
         if fabs(den) <= units.EPSILON and fabs(num) <= units.EPSILON:
