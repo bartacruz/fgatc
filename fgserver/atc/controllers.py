@@ -209,6 +209,12 @@ class Controller(object):
             response.message = order.message.replace(',', ', I say again,',1)
         return response
 
+    def __unicode__(self):
+        return '%s for %s' % (type(self).__name__, self.comm)
+    
+    def __str__(self):
+        return self.__unicode__().encode('utf-8')
+    
 class Ground(Controller):
     def readytaxi(self,request):
         response=self._init_response(request)
@@ -243,11 +249,14 @@ class Ground(Controller):
 
 class Tower(Controller):
     
-    helpers = []
     
+    def __unicode__(self):
+        return '%s for %s' % (type(self).__name__, self.comm)
+
     def configure(self):
         Controller.configure(self)
         self.log("creating helpers...")
+        self.helpers=[]
         self.helpers.append(Ground(self.comm))
         self.helpers.append(Departure(self.comm))
         self.helpers.append(Approach(self.comm))
