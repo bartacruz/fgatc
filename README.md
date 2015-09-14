@@ -9,6 +9,8 @@ The project contains:
 * Multiplayer server that
   * relays positions of near planes.
   
+  * creates AI traffic that can be configured with the Django admin app
+  
   * creates AI ATCs on demand and react to player's messages
     
   For instance, you can send a message like 
@@ -19,7 +21,7 @@ The project contains:
  
 > YOURCALLSIGN, Taxi to runway 28 and hold short
  
-  * Also creates AI traffic that can be configured with the Django admin app
+  
 
 * Django admin app for configuration and administration of airports, aircrafts and AI traffic.
   
