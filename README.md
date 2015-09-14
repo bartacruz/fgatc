@@ -4,9 +4,11 @@
 
 The project contains:
 * Nasal script that detects COMM frequency and tune in to AI ATC in the server. 
-  Includes a dialog for sending messages
+  Includes a dialog for sending messages.
 
-* Multiplayer server that 
+* Multiplayer server that
+  * relays positions of near planes.
+  
   * creates AI ATCs on demand and react to player's messages
     
   For instance, you can send a message like 
