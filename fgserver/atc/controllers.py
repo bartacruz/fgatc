@@ -19,9 +19,10 @@ from datetime import timedelta
 from pip._vendor.requests.models import Response
 
 class Controller(object):
-    comm=None    
+    comm=None
     last_order_date=None
     runway_boundaries = ()
+    master=None
     
     def __init__(self,comm):
         self.comm = comm
@@ -176,8 +177,9 @@ class Controller(object):
             return response
     
     def pass_control(self,response,controller):
-        response.add_param(Order.PARAM_FREQUENCY,controller.comm.get_FGfreq())
-        response.add_param(Order.PARAM_CONTROLLER,controller.comm.identifier)
+        if not self.master:
+            response.add_param(Order.PARAM_FREQUENCY,controller.comm.get_FGfreq())
+            response.add_param(Order.PARAM_CONTROLLER,controller.comm.identifier)
         
     def roger(self,request):
         tag=self.comm.tags.get(aircraft=request.sender)
@@ -260,7 +262,9 @@ class Tower(Controller):
         self.helpers.append(Ground(self.comm))
         self.helpers.append(Departure(self.comm))
         self.helpers.append(Approach(self.comm))
-    
+        for h in self.helpers:
+            h.master=self
+            
     def manage(self, request):
         if Controller.manage(self, request):
             return True

@@ -362,14 +362,17 @@ var parse_message = func(tag) {
 		} else if(last_order['ord'] == 'transition') {
 			var ack = sprintf("clear to cross at %s",last_order['alt']);
 			msg = string.replace(msg,'{ack}',ack);
+		} else if(last_order['ord'] == 'tuneok') {
+			msg = string.replace(msg,'{ack}','Roger');
+			msg = string.replace(msg,'{tuneto}','');
 		} else {
 			msg = string.replace(msg,'{ack}','Roger');
 		}
-		if(last_order['atc'] =! nil) {
-			var tuneto = sprintf(", %s on %s",last_order["atc"], last_order['freq']);
-			msg = string.replace(msg,'{tuneto}',tuneto);
-		} else {
+		if(last_order['atc'] == nil) {
 			msg = string.replace(msg,'{tuneto}','');
+		} else {
+			var tuneto = sprintf(", %s on %s",last_order['atc'], last_order['freq']);
+			msg = string.replace(msg,'{tuneto}',tuneto);
 		}
 		if (last_order['qnh'] != nil) {
 			msg = string.replace(msg,'{qnh}', sprintf(" QNH %s",last_order['qnh']));
@@ -550,7 +553,7 @@ var multiupdate=func(a=nil,b=nil,c=nil) {
 #setlistener("/sim/signals/multiplayer-updated", multiupdate);
 # setlistener("/ai/models/model-added",func settimer(atcng.check_model,1));
 #check_models();
-setlistener("/ai/models/model-added",atcng.model_added,1,0);
-setlistener("/ai/models/model-removed",atcng.model_removed);
+setlistener("/ai/models/model-added",atcng.model_added,1,1);
+setlistener("/ai/models/model-removed",atcng.model_removed,0,1);
 setlistener("/instrumentation/comm/frequencies/selected-mhz",atcng.update,1,0);
 print("ATCNG started");
