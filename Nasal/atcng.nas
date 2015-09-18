@@ -252,13 +252,13 @@ var readmessage = func(node=nil) {
 	print("INCOME MESSAGE");
 	var model_path=string.join("/",split("/",node.getPath())[0:3]);
 	var model_freq= getprop(model_path,freqchannel);
+	var msg = node.getValue();
 	if (frequency != model_freq) {
 		print(sprintf("my freq=%s, sender's freq=%s",frequency,model_freq));
 		print(sprintf("Wrong frequency %s . Ignoring message: %s",model_freq,msg));
 		return;
 	}
 	
-	var msg = node.getValue();
 	var msg2 = getprop(model_path,servermsgchannel2);
 	if (msg2 != nil and msg2 != "") {
 		print("Concatenating msg and msg2");
