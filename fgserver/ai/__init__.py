@@ -1,14 +1,14 @@
 from fgserver.helper import Position, get_distance, get_heading_to, Vector3D,\
     move, normdeg, Quaternion, geod2cart, normalize, say_number,\
     get_heading_to_360
-from fgserver.messages import PosMsg, PROP_CHAT, alias
-from fgserver import units
+from fgserver.messages import PosMsg, PROP_CHAT, PROP_OID, alias
+from fgserver import units, get_controllers
 from __builtin__ import round, min
 from fgserver.units import FT
-from fgserver.models import Aircraft, Request, Airport, Order
+from fgserver.models import Aircraft, Request, Airport, Order, Comm
 from django.utils import timezone
 from datetime import timedelta
-from random import randint
+from random import randint, random
 import fgserver
 
 class PlaneInfo():
@@ -95,7 +95,9 @@ class AIPlane():
     target_course=0
     target_vertical_speed=0
     target_altitude=0
-    
+    comm=None
+    last_order=None
+        
     def callsign(self):
         return self.circuit.aircraft.callsign
     
@@ -174,8 +176,11 @@ class AIPlane():
     
     def send_request(self,req,msg):
         self.message=msg
+        req = "%s;mid=%s" % (req,randint(1000,9999))
         date=timezone.now()
         request = Request(sender=self.aircraft(),date=date,request=req)
+        if self.comm:
+            request.receiver=self.comm
         self.log("Sending request",request)
         request.save()
 
@@ -214,7 +219,9 @@ class AIPlane():
             msg="%s Tower, %s, holding short of runway %s" % (self.airport().name, self.callsign(),self.say_runway())
             self.send_request(req,msg)
         elif self.state== PlaneInfo.STOPPED and self.waypoint.type == WayPoint.PARKING:
-            req = "req=tunein;apt=%s" % self.airport().icao
+            twr = self.airport().comms.filter(type=Comm.TWR).first()
+            self.comm=twr
+            req = "req=tunein;freq=%s" % twr.get_FGfreq()
             self.send_request(req,'')
 
         elif self.state== PlaneInfo.CLIMBING:
@@ -288,6 +295,10 @@ class AIPlane():
         props = pos.properties
         props.set_prop(302,self.speed*50)
         props.set_prop(312,self.speed*50)
+        if self.comm:
+            props.set_prop(10001,str(self.comm.get_FGfreq()))
+        if self.last_order:
+            props.set_prop(PROP_OID,str(self.last_order.id))
         if self.on_ground() or self.state == PlaneInfo.LANDING:
             props.set_prop(1004,1)
             props.set_prop(201,1)

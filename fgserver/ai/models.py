@@ -12,8 +12,6 @@ from django.db.models.fields.related import ForeignKey
 from django.db.models.fields import CharField, FloatField, IntegerField
 from fgserver.models import Airport, Aircraft, Order
 from fgserver.ai import AIPlane, PlaneInfo
-from django.db.models.signals import post_save
-from django.dispatch.dispatcher import receiver
 from fgserver.messages import alias
 from model_utils.managers import InheritanceManager
 from random import randint
@@ -209,6 +207,7 @@ class Circuit(FlightPlan):
             else:
                 self.log("Circuit",self.aircraft.callsign,', order ignored', instance)
             self._last_order = instance
+            self.aiplane.last_order = instance
 
 class WayPoint(Model):
     POINT=0
