@@ -17,11 +17,13 @@ from fgserver.helper import normalize, move, point_inside_polygon, get_distance,
     get_heading_to, angle_diff
 from datetime import timedelta
 from pip._vendor.requests.models import Response
+import time
+import threading
 
 class Controller(object):
     comm=None
     last_order_date=None
-    runway_boundaries = ()
+    _runway_boundaries = None
     master=None
     
     def __init__(self,comm):
@@ -64,7 +66,7 @@ class Controller(object):
                 
     def check_waiting(self):
         landing = self.comm.tags.filter(status=PlaneInfo.LANDING)
-        lined = self.comm.tags.filter(status=PlaneInfo.LINED_UP)
+        lined = self.comm.tags.filter(status__in=(PlaneInfo.LINED_UP, PlaneInfo.DEPARTING,))
         short = self.comm.tags.filter(status=PlaneInfo.SHORT)
         runway = self.active_runway()
         self.log("check_waiting:",landing,lined,short)
@@ -156,10 +158,12 @@ class Controller(object):
         req = request.get_request().req
         if self.manages(req):
             handler = getattr(self, req)
-            response = handler(request)    
+            response = handler(request)
+            threading.Thread(target=check_waiting,args=(self,)).start()    
         else:
             self.log("Rerouting request")
             response= self.reroute(request)
+        
         if response:
                 response.save()
                 self.log("Order saved",response)
@@ -227,7 +231,7 @@ class Ground(Controller):
         count = self.comm.tags.filter(status=PlaneInfo.SHORT).count()
         count_others = self.comm.tags.filter(status__in=[PlaneInfo.LINED_UP,PlaneInfo.LANDING]).count()
         self.log("readytaxi",count,count_others)
-        if count or count_others:
+        if not self.master or count or count_others:
             response.add_param(Order.PARAM_HOLD, 1)
             response.add_param(Order.PARAM_SHORT, 1)
             num = count +1
@@ -432,3 +436,8 @@ class Approach(Controller):
     def withyou(self,request):
         return self.inbound(request)
         
+def check_waiting(tower):
+    time.sleep(3)
+    tower.check_waiting()
+    
+
