@@ -12,14 +12,15 @@ templates={
            alias.CLEAR_TK : "{cs}, cleared for take off",
            alias.GO_AROUND : "{cs}, go around, I repeat, go around. Report on {cirw}",
            alias.JOIN_CIRCUIT:"{cs}, join {cirt} hand {cirw} for runway {rwy} at {alt}{qnh}",
-           #alias.JOIN_CIRCUIT:"{cs}, proceed to {cirw} for {rwy}{qnh} ",
+           alias.CIRCUIT_STRAIGHT:"{cs}, make straight-in approach runway {rwy}, report on {cirw}{qnh} ",
            alias.LINEUP : "{cs}, line up on runway {rwy}{hld}",
            alias.REPORT_CIRCUIT: '{cs}, report on {cirw}, number {num}',
            alias.STARTUP: "{cs}, start up approved{qnh}. Call ready to taxi",
            alias.TAXI_TO: "{cs}, taxi to runway {rwy} {via}{hld}{short}{lineup}",
            alias.WAIT: "{cs}, wait until advised",
-           alias.TUNE_TO: "{cs}",
+           alias.TUNE_TO: "{cs}", 
            alias.SWITCHING_OFF: "{cs} {comm} switching off, good day!",
+           alias.TAXI_PARK: "{cs}, taxi to parking {park}"
                 
     }
     
@@ -40,6 +41,7 @@ def get_message(order):
     msg = re.sub(r'{num}',str(order.get_param(Order.PARAM_NUMBER,'')),msg)
     msg = re.sub(r'{freq}',str(order.get_param(Order.PARAM_FREQUENCY,'')),msg)
     msg = re.sub(r'{conn}',str(order.get_param(Order.PARAM_CONTROLLER,'')),msg)
+    msg = re.sub(r'{park}',str(order.get_param(Order.PARAM_PARKING,'')),msg)
     if order.get_param(Order.PARAM_NUMBER):
         msg = re.sub(r'{onum}',', number %s' % order.get_param(Order.PARAM_NUMBER),msg)
     if order.get_param(Order.PARAM_LINEUP):

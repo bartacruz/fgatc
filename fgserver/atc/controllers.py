@@ -16,7 +16,6 @@ from math import sqrt, atan
 from fgserver.helper import normalize, move, point_inside_polygon, get_distance,\
     get_heading_to, angle_diff
 from datetime import timedelta
-from pip._vendor.requests.models import Response
 import time
 import threading
 
@@ -228,7 +227,7 @@ class Ground(Controller):
         response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
         twr = get_controllers(self.comm.airport, Comm.TWR)[0]
         self.pass_control(response, twr)
-        count = self.comm.tags.filter(status=PlaneInfo.SHORT).count()
+        count = self.comm.tags.filter(status__in=(PlaneInfo.SHORT,PlaneInfo.TAXIING,)).count()
         count_others = self.comm.tags.filter(status__in=[PlaneInfo.LINED_UP,PlaneInfo.LANDING]).count()
         self.log("readytaxi",count,count_others)
         if not self.master or count or count_others:
@@ -279,11 +278,18 @@ class Tower(Controller):
                 return c.manage(request)
         return False
 
+    def clearrw(self,request):
+        response=self._init_response(request)
+        response.add_param(Order.PARAM_ORDER, alias.TAXI_PARK)
+        response.message=get_message(response)
+        self.set_status(request.sender, PlaneInfo.PARKING)
+        return response
+    
     def holdingshort(self,request):
         response=self._init_response(request)
         response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
         count = self.comm.tags.filter(status=PlaneInfo.SHORT).exclude(aircraft=request.sender).count()
-        count_others = self.comm.tags.filter(status__in=[PlaneInfo.LINED_UP,PlaneInfo.LANDING]).exclude(aircraft=request.sender).count()
+        count_others = self.comm.tags.filter(status__in=[PlaneInfo.LINED_UP,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_FINAL,PlaneInfo.CIRCUIT_BASE]).exclude(aircraft=request.sender).count()
         self.set_status(request.sender, PlaneInfo.SHORT,count)
         tag = self.get_tag(request.sender)
         
@@ -293,7 +299,7 @@ class Tower(Controller):
             response.add_param(Order.PARAM_SHORT, 1)
             response.add_param(Order.PARAM_NUMBER, count+count_others+1)
             self.set_status(request.sender, PlaneInfo.SHORT,count+count_others+1)
-        elif randint(0,2)==1:
+        elif randint(0,3)==1:
             response.add_param(Order.PARAM_ORDER, alias.LINEUP)
             response.add_param(Order.PARAM_HOLD, 1)
             response.add_param(Order.PARAM_NUMBER, 1)
@@ -345,13 +351,13 @@ class Tower(Controller):
         response=self._init_response(request)
         lined = self.comm.tags.filter(status=PlaneInfo.LINED_UP).count()
         landing = self.comm.tags.filter(status=PlaneInfo.LANDING).count()
-        if lined:
+        if lined or landing:
             response.add_param(Order.PARAM_ORDER,alias.GO_AROUND)
             response.add_param(Order.PARAM_CIRCUIT_WP,alias.CIRCUIT_BASE)
             self.set_status(request.sender, PlaneInfo.APPROACHING)
         else:
             response.add_param(Order.PARAM_ORDER,alias.CLEAR_LAND)
-            response.add_param(Order.PARAM_NUMBER,landing+1)
+            #response.add_param(Order.PARAM_NUMBER,landing+1)
             response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
             response.add_param(Order.PARAM_QNH, str(get_qnh(self.comm.airport)))
             self.set_status(request.sender, PlaneInfo.LANDING)
@@ -421,11 +427,20 @@ class Approach(Controller):
 
     def inbound(self,request):
         response=self._init_response(request)
-        response.add_param(Order.PARAM_ORDER, alias.JOIN_CIRCUIT)
+        circp = self.comm.tags.filter(status__in=(PlaneInfo.CIRCUIT_FINAL,PlaneInfo.CIRCUIT_BASE,PlaneInfo.CIRCUIT_DOWNWIND,PlaneInfo.CIRCUIT_CROSSWIND,)).exclude(aircraft__callsign=request.sender.callsign).count()
+        ph = get_heading_to(request.sender.get_position(),self.active_runway().get_position())
+        s = angle_diff(ph,float(self.active_runway().bearing))
+        self.log("circp=%s, ph=%s, s=%s" % (circp,ph,s))
+        if circp or s > 40:
+            # other planes in circuit or not straight of rwy, must join.
+            response.add_param(Order.PARAM_ORDER, alias.JOIN_CIRCUIT)
+            response.add_param(Order.PARAM_CIRCUIT_TYPE, self.circuit_type)
+            response.add_param(Order.PARAM_CIRCUIT_WP,[alias.CIRCUIT_CROSSWIND,alias.CIRCUIT_DOWNWIND][randint(0,1)])
+        else:
+            response.add_param(Order.PARAM_ORDER, alias.CIRCUIT_STRAIGHT)
+            response.add_param(Order.PARAM_CIRCUIT_WP,alias.CIRCUIT_FINAL)
         response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
         response.add_param(Order.PARAM_ALTITUDE,str(self.circuit_alt) )
-        response.add_param(Order.PARAM_CIRCUIT_TYPE, self.circuit_type)
-        response.add_param(Order.PARAM_CIRCUIT_WP,[alias.CIRCUIT_CROSSWIND,alias.CIRCUIT_DOWNWIND][randint(0,1)])
         response.add_param(Order.PARAM_QNH, str(get_qnh(self.comm.airport)))
         twr = get_controllers(self.comm.airport, Comm.TWR)[0]
         self.pass_control(response, twr)

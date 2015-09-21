@@ -15,6 +15,7 @@ from fgserver.ai import AIPlane, PlaneInfo
 from fgserver.messages import alias
 from model_utils.managers import InheritanceManager
 from random import randint
+import threading
 
 class FlightPlan(Model):
     name = CharField(max_length=8)
@@ -49,7 +50,7 @@ class Circuit(FlightPlan):
     def init(self):
         self._waypoint=0
         self._time=0
-        self._waiting=0
+        self._waiting=40
         self.waypoints.all().delete()
         self.aircraft.state=2
         self.generate_waypoints()
@@ -135,6 +136,7 @@ class Circuit(FlightPlan):
         if self.waypoints.all().count() > self._waypoint + 1:
             return self.waypoints.all().order_by('id')[self._waypoint+1]
         return None
+    
     def update(self,time):
         #if self.aircraft.state < 1:
         #    return
@@ -196,18 +198,32 @@ class Circuit(FlightPlan):
         self.log(self.name,"procesando orden",instance)
         if instance.receiver == self.aircraft and instance.confirmed:
             order = instance.get_param(Order.PARAM_ORDER)
-            if order == alias.TUNE_OK:
-                self.aiplane.set_state(PlaneInfo.PUSHBACK)
-            elif order in [alias.TAXI_TO, alias.LINEUP]:
-                self.aiplane.set_state(PlaneInfo.TAXIING)
-                self._waiting=10
-            elif order == alias.CLEAR_TK:
-                self.aiplane.set_state(PlaneInfo.DEPARTING)
-                self._waiting=10
-            else:
-                self.log("Circuit",self.aircraft.callsign,', order ignored', instance)
             self._last_order = instance
             self.aiplane.last_order = instance
+            if order == alias.TUNE_OK:
+                if self.aiplane.state == PlaneInfo.STOPPED:
+                    self.aiplane.set_state(PlaneInfo.PUSHBACK)
+                else:
+                    self.aiplane.check_request()
+            elif order == alias.TUNE_TO:
+                freq = instance.get_param(Order.PARAM_FREQUENCY).replace('.','')
+                self.log("retunning radio to %s" % freq)
+                comm = self.airport.comms.filter(frequency=freq).first()
+                self.aiplane.comm=comm
+                req = "req=tunein;freq=%s" % comm.get_FGfreq()
+                threading.Thread(target=self.aiplane.send_request,args=(req,'',)).start()
+            elif order in [alias.TAXI_TO, alias.LINEUP]:
+                self.aiplane.set_state(PlaneInfo.TAXIING)
+                self._waiting=2
+            elif order == alias.CLEAR_TK:
+                if self.aiplane.state == PlaneInfo.SHORT:
+                    self.aiplane.set_state(PlaneInfo.TAXIING)
+                else:
+                    self.aiplane.set_state(PlaneInfo.DEPARTING)
+                self._waiting=2
+            else:
+                self.log("Circuit",self.aircraft.callsign,', order ignored', instance)
+            
 
 class WayPoint(Model):
     POINT=0

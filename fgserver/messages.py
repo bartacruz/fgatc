@@ -210,6 +210,7 @@ class alias():
     REPORT_CIRCUIT='cirrep'
     SWITCHING_OFF='soff'
     STARTUP='startup'
+    TAXI_PARK='taxipark'
     TAXI_READY='readytaxi'
     TAXI_TO='taxito'
     TRANSITION='transiton'

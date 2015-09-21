@@ -334,7 +334,7 @@ var parse_message = func(tag) {
 	msg = string.replace(msg,'{rwyof}', "of runway  " ~ selected_runway);
 	msg = string.replace(msg,'{apt}',get_controller());
 	msg = string.replace(msg,'{alt}',int(getprop("/position/altitude-ft")));
-	msg = string.replace(msg,'{heading}',say_number(int(getprop("/orientation/heading-deg"))));
+	msg = string.replace(msg,'{heading}',say_number(int(getprop("/orientation/heading-magnetic-deg"))));
 	if (tag == "roger") {
 		if(last_order['ord'] == 'taxito') {
 			var ack = sprintf("taxi to %s",last_order['rwy']);
@@ -365,6 +365,9 @@ var parse_message = func(tag) {
 		} else if(last_order['ord'] == 'tuneok') {
 			msg = string.replace(msg,'{ack}','Roger');
 			msg = string.replace(msg,'{tuneto}','');
+		} else if(last_order['ord'] == 'straight') {
+			var ack = sprintf("straight-in runway %s, report on %s",last_order['rwy'],last_order['cirw']);
+			msg = string.replace(msg,'{ack}',ack);
 		} else {
 			msg = string.replace(msg,'{ack}','Roger');
 		}

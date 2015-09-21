@@ -68,6 +68,10 @@ def get_circuit(name):
     #return get_cache('circuits').get(name)
     return _circuits.get(name)
 
+def check_circuits(controller):
+    log('checking circuits for %s' % controller)
+    load_circuits(controller.comm.airport)
+
 def load_circuits(airport):
     for circuit in airport.circuits.all():
         if not get_circuit(circuit.name):
@@ -187,6 +191,7 @@ def process_request(sender, instance, **kwargs):
         log("Processing request %s " % instance)
         controller = get_controller(instance.receiver)
         controller.manage(instance)
+        check_circuits(controller)
     else:
         log("Ignoring request without receiver %s " % instance)
 #     order= 
@@ -224,7 +229,7 @@ def send_pos(callsign):
                 msg.lag=0.1
                 msg.properties.set_prop(PROP_FREQ, str(order.sender.get_FGfreq()))
                 #print 'CHK',order.id,aircraft.id,_received_orders
-                if not is_order_received(aircraft, order.id):
+                if not is_order_received(order.receiver, order.id):
                     ostring = order.get_order()
                     ostring2=''
                     if len(ostring) >=128:
@@ -270,7 +275,7 @@ def send_pos(callsign):
             sendto(msg.send(), aircraft.get_addr())
     ''' send mp and ai planes positions to player ''' 
     for mp in get_mpplanes(aircraft):
-        if mp.plans.count():
+        if msg and mp.plans.count():
             for p in mp.plans.all():
                 if p.circuit:
                     cir = get_circuit(p.circuit.name)
@@ -292,8 +297,10 @@ def send_pos(callsign):
             pos.lag=0.1
             #log("sending mp",pos.__dict__)
             sendto(pos.send(),aircraft.get_addr())
+            oid_p = pos.get_property(PROP_OID)
+            if oid_p:
+                receive_order(mp, oid_p['value'])
             
-                
 def sim_time():
     return (timezone.now() - DATE_STARTED).total_seconds()
 
@@ -335,6 +342,7 @@ def process_pos(pos):
     aircraft.lat=geod[0]
     aircraft.lon=geod[1]
     aircraft.altitude=geod[2]
+    
     
     qor = Quaternion.fromAngleAxis(Vector3D.from_array(pos.orientation))
     h10r = Quaternion.fromLatLon(aircraft.lat, aircraft.lon).conjugate().multiply(qor)

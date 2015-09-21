@@ -33,8 +33,8 @@ class PlaneInfo():
     CIRCUIT_STRAIGHT=15
     SHORT=16
     LINED_UP=17
-    
     TUNNED=18
+    PARKING = 19
     
     CHOICES = (
         (0,'None'),               
@@ -56,6 +56,7 @@ class PlaneInfo():
         (SHORT,'Short of runway'),
         (LINED_UP,'Lined up'),
         (TUNNED,'Tunned'),
+        (PARKING,'Parking'),
     )
     CHOICES_STR = (
         ('0','None'),               
@@ -77,6 +78,7 @@ class PlaneInfo():
         (str(SHORT),'Short of runway'),
         (str(LINED_UP),'Lined up'),
         (str(TUNNED),'Tunned'),
+        (str(PARKING),'Parking'),
     )
          
 class AIPlane():
@@ -109,15 +111,16 @@ class AIPlane():
         self.linear_velocity = Position()
         #self.set_state(self.waypoint.status)
         #self.update_aircraft()
+        self.comm=self.airport().comms.filter(type=Comm.TWR).first()
+            
         self.log("created")
         
     def log(self,*argv):
         fgserver.info("AI %s" % self.callsign(),*argv)
 
-    def set_state(self,state):
+    def set_state(self,state,changed=False):
         if state <=0:
             return
-        changed = False
         if self.state != state:
             self.log("State changed from %s to %s" % (PlaneInfo.CHOICES[self.state][1],PlaneInfo.CHOICES[state][1]))
             changed = True
@@ -134,10 +137,11 @@ class AIPlane():
             self.turn_rate = 50
             self.speed = 10*units.KNOTS
             self.target_vertical_speed=1
-        elif state == PlaneInfo.DEPARTING or (state==PlaneInfo.LINED_UP and laor.hold()):
+        elif state == PlaneInfo.DEPARTING or state==PlaneInfo.LINED_UP:
             self.turn_rate = 3
             self.speed = 70*units.KNOTS
             self.target_vertical_speed=100*units.FPM
+            self.course = float(self.airport().active_runway().bearing)
         elif state == PlaneInfo.CLIMBING:
             self.turn_rate = 5
             self.speed = 100*units.KNOTS
@@ -185,48 +189,45 @@ class AIPlane():
         request.save()
 
     def check_request(self):
-        self.log("check_request",self.waypoint.type)
+        self.log("check_request",self.waypoint.type, self.state)
         from fgserver.ai.models import WayPoint
         if not self.airport():
             return
         laor = getattr(self.circuit,'_last_order',None)
         if self.state == PlaneInfo.CIRCUIT_CROSSWIND:
             req = "req=crosswind;apt=%s" % self.airport().icao
-            msg="%s Tower, %s, Crosswind for runway %s" % (self.airport().name, self.callsign(),self.say_runway())
+            msg="%s Tower, %s, Crosswind for runway %s" % (self.comm.identifier, self.callsign(),self.say_runway())
             self.send_request(req,msg)
         elif self.state == PlaneInfo.CIRCUIT_DOWNWIND:
             req = "req=downwind;apt=%s" % self.airport().icao
-            msg="%s Tower, %s, Downwind for runway %s" % (self.airport().name, self.callsign(),self.say_runway())
+            msg="%s Tower, %s, Downwind for runway %s" % (self.comm.identifier, self.callsign(),self.say_runway())
             self.send_request(req,msg)
         elif self.state == PlaneInfo.CIRCUIT_BASE:
             req = "req=base;apt=%s" % self.airport().icao
-            msg="%s Tower, %s, Turning base for runway %s" % (self.airport().name, self.callsign(),self.say_runway())
+            msg="%s Tower, %s, Turning base for runway %s" % (self.comm.identifier, self.callsign(),self.say_runway())
             self.send_request(req,msg)
         elif self.state == PlaneInfo.CIRCUIT_FINAL:
             req = "req=final;apt=%s" % self.airport().icao
-            msg="%s Tower, %s, Final for runway %s" % (self.airport().name, self.callsign(),self.say_runway())
+            msg="%s Tower, %s, Final for runway %s" % (self.comm.identifier, self.callsign(),self.say_runway())
             self.send_request(req,msg)    
         elif self.state == PlaneInfo.PUSHBACK:
             req = "req=readytaxi;apt=%s" % self.airport().icao
-            msg="%s Tower, %s, ready to taxi" % (self.airport().name, self.callsign())
+            msg="%s Tower, %s, ready to taxi" % (self.comm.identifier, self.callsign())
             self.send_request(req,msg)
         elif self.state == PlaneInfo.LINED_UP and laor.get_param(Order.PARAM_LINEUP):
             req = "req=readytko;apt=%s" % self.airport().icao
-            msg="%s Tower, %s, ready for takeoff" % (self.airport().name, self.callsign())
+            msg="%s Tower, %s, ready for takeoff" % (self.comm.identifier, self.callsign())
             self.send_request(req,msg)
-        elif self.state == PlaneInfo.SHORT and laor.short():
+        elif self.state == PlaneInfo.SHORT and (laor.short() or laor.get_instruction()==alias.TUNE_OK):
             req = "req=holdingshort;apt=%s" % self.airport().icao
-            msg="%s Tower, %s, holding short of runway %s" % (self.airport().name, self.callsign(),self.say_runway())
+            msg="%s Tower, %s, holding short of runway %s" % (self.comm.identifier, self.callsign(),self.say_runway())
             self.send_request(req,msg)
         elif self.state== PlaneInfo.STOPPED and self.waypoint.type == WayPoint.PARKING:
-            twr = self.airport().comms.filter(type=Comm.TWR).first()
-            self.comm=twr
-            req = "req=tunein;freq=%s" % twr.get_FGfreq()
-            self.send_request(req,'')
-
+            req = "req=tunein;freq=%s" % self.comm.get_FGfreq()
+            self.send_request(req,'',)
         elif self.state== PlaneInfo.CLIMBING:
             req = "req=leaving;apt=%s" % self.airport().icao
-            self.send_request(req,"%s Tower, %s, leaving airfield" % (self.airport().name, self.callsign()))
+            self.send_request(req,"%s Tower, %s, leaving airfield" % (self.comm.identifier, self.callsign()))
 
     def move(self,course,distance,dt):
         self.target_course=course
@@ -253,6 +254,8 @@ class AIPlane():
         
         
     def next_altitude(self,dt):
+        if self.on_ground():
+            return self.airport().altitude
         if self.speed == 0 or abs(self.position.z - self.target_altitude) <= 0.1:
             return self.target_altitude
         multi=1
