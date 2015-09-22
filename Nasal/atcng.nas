@@ -35,6 +35,15 @@ var LETTERS = [
 
 var NUMBERS=['zero','one','two','three','four','five','six','seven','eight','niner'];
 
+# Readback last order
+
+var readback = func() {
+	atcng.sendmessage("roger");
+};
+
+
+
+
 var short_callsign=func(callsign){
 	var base='a';
 	var cs = string.lc(callsign);
@@ -68,7 +77,6 @@ var set_freq=func(freq) {
 	setprop(freq_node,freq);
 	setprop(freqchannel,freq);
 }
-
 var sendmessage = func(message="",dlg=1){
 	var msg = parse_message(message);
 	var request = sprintf("req=%s;freq=%.2f;mid=%s",message,frequency,int(rand()*10000));
