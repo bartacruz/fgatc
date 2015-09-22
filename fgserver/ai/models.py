@@ -129,9 +129,11 @@ class Circuit(FlightPlan):
         self.log("waypoints created")
 
     def waypoint(self):
-        if self.waypoints.all().count() > self._waypoint:
-            return self.waypoints.all().order_by('id')[self._waypoint]
-        return None
+        if self.waypoints.all().count() <= self._waypoint:
+            self._waypoint=0
+        return self.waypoints.all().order_by('id')[self._waypoint]
+        
+    
     def next_waypoint(self):
         if self.waypoints.all().count() > self._waypoint + 1:
             return self.waypoints.all().order_by('id')[self._waypoint+1]
