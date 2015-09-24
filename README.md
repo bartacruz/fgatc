@@ -21,7 +21,6 @@ The project contains:
  
 > YOURCALLSIGN, Taxi to runway 28 and hold short
  
-  
 
 * Django admin app for configuration and administration of airports, aircrafts and AI traffic.
   
@@ -75,11 +74,9 @@ $ python manage.py syncdb
 $ python manage.py migrate
 ```
 
-There's a neat Nasal script in the Nasal directory that does all the magic in the FlightGear side. 
-You can install it in your FlightGear root directory or in your local .fgfs/ directory, under `Nasal/`.
+5. Install the [Nasal script](Nasal/README.md)
 
-There is also another neat script in `fgserver/tools/airport_importer.py` that imports ALL the airports 
-and runway information into the database from FlightGear's apt-dat.gz (or any X-Plane v810 airport file)
+There is a neat script in `fgserver/tools/airport_importer.py` that imports ALL the airports, whith runway and comm information, into the database from FlightGear's apt-dat.gz (or any X-Plane v810 airport file)
 
 ## Usage
 1. Run the Django app: `$ python manage.py runserver`
@@ -88,10 +85,10 @@ and runway information into the database from FlightGear's apt-dat.gz (or any X-
   * Create AI Aircrafts.
 3. Run the server: `$ python server.py`
 4. Start Flightgear and use the server address as a multiplayer server. Tune the radio to some controller's freq.
-  Now you can use the menu with the key `'` and communicate with the towers.
+  Now you can use the menu with the key `'` and communicate with the ATC controllers.
 5. Access the interactive map in `/map/` (i.e.: <http://localhost:8000/map/>). 
-  With no other parameters, it will show the SABE area (Buenos Aires). 
-  Use the `icao` parameter to customize the startup location of the map. (i.e.: <http://localhost:8000/map/?icao=KSFO>) 
+  With no other parameters, it will show the SABE airport area (Buenos Aires, Argentina). 
+  You can use the `icao` parameter to customize the startup location of the map. (i.e.: <http://localhost:8000/map/?icao=KSFO>) 
 
 ## Planned/ToDo
 [x] Enhance METAR loading and caching.
