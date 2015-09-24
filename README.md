@@ -1,7 +1,8 @@
 #FlightGear AI ATC and Aircraft multiplayer server
 
 A complete FlightGear multiplayer server with AI ATC, AI Planes, interactive map. Messages are sent and received only in the tunned frequency. 
-**In alpha stage**. Fully functional, but with many bugs.
+
+**In beta stage**. Fully functional, but with many bugs.
 
 The project contains:
 * Nasal script that detects COMM frequency and tune in to AI ATC in the server. 
