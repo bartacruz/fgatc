@@ -1,6 +1,7 @@
 #FlightGear AI ATC and Aircraft multiplayer server
 
-**In alpha stage**
+A complete FlightGear multiplayer server with AI ATC, AI Planes, interactive map. Messages are sent and received only in the tunned frequency. 
+**In alpha stage**. Fully functional, but with many bugs.
 
 The project contains:
 * Nasal script that detects COMM frequency and tune in to AI ATC in the server. 
@@ -94,7 +95,7 @@ There is a neat script in `fgserver/tools/airport_importer.py` that imports ALL 
 [x] Enhance METAR loading and caching.
 [x] List of pilots on map (and click-to-pan to the pilot, of course!) 
 [ ] Enhance AI tower's traffic management. 
-[ ] Create more AI traffic types (currently there's only a left circuit)
+[ ] Create more AI traffic types (currently there's only a _left circuit_ )
 [ ] Implement ground routes directions using Dijkstra's shortest path algorithm.
 [ ] Relay positions to FlightGear's official MP servers.
 [ ] Enhance map interactions
