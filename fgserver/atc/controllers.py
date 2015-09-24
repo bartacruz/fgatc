@@ -356,7 +356,11 @@ class Tower(Controller):
             response.add_param(Order.PARAM_CIRCUIT_WP,alias.CIRCUIT_BASE)
             self.set_status(request.sender, PlaneInfo.APPROACHING)
         else:
-            response.add_param(Order.PARAM_ORDER,alias.CLEAR_LAND)
+            tgo = request.get_param(alias.CIRCUIT_TNGO)
+            if tgo:
+                response.add_param(Order.PARAM_ORDER,alias.CLEAR_TOUCHNGO)
+            else:
+                response.add_param(Order.PARAM_ORDER,alias.CLEAR_LAND)
             #response.add_param(Order.PARAM_NUMBER,landing+1)
             response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
             response.add_param(Order.PARAM_QNH, str(get_qnh(self.comm.airport)))

@@ -199,6 +199,7 @@ PROPERTIES = {
 class alias():
     CLEAR_CROSS='clearcross'
     CLEAR_LAND='clearland'
+    CLEAR_TOUCHNGO='cleartngo'
     CLEAR_TK='cleartk'
     LEAVING='leaving'
     INBOUND_APPROACH='inbound'
@@ -225,6 +226,7 @@ class alias():
     CIRCUIT_DOWNWIND='downwind'
     CIRCUIT_BASE='base'
     CIRCUIT_FINAL='final'
+    CIRCUIT_TNGO='tngo'
 
     
 def encode_node(unp, node):

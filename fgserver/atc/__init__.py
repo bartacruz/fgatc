@@ -8,8 +8,9 @@ from fgserver import get_qnh
 
 templates={
            alias.CLEAR_CROSS:"{cs}, clear to cross airspace above {alt}",
-           alias.CLEAR_LAND:"{cs}, clear to land{onum}{qnh}",
-           alias.CLEAR_TK : "{cs}, cleared for take off",
+           alias.CLEAR_LAND:"{cs}, runway {rwy}, clear to land{onum}{qnh}",
+           alias.CLEAR_TOUCHNGO:"{cs}, runway {rwy}, clear touch and go{onum}{qnh}",
+           alias.CLEAR_TK : "{cs}, runway {rwy}, cleared for take off",
            alias.GO_AROUND : "{cs}, go around, I repeat, go around. Report on {cirw}",
            alias.JOIN_CIRCUIT:"{cs}, join {cirt} hand {cirw} for runway {rwy} at {alt}{qnh}",
            alias.CIRCUIT_STRAIGHT:"{cs}, make straight-in approach runway {rwy}, report on {cirw}{qnh} ",
