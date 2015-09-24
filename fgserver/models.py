@@ -165,6 +165,10 @@ class Request(Model):
     sender = ForeignKey(Aircraft, related_name='requests')
     receiver = ForeignKey(Comm, related_name='requests', null=True,blank=True)
     request = CharField(max_length=255)
+  
+    def get_param(self,param):
+        r = self.get_request();
+        return r.__dict__.get(param,None)
     
     def get_request(self):
         if self.request:
