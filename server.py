@@ -23,6 +23,9 @@ from __builtin__ import Exception, max
 os.environ['DJANGO_SETTINGS_MODULE'] = 'fgserver.settings' 
 import django
 
+# Port that server listens
+server_port=5100
+
 orders = {}
 
 UPDATE_RATE=2
@@ -58,14 +61,11 @@ def error(*argv):
 
 def set_circuit(circuit):
     if circuit:
-        #log("storing circuit",circuit.__dict__)
-        #get_cache('circuits').set(circuit.name,circuit)
         if not _circuits.has_key(circuit.name):
             log("storing circuit",circuit.name)
             _circuits[circuit.name]=circuit
         
 def get_circuit(name):
-    #return get_cache('circuits').get(name)
     return _circuits.get(name)
 
 def check_circuits(controller):
@@ -79,20 +79,8 @@ def load_circuits(airport):
             set_aircraft(circuit.aircraft)
             set_circuit(circuit)
             log("Circuit %s added" % circuit)
-             
-# def get_controller(airport):
-#     a,create=ATC.objects.get_or_create(airport=airport)
-#     if create:
-#         log("Creating controller for %s" % airport)
-#         Departure.objects.create(atc=a,name="%s Departure" % airport.name)
-#         Approach.objects.create(atc=a,name="%s Approach" % airport.name)
-#         Tower.objects.create(atc=a,name="%s Tower" % airport.name)
-#     load_circuits(airport)
-#     #log("get_controller. returning %s" % a)
-#     return a
 
 def get_aicraft(callsign):
-    #a = get_cache('aircrafts').get(callsign)
     a = _aaa.get(callsign)
     #log(callsign,"a",a,"_aaa",_aaa)
     if not a:
@@ -194,11 +182,6 @@ def process_request(sender, instance, **kwargs):
         check_circuits(controller)
     else:
         log("Ignoring request without receiver %s " % instance)
-#     order= 
-#     if order:
-#         order.sender = airport
-#         order.save()
-#         log("saving order",order,order.date,timezone.now())
 
 def get_mpplanes(aircraft):
     planes = []
@@ -214,10 +197,9 @@ def get_mpplanes(aircraft):
     #return []
 
 def send_pos(callsign):
-    #aircraft = Aircraft.objects.get(callsign=callsign)
-    #request = Request.objects.filter(sender=aircraft).order_by('-date').first()
     aircraft = get_aicraft(callsign)
     request = aircraft.requests.last()
+    msg = None
     if aircraft.freq and request and request.receiver:
         #log("aircraft.freq =%s, receiver.freq=%s" % (aircraft.freq,request.receiver.get_FGfreq()))
         order = _last_orders.get(request.receiver.id)
@@ -266,6 +248,7 @@ def send_pos(callsign):
                 
             except:
                 llogger.exception("Sending msg")
+            
         else:
             msg = PosMsg()
             msg.send_from_comm(request.receiver)
@@ -369,11 +352,8 @@ def process_pos(pos):
     if oid_p:
         receive_order(aircraft, oid_p['value'])
     return True
-#     except Exception as e:
-#         log("ERROR al procesar posicion",e,pos)
-#         return False
 
-#t = threading.Thread(target=processor, name='Servicio')
+
 DATE_STARTED = timezone.now()
 
 MSG_MAGIC = 0x46474653
@@ -384,13 +364,14 @@ Order.objects.all().update(confirmed=False)
 get_cache('default').set('last_update',timezone.now())
 
 fgsock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-fglisten = ("localhost",5100)
+fglisten = ("localhost",server_port)
 fgsock.bind(fglisten)
 
 cont = True
+
+# Main loop
 while cont:
     data,addr = fgsock.recvfrom(1200)
-    #xs= ":".join("{:02x}".format(ord(c)) for c in data)
     unp = Unpacker(data)
     pos = PosMsg()
     pos.receive(unp)
