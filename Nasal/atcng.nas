@@ -83,6 +83,12 @@ var sendmessage = func(message="",dlg=1){
 	if (message=='roger' and last_order != nil){
 		request = sprintf("%s;laor=%s",request,last_order['ord']);
 	}
+	if (get_option('tngo')) {
+		request = sprintf("%s;tngo=1",request);
+	}
+	if (get_option('remain')) {
+		request = sprintf("%s;remain=1",request);
+	}
 	print(sprintf("Sendmessage: %s | %s",request , msg));
 	setprop(pilotchannel,request);
 	setprop(chatchannel,msg);
@@ -223,8 +229,7 @@ var readorder = func(node=nil) {
 
 	var order = node.getValue();
 	if (order == nil or order == '') {
-		# last_order = nil;
-		# last_order_string=nil;
+		print("readorder: Empty order. returning");
 		return;
 	}
 	var order2 = getprop(model_path,serverchannel2);
@@ -244,6 +249,7 @@ var readorder = func(node=nil) {
 			print("Order already received");
 		} else {
 			last_order = laor;
+			print(sprintf("ATCNG laor=%s",last_order));
 			if (last_order['rwy']){
 				selected_runway=last_order['rwy'];
 			}
@@ -252,6 +258,7 @@ var readorder = func(node=nil) {
 			}
 			setprop(oidnode,sprintf("%s",last_order['oid']));
 			print(sprintf("ATCNG incoming order=%s",order));
+			compute_flow(laor);
 		}
 	}
 }
@@ -317,7 +324,7 @@ var messages = {
 	crosswind: '{apt}, {cs}, crosswind for runway {rwy}',
 	downwind: '{apt}, {cs}, downwind for runway {rwy}',
 	base: '{apt}, {cs}, turning base for runway {rwy}',
-	final: '{apt}, {cs}, turning final for runway {rwy}',
+	final: '{apt}, {cs}, final for runway {rwy}{tngo}',
 	straight: '{apt}, {cs}, straight for runway {rwy}',
 	clearrw: '{apt}, {cs}, clear {rwyof}',
 	around: '{apt}, {cs}, going around',
@@ -343,6 +350,11 @@ var parse_message = func(tag) {
 	msg = string.replace(msg,'{apt}',get_controller());
 	msg = string.replace(msg,'{alt}',int(getprop("/position/altitude-ft")));
 	msg = string.replace(msg,'{heading}',say_number(int(getprop("/orientation/heading-magnetic-deg"))));
+	if (get_option('tngo')) {
+		msg = string.replace(msg,'{tngo}', " for touch and go");
+	} else {
+		msg = string.replace(msg,'{tngo}', "");
+	}		
 	if (tag == "roger") {
 		if(last_order['ord'] == 'taxito') {
 			var ack = sprintf("taxi to %s",last_order['rwy']);
@@ -366,6 +378,9 @@ var parse_message = func(tag) {
 			msg = string.replace(msg,'{ack}',ack);
 		} else if(last_order['ord'] == 'clearland') {
 			var ack = sprintf("clear to land runway %s",last_order['rwy']);
+			msg = string.replace(msg,'{ack}',ack);
+		} else if(last_order['ord'] == 'cleartngo') {
+			var ack = sprintf("clear touch and go runway %s",last_order['rwy']);
 			msg = string.replace(msg,'{ack}',ack);
 		} else if(last_order['ord'] == 'transition') {
 			var ack = sprintf("clear to cross at %s",last_order['alt']);
@@ -398,12 +413,44 @@ var parse_message = func(tag) {
 var reset = func() {
 	update();
 	dialog.destroy();
+};
+
+var flow_next = func() {
+	var next = getprop(atcng.root ~ "/next");
+	if (next != "") {
+		atcng.sendmessage(next);
+	}
 }
+
+var compute_flow = func() {
+	var next="";
+	var lao =last_order['ord']; 
+	if ( lao == 'startup') {
+		next = "readytaxi";
+	} else if (lao == 'taxito') {
+		if (last_order['short']) {
+			next = "holdingshort";
+		} else {
+			next = "readytko";
+		}
+	} else if (lao == 'clearland') {
+		next = "clearrw";
+	} else if (lao == 'cleartk' or lao == "cleartngo") {
+		next = "leaving";
+	} else if (lao == 'join' or lao == 'cirrep') {
+		var cirw = last_order['cirw'];
+		next = cirw;
+	} 
+	var nn =atcng.root ~ "/next"; 
+	print(sprintf("compute flow. node=%s, next=%s",nn,next));
+	setprop(nn,next);
+};
 var get_dialog_column=func(tag){
 	var legend= parse_message(tag);	
 	var col ={ type: "button", legend: legend, code: tag, halign: "right", callback: "atcng.sendmessage" };
 	return col;
 }
+
 var dialog_columns=func(){
 	var cols = [];
 	# print (sprintf("dialog_cols. view=%s, last_order=%s",viewnode,last_order));
@@ -411,16 +458,9 @@ var dialog_columns=func(){
 		append(cols,get_dialog_column('roger'));
 	}
 	if (viewnode == 'flow') {
-		if (last_order == nil or last_order == "")  {
-			append(cols,get_dialog_column('startup'));
-			append(cols,get_dialog_column('readytaxi'));
-		} else {
-		 	if (last_order['ord'] == 'startup') {
-		 		append(cols,get_dialog_column('readytaxi'));
-			} else if (last_order['ord'] == 'taxito' or last_order['ord'] == "lineup" or last_order['ord'] == "holdshort") {
-		 		append(cols,get_dialog_column('holdingshort'));
-		 		append(cols,get_dialog_column('readytko'));
-	     	}
+		var next = getprop(atcng.root ~ "/next");
+		if (next) {
+			append(cols,get_dialog_column(next));
 	    }
 	} else if (viewnode == 'depart') {
 
@@ -441,9 +481,24 @@ var dialog_columns=func(){
     } else if (viewnode == 'approach') {
     	append(cols,get_dialog_column('transition'));
     	append(cols,get_dialog_column('withyou'));
+    } else if (viewnode == 'options') {
+		append(cols,{ type: "checkbox", label: "Remain in the pattern", code: "remain", halign: "left", callback: "atcng.set_option", property: atcng.root ~ "/options/remain" });
+		append(cols,{ type: "checkbox", label: "Touch and go", code: "tngo", halign: "left", callback: "atcng.set_option", property: atcng.root ~ "/options/tngo" });
+		
     }
      return cols;
 }
+
+var set_option = func(option=nil) {
+	var prop = atcng.root ~ "/options/" ~ option;
+	setprop(prop,!getprop(prop));
+	#print(sprintf("Updating %s to %s",prop,s));
+};
+
+var get_option = func(option=nil) {
+	var prop = atcng.root ~ "/options/" ~ option;
+	return getprop(prop);
+};
 
 var setview = func(view = nil) {
 	print("setview" ~ view);
@@ -513,6 +568,9 @@ var dialog = {
         b2 = options.addChild("button");
 		b2.node.setValues({ type: "button", legend: "Approach", code: "approach", halign: "right", callback: "atcng.setview" });
         b2.setBinding("nasal", 'atcng.setview("approach")');		
+        b2 = options.addChild("button");
+		b2.node.setValues({ type: "button", legend: "Options", code: "options", halign: "right", callback: "atcng.setview" });
+        b2.setBinding("nasal", 'atcng.setview("options")');		
         
 		me.dialog.addChild("hrule");
 		var content = me.dialog.addChild("group");
@@ -521,7 +579,7 @@ var dialog = {
         content.set("default-padding", 5);
 		me.columns = atcng.dialog_columns();
 		foreach (var column; me.columns) {
-			w = content.addChild("button");
+			w = content.addChild(column.type);
 			w.node.setValues(column);
             w.setBinding("nasal", column.callback ~ "(\"" ~ column.code ~ "\");");
 		}
