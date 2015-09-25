@@ -372,7 +372,7 @@ def get_distance(fro, to, unit=units.M):
 def get_heading_to(fro, to):
     info = Geodesic.WGS84.Inverse(fro.x, fro.y, to.x, to.y)
     heading = info['azi2']
-    return normdeg(heading)
+    return normalize(heading)
 
 def get_heading_to_360(fro, to):
     info = Geodesic.WGS84.Inverse(fro.x, fro.y, to.x, to.y)

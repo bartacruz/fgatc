@@ -14,7 +14,7 @@ from fgserver.atc import get_message
 from fgserver import get_qnh, units, llogger, get_controllers
 from math import sqrt, atan
 from fgserver.helper import normalize, move, point_inside_polygon, get_distance,\
-    get_heading_to, angle_diff
+    get_heading_to, angle_diff, get_heading_to_360
 from datetime import timedelta
 import time
 import threading
@@ -64,9 +64,9 @@ class Controller(object):
         return point_inside_polygon(pos.x,pos.y,self.runway_boundaries())
                 
     def check_waiting(self):
-        landing = self.comm.tags.filter(status=PlaneInfo.LANDING)
-        lined = self.comm.tags.filter(status__in=(PlaneInfo.LINED_UP, PlaneInfo.DEPARTING,))
-        short = self.comm.tags.filter(status=PlaneInfo.SHORT)
+        landing = self.comm.airport.tags.filter(status=PlaneInfo.LANDING)
+        lined = self.comm.airport.tags.filter(status__in=(PlaneInfo.LINED_UP, PlaneInfo.DEPARTING,))
+        short = self.comm.airport.tags.filter(status=PlaneInfo.SHORT)
         runway = self.active_runway()
         self.log("check_waiting:",landing,lined,short)
         if lined.count():
@@ -88,11 +88,11 @@ class Controller(object):
             for ll in landing.all():
                 l = landing.first().aircraft
                 dist = get_distance(l.get_position(),runway.get_position())
-                head = get_heading_to(l.get_position(),runway.get_position())
+                head = get_heading_to_360(l.get_position(),runway.get_position())
                 adiff = angle_diff(head, - l.heading)
                 if dist > 1*units.NM or adiff > 5 :
                     ''' nop, he isn't'''
-                    self.log("acft not in runway. removing LINED_UP state",l)
+                    self.log("acft not in runway. removing LANDING state",l,dist, head,l.heading, adiff)
                     self.set_status(l,0,0)
                     return self.check_waiting() #check again
         elif short.count():
@@ -132,13 +132,13 @@ class Controller(object):
         return None
     
     def get_tag(self,aircraft):
-        tag,created = Tag.objects.get_or_create(comm=self.comm,aircraft=aircraft)
+        tag,created = Tag.objects.get_or_create(airport=self.comm.airport,aircraft=aircraft)
         if created:
             self.log(": Controller tag created for %s " % aircraft)
         return tag
     
     def set_status(self,aircraft,status,number=None):
-        tag,created = Tag.objects.get_or_create(aircraft=aircraft,comm=self.comm)
+        tag,created = Tag.objects.get_or_create(aircraft=aircraft,airport=self.comm.airport)
         tag.status=str(status)
         if number != None:
             tag.number=number
@@ -185,7 +185,7 @@ class Controller(object):
             response.add_param(Order.PARAM_CONTROLLER,controller.comm.identifier)
         
     def roger(self,request):
-        tag=self.comm.tags.get(aircraft=request.sender)
+        tag=self.get_tag(request.sender)
         tag.ack_order=request.get_request().laor
         tag.save()
         
@@ -227,8 +227,8 @@ class Ground(Controller):
         response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
         twr = get_controllers(self.comm.airport, Comm.TWR)[0]
         self.pass_control(response, twr)
-        count = self.comm.tags.filter(status__in=(PlaneInfo.SHORT,PlaneInfo.TAXIING,)).count()
-        count_others = self.comm.tags.filter(status__in=[PlaneInfo.LINED_UP,PlaneInfo.LANDING]).count()
+        count = self.comm.airport.tags.filter(status__in=(PlaneInfo.SHORT,PlaneInfo.TAXIING,)).count()
+        count_others = self.comm.airport.tags.filter(status__in=[PlaneInfo.LINED_UP,PlaneInfo.LANDING]).count()
         self.log("readytaxi",count,count_others)
         if not self.master or count or count_others:
             response.add_param(Order.PARAM_HOLD, 1)
@@ -288,12 +288,12 @@ class Tower(Controller):
     def holdingshort(self,request):
         response=self._init_response(request)
         response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
-        count = self.comm.tags.filter(status=PlaneInfo.SHORT).exclude(aircraft=request.sender).count()
-        count_others = self.comm.tags.filter(status__in=[PlaneInfo.LINED_UP,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_FINAL,PlaneInfo.CIRCUIT_BASE]).exclude(aircraft=request.sender).count()
+        count = self.comm.airport.tags.filter(status=PlaneInfo.SHORT).exclude(aircraft=request.sender).count()
+        count_others = self.comm.airport.tags.filter(status__in=[PlaneInfo.LINED_UP, PlaneInfo.DEPARTING,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_FINAL,PlaneInfo.CIRCUIT_BASE]).exclude(aircraft=request.sender).count()
         self.set_status(request.sender, PlaneInfo.SHORT,count)
         tag = self.get_tag(request.sender)
         
-        if count_others or (tag.number > 1 and count) :
+        if count_others or (tag.number  and count) :
             response.add_param(Order.PARAM_ORDER, alias.WAIT)
             response.add_param(Order.PARAM_HOLD, 1)
             response.add_param(Order.PARAM_SHORT, 1)
@@ -304,10 +304,13 @@ class Tower(Controller):
             response.add_param(Order.PARAM_HOLD, 1)
             response.add_param(Order.PARAM_NUMBER, 1)
             response.add_param(Order.PARAM_LINEUP, 1)
+            self.set_status(request.sender, PlaneInfo.LINED_UP,0)
         else:
             response.add_param(Order.PARAM_ORDER, alias.CLEAR_TK)
             response.add_param(Order.PARAM_NUMBER, 1)
+            self.set_status(request.sender, PlaneInfo.LINED_UP,0)
         response.message=get_message(response)
+        request.sender.startup_location.update(aircraft=None)
         return response
     
     def readytko(self,request):
@@ -316,6 +319,7 @@ class Tower(Controller):
         response.add_param(Order.PARAM_ORDER, alias.CLEAR_TK)
         response.message=get_message(response)
         self.set_status(request.sender, PlaneInfo.LINED_UP)
+        request.sender.startup_location.update(aircraft=None)
         return response
     
     def leaving(self,request):
@@ -329,7 +333,7 @@ class Tower(Controller):
         response=self._init_response(request)
         response.add_param(Order.PARAM_ORDER,alias.REPORT_CIRCUIT)
         response.add_param(Order.PARAM_CIRCUIT_WP,report_circuit)
-        count = self.comm.tags.filter(status=cur_circuit).exclude(aircraft__callsign=request.sender.callsign).count()
+        count = self.comm.airport.tags.filter(status=cur_circuit).exclude(aircraft__callsign=request.sender.callsign).count()
         response.add_param(Order.PARAM_NUMBER,count+1)
         response.message=get_message(response)
         self.set_status(request.sender, cur_circuit)
@@ -349,8 +353,8 @@ class Tower(Controller):
 
     def final(self,request):
         response=self._init_response(request)
-        lined = self.comm.tags.filter(status=PlaneInfo.LINED_UP).count()
-        landing = self.comm.tags.filter(status=PlaneInfo.LANDING).count()
+        lined = self.comm.airport.tags.filter(status=PlaneInfo.LINED_UP).count()
+        landing = self.comm.airport.tags.filter(status=PlaneInfo.LANDING).count()
         if lined or landing:
             response.add_param(Order.PARAM_ORDER,alias.GO_AROUND)
             response.add_param(Order.PARAM_CIRCUIT_WP,alias.CIRCUIT_BASE)
@@ -391,8 +395,8 @@ class Departure(Controller):
         response=self._init_response(request)
         response.add_param(Order.PARAM_ORDER,'taxito')
         response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
-        count = self.comm.tags.filter(status=PlaneInfo.SHORT).count()
-        count_others = self.comm.tags.filter(status__in=[PlaneInfo.LINED_UP,PlaneInfo.LANDING]).count()
+        count = self.comm.airport.tags.filter(status=PlaneInfo.SHORT).count()
+        count_others = self.comm.airport.tags.filter(status__in=[PlaneInfo.LINED_UP,PlaneInfo.LANDING]).count()
         self.log("readytaxi",count,count_others)
         if count or count_others:
             response.add_param(Order.PARAM_HOLD, 1)
@@ -431,7 +435,7 @@ class Approach(Controller):
 
     def inbound(self,request):
         response=self._init_response(request)
-        circp = self.comm.tags.filter(status__in=(PlaneInfo.CIRCUIT_FINAL,PlaneInfo.CIRCUIT_BASE,PlaneInfo.CIRCUIT_DOWNWIND,PlaneInfo.CIRCUIT_CROSSWIND,)).exclude(aircraft__callsign=request.sender.callsign).count()
+        circp = self.comm.airport.tags.filter(status__in=(PlaneInfo.CIRCUIT_FINAL,PlaneInfo.CIRCUIT_BASE,PlaneInfo.CIRCUIT_DOWNWIND,PlaneInfo.CIRCUIT_CROSSWIND,)).exclude(aircraft__callsign=request.sender.callsign).count()
         ph = get_heading_to(request.sender.get_position(),self.active_runway().get_position())
         s = angle_diff(ph,float(self.active_runway().bearing))
         self.log("circp=%s, ph=%s, s=%s" % (circp,ph,s))

@@ -368,10 +368,11 @@ class Approach(Controller):
 class Tag(StatusModel):
     STATUS = PlaneInfo.CHOICES_STR
     
-    comm = ForeignKey(Comm, related_name='tags')
+    #comm = ForeignKey(Comm, related_name='tags')
+    airport = ForeignKey(Airport, related_name='tags',null=True)
     aircraft=ForeignKey(Aircraft,related_name='tags')
     number = IntegerField(default=1)
     ack_order=CharField(max_length=255,null=True,blank=True)
 
     def __unicode__(self):
-        return "%s - %s [%s]" % (self.comm,self.aircraft.callsign,self.status)
+        return "%s - %s [%s]" % (self.airport,self.aircraft.callsign,self.status)
