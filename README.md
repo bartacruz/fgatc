@@ -65,28 +65,30 @@ If you want to create a virtualenv, use the `requirements.txt` file to install a
 
 ## Install
 
+
 0. Make sure you have all the requirements installed.
 1. Grab the code and place it in some directory (D'oh!).
 2. Create a database.
 3. Edit settings.py to suit your needs (mostly db configuration)
 4. Generate the tables with
 
-```
-$ python manage.py syncdb 
-$ python manage.py migrate
-```
+	```
+	$ python manage.py syncdb 
+	$ python manage.py migrate
+	s```
 
-5. Install the [Nasal script](Nasal/README.md)
+5. Install the [Nasal script](Nasal/)
 
 There is a neat script in `fgserver/tools/airport_importer.py` that imports ALL the airports, whith runway and comm information, into the database from FlightGear's apt-dat.gz (or any X-Plane v810 airport file)
 
 ## Usage
+
 1. Run the Django app: `$ python manage.py runserver`
 2. Point to your host, port 8000 (i.e.: <http://localhost:8000>) and do some admin stuff like:
   * Create airports and runways
   * Create AI Aircrafts.
 3. Run the server: `$ python server.py`
-4. Start Flightgear and use the server address as a multiplayer server. Tune the radio to some controller's freq.
+4. Start Flightgear and use the server address as a multiplayer server. The default port is 5100. Tune the radio to some controller's frequency.
   Now you can use the menu with the key `'` and communicate with the ATC controllers.
 5. Access the interactive map in `/map/` (i.e.: <http://localhost:8000/map/>). 
   With no other parameters, it will show the SABE airport area (Buenos Aires, Argentina). 

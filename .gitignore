@@ -1,3 +1,4 @@
 syntax: glob
 .settings
 *.pyc
+*.md.html
