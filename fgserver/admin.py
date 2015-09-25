@@ -6,7 +6,7 @@ Created on Apr 16, 2015
 '''
 from django.contrib import admin
 from django.contrib.admin.options import ModelAdmin, TabularInline
-from fgserver.models import Airport, Runway, Aircraft, Comm
+from fgserver.models import Airport, Runway, Aircraft, Comm, StartupLocation
 from fgserver.ai.models import Circuit
 
 admin.autodiscover()
@@ -22,11 +22,15 @@ class RunwayInline(TabularInline):
 class CircuitInline(TabularInline):
     model=Circuit
     extra=0
+
+class StartupInline(TabularInline):
+    model=StartupLocation
+    extra=0
     
 class AirportAdmin(ModelAdmin):
     search_fields = ['icao','name']
     list_display=('icao','name','lat','lon')
-    inlines = [RunwayInline,CommInline, CircuitInline]
+    inlines = [RunwayInline,CommInline, StartupInline, CircuitInline]
 
 class RunwayAdmin(ModelAdmin):
     search_fields = ['airport__icao','airport__name']

@@ -50,7 +50,7 @@ class Circuit(FlightPlan):
     def init(self):
         self._waypoint=0
         self._time=0
-        self._waiting=40
+        self._waiting=randint(60,180)
         self.waypoints.all().delete()
         self.aircraft.state=2
         self.generate_waypoints()
@@ -63,7 +63,7 @@ class Circuit(FlightPlan):
         self.log("END OF CIRCUIT %s" % self.name)
         self._waypoint=0
         self.aiplane = AIPlane(self)
-        self._waiting=randint(30,120)
+        self._waiting=randint(90,270)
 
     def last_order(self):
         return self.aircraft.orders.filter(confirmed=True).last()
@@ -73,7 +73,14 @@ class Circuit(FlightPlan):
         wp.set_position(position)
         wp.save()
         return wp
-         
+
+    def get_startup_location(self):     
+        s1 = self.airport.startups.filter(active=True,aircraft=None).first()
+        if s1:
+            s1.aircraft=self.aircraft
+            s1.save()
+        return s1
+
     def generate_waypoints(self):
         runway = self.airport.active_runway()
         straight = runway.bearing
@@ -84,7 +91,12 @@ class Circuit(FlightPlan):
         self.log("runway length", runway.length,runway.length/2)
         rwystart = move(runway.position(), reverse, runway.length*units.FT/2,apalt)
         rwyend = move(runway.position(), straight, runway.length*units.FT/2,apalt)
-        position = move(rwystart,left,runway.width*units.FT,apalt)
+        s1 = self.get_startup_location()
+        if s1:
+            position = s1.get_position()
+            self.log("STARTUP LOCATION=%s" % s1)
+        else:
+            position = move(rwystart,left,runway.width*units.FT,apalt)
         self.create_waypoint(position, "FParking %s"%runway.name, WayPoint.PARKING, PlaneInfo.STOPPED)
         position = move(rwystart,left,runway.width*units.FT*0.8,apalt)
         self.create_waypoint(position, "Short %s"%runway.name, WayPoint.HOLD, PlaneInfo.SHORT)

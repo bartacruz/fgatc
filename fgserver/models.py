@@ -246,6 +246,22 @@ class Order(Model):
     def __unicode__(self):
         return "%s: to %s = %s" %( self.id,self.receiver,self.order)
 
+class StartupLocation(Model):
+    airport = ForeignKey(Airport,related_name="startups")
+    name = CharField(max_length=60)
+    lat = DecimalField(default=0,max_digits=10,decimal_places=6)
+    lon = DecimalField(default=0,max_digits=10,decimal_places=6)
+    altitude = IntegerField(default=0)
+    heading = FloatField(default=0)
+    aircraft=ForeignKey(Aircraft,blank=True,null=True, related_name='startup_location')
+    active = BooleanField(default=True)
+
+    def get_position(self):
+        return Position(float(self.lat), float(self.lon), float(self.altitude))
+    
+    def __unicode__(self):
+        return "%s@%s" %( self.name,self.airport)
+
 class MetarUpdater(Thread):
     apt = None
     
