@@ -75,7 +75,7 @@ If you want to create a virtualenv, use the `requirements.txt` file to install a
 	```
 	$ python manage.py syncdb 
 	$ python manage.py migrate
-	s```
+	```
 
 5. Install the [Nasal script](Nasal/)
 
