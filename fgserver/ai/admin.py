@@ -24,7 +24,7 @@ class FlightPlanAdmin(ModelAdmin):
     inlines = [WaypointInline]
 
 class CircuitAdmin(ModelAdmin):
-    list_display=('name','airport','description','radius','altitude')
+    list_display=('name','airport','description','radius','altitude','enabled')
     search_fields = ['name','airport__icao','airport__name']
     inlines = [WaypointInline]
 

@@ -9,7 +9,8 @@ from fgserver import units, llogger
 from __builtin__ import min
 from django.db.models.base import Model
 from django.db.models.fields.related import ForeignKey
-from django.db.models.fields import CharField, FloatField, IntegerField
+from django.db.models.fields import CharField, FloatField, IntegerField,\
+    BooleanField
 from fgserver.models import Airport, Aircraft, Order
 from fgserver.ai import AIPlane, PlaneInfo
 from fgserver.messages import alias
@@ -46,13 +47,14 @@ class Circuit(FlightPlan):
     radius.description="Radius of the circuit (in meters)"
     altitude=FloatField(default=1000*units.FT)
     altitude.description="Altitude of the circuit (in meters)"   
-        
+    enabled = BooleanField(default=False)
+            
     def init(self):
         self._waypoint=0
         self._time=0
         self._waiting=randint(60,180)
-        self.waypoints.all().delete()
         self.aircraft.state=2
+        self.runway = None
         self.generate_waypoints()
         self.aiplane = AIPlane(self)
         self.aiplane.update_aircraft()
@@ -75,14 +77,19 @@ class Circuit(FlightPlan):
         return wp
 
     def get_startup_location(self):     
-        s1 = self.airport.startups.filter(active=True,aircraft=None).first()
+        s1 = self.airport.startups.filter(aircraft = self.aircraft).first()
+        if not s1:
+            s1 = self.airport.startups.filter(active=True,aircraft=None).first()
         if s1:
             s1.aircraft=self.aircraft
             s1.save()
         return s1
 
     def generate_waypoints(self):
-        runway = self.airport.active_runway()
+        self.waypoints.all().delete()
+        if not self.runway:
+            self.runway = self.airport.active_runway()
+        runway = self.runway
         straight = runway.bearing
         reverse= normdeg(straight-180)
         left = normdeg(straight-90)
@@ -227,14 +234,24 @@ class Circuit(FlightPlan):
                 req = "req=tunein;freq=%s" % comm.get_FGfreq()
                 threading.Thread(target=self.aiplane.send_request,args=(req,'',)).start()
             elif order in [alias.TAXI_TO, alias.LINEUP]:
+                rwy = instance.get_param(Order.PARAM_RUNWAY)
+                if not self.runway or self.runway.name != rwy:
+                    ''' the ATC refered us to a different runway. Obey '''
+                    self.log("regenerating flight plan for ATC's assigned runway %s " % rwy)
+                    self.runway = self.airport.runways.get(name=rwy)
+                    self.generate_waypoints()
+                    self.aiplane.waypoint = self.waypoint()
+                    self.log("Setting aiplane waypoint to %s " % self.aiplane.waypoint)
+                    
                 self.aiplane.set_state(PlaneInfo.TAXIING)
-                self._waiting=2
+                self._waiting=10
             elif order == alias.CLEAR_TK:
                 if self.aiplane.state == PlaneInfo.SHORT:
-                    self.aiplane.set_state(PlaneInfo.TAXIING)
+                    self.aiplane.set_state(PlaneInfo.LINING_UP)
                 else:
                     self.aiplane.set_state(PlaneInfo.DEPARTING)
-                self._waiting=2
+                self._waiting=15
+    
             else:
                 self.log("Circuit",self.aircraft.callsign,', order ignored', instance)
             

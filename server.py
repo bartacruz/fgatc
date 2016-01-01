@@ -15,7 +15,7 @@ from django.dispatch.dispatcher import receiver
 from fgserver.models import Order, Aircraft, Request, Airport,\
     airportsWithinRange
 from django.utils import timezone
-from fgserver.atc.models import Tower, ATC, Departure, Approach
+from fgserver.atc.models import Tower, ATC, Departure, Approach, Tag
 from fgserver import units, llogger, messages, get_controller
 from django.core.cache import  get_cache
 import os 
@@ -25,10 +25,15 @@ import django
 
 # Port that server listens
 server_port=5100
+# Relay server
+RELAY=('217.78.131.44',5000)
+RELAY_ENABLED=False
+UPDATE_RATE=2
+DATE_STARTED = timezone.now()
+MSG_MAGIC = 0x46474653
 
 orders = {}
 
-UPDATE_RATE=2
 _aircrafts=[]
 POSITIONS = {}
 _aaa={}
@@ -73,7 +78,7 @@ def check_circuits(controller):
     load_circuits(controller.comm.airport)
 
 def load_circuits(airport):
-    for circuit in airport.circuits.all():
+    for circuit in airport.circuits.filter(enabled=True):
         if not get_circuit(circuit.name):
             circuit.init()
             set_aircraft(circuit.aircraft)
@@ -314,7 +319,15 @@ def find_comm(request):
             return c.first().id
     return None
 
-
+def relay(data):
+    global relaysock
+    if RELAY_ENABLED:
+        try:
+            relaysock.sendto(data, RELAY)
+        except:
+            error("Error relaying data to server")
+    
+    
 def process_pos(pos):
     
     set_pos(pos)
@@ -354,16 +367,16 @@ def process_pos(pos):
     return True
 
 
-DATE_STARTED = timezone.now()
-
-MSG_MAGIC = 0x46474653
 
 # Reset all planes to 0
 Aircraft.objects.all().update(state=0)
 Order.objects.all().update(confirmed=False)
+Tag.objects.all().delete()
+
 get_cache('default').set('last_update',timezone.now())
 
 fgsock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+relaysock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
 fglisten = ("localhost",server_port)
 fgsock.bind(fglisten)
 
@@ -372,6 +385,7 @@ cont = True
 # Main loop
 while cont:
     data,addr = fgsock.recvfrom(1200)
+    relay(data)
     unp = Unpacker(data)
     pos = PosMsg()
     pos.receive(unp)

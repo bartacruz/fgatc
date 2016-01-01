@@ -8,6 +8,7 @@ from fgserver.models import Airport, Runway, Comm
 from fgserver.helper import normalize
 import re
 from fgserver import llogger
+from xml.etree import ElementTree
 
 
 def rwys_from_aptdat(airport,line):
@@ -113,4 +114,19 @@ def import_apts(file):
                         llogger.debug("comms= %s" % comms)
                 print airport.icao, airport.name, airport.lat, airport.lon,airport.altitude, len(runways), len(comms)
 
-import_apts("../data/apt.dat.gz")
+def groundnet(wedfile):
+     
+    e = ElementTree.parse(wedfile).getroot()
+    idx = 0
+    for ramp in e.findall(".//*[@class='WED_RampPosition']"):
+        s = {index: idx, type:'ga'}
+        s['name']=ramp.find('hierarchy').get('name')
+        p = ramp.find('point')
+        s['lat']=p.
+        
+        
+        print 
+        
+
+groundnet('/home/julio/WED/Custom Scenery/SADF/earth.wed.xml')
+#import_apts("../data/apt.dat.gz")

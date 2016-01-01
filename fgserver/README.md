@@ -19,6 +19,7 @@ You can run the Django app from command line with
 
 ```
 $ python manage.py runserver
+
 ```
 
 ### WSGI

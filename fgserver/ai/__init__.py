@@ -29,12 +29,13 @@ class PlaneInfo():
     CIRCUIT_CROSSWIND=11
     CIRCUIT_DOWNWIND=12
     CIRCUIT_BASE=13
-    CIRCUIT_FINAL=14
-    CIRCUIT_STRAIGHT=15
+    CIRCUIT_STRAIGHT=14
+    CIRCUIT_FINAL=15
     SHORT=16
     LINED_UP=17
     TUNNED=18
     PARKING = 19
+    LINING_UP=20
     
     CHOICES = (
         (0,'None'),               
@@ -51,12 +52,13 @@ class PlaneInfo():
         (CIRCUIT_CROSSWIND,'Crosswind'),
         (CIRCUIT_DOWNWIND,'Downwind'),
         (CIRCUIT_BASE,'Base'),
-        (CIRCUIT_FINAL,'Final'),
         (CIRCUIT_STRAIGHT,'Straight'),
+        (CIRCUIT_FINAL,'Final'),
         (SHORT,'Short of runway'),
         (LINED_UP,'Lined up'),
         (TUNNED,'Tunned'),
         (PARKING,'Parking'),
+        (LINING_UP,'Lining up'),
     )
     CHOICES_STR = (
         ('0','None'),               
@@ -73,12 +75,13 @@ class PlaneInfo():
         (str(CIRCUIT_CROSSWIND),'Crosswind'),
         (str(CIRCUIT_DOWNWIND),'Downwind'),
         (str(CIRCUIT_BASE),'Base'),
-        (str(CIRCUIT_FINAL),'Final'),
         (str(CIRCUIT_STRAIGHT),'Straight'),
+        (str(CIRCUIT_FINAL),'Final'),
         (str(SHORT),'Short of runway'),
         (str(LINED_UP),'Lined up'),
         (str(TUNNED),'Tunned'),
         (str(PARKING),'Parking'),
+        (str(LINING_UP),'Lining up'),
     )
          
 class AIPlane():
@@ -132,8 +135,8 @@ class AIPlane():
             self.speed=0
             self.vertical_speed=0
             self.turn_rate=1
-            self.target_vertical_speed=1
-        elif state == PlaneInfo.TAXIING or (state==PlaneInfo.SHORT and not laor.short()):
+            self.target_vertical_speed=1    
+        elif state == PlaneInfo.TAXIING or (state==PlaneInfo.SHORT and not laor.short()) or state == PlaneInfo.LINING_UP:
             self.turn_rate = 50
             self.speed = 10*units.KNOTS
             self.target_vertical_speed=1
@@ -141,7 +144,6 @@ class AIPlane():
             self.turn_rate = 3
             self.speed = 70*units.KNOTS
             self.target_vertical_speed=100*units.FPM
-            self.course = float(self.airport().active_runway().bearing)
         elif state == PlaneInfo.CLIMBING:
             self.turn_rate = 5
             self.speed = 100*units.KNOTS
@@ -163,6 +165,10 @@ class AIPlane():
             self.speed = 80*units.KNOTS
             self.target_vertical_speed=400*units.FPM
         #self.log("turn_rate",self.turn_rate,"speed",self.speed,"target_vs",self.target_vertical_speed)
+        
+        if state == PlaneInfo.DEPARTING or state==PlaneInfo.LINED_UP:
+            self.course = float(self.airport().active_runway().bearing)
+                
         if changed:
             self.check_request()
     

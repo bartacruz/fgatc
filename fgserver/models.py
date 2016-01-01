@@ -15,10 +15,12 @@ from django.dispatch.dispatcher import receiver
 from django.utils import timezone
 
 from fgserver import llogger, debug, units, get_closest_metar
-from fgserver.helper import normdeg, Position, get_distance, move
+from fgserver.helper import normdeg, Position, get_distance, move, normalize,\
+    point_inside_polygon
 from fgserver.settings import METAR_UPDATE
 from django.db.models.signals import post_save
 from metar.Metar import Metar
+from math import sqrt, atan
 
 
 class Airport(Model):
@@ -83,6 +85,32 @@ class Runway(Model):
     lon=DecimalField(default=0,max_digits=10,decimal_places=6)
     altitude =0
         
+    def __init__(self, *args, **kwargs):
+        Model.__init__(self, *args, **kwargs)
+        self._calculate_boundaries()
+    
+    def _calculate_boundaries(self):
+        w2= self.width*units.FT/2
+        l2= self.length*units.FT/2
+        bearing = float(self.bearing)
+        pos = self.get_position()
+        cat = sqrt(w2 * w2+l2*l2)
+        alpha = atan(w2/l2)*units.RAD
+        #self.log(l2,w2,cat,alpha)
+        angles = []
+        angles.append(normalize(bearing + alpha)) # front right
+        angles.append(normalize(bearing - alpha))
+        angles.append(normalize(bearing + alpha -180 ))
+        angles.append(normalize(bearing - alpha -180 ))
+        #self.log("self angles", angles)        
+        self._boundaries=[]
+        for angle in angles:
+            p = move(pos, angle, cat, pos.z)
+            self._boundaries.append((p.x,p.y))
+        
+    def on_runway(self,pos):
+        return point_inside_polygon(pos.x,pos.y,self._boundaries)
+    
     def position(self):
         ''' alias'''
         return self.get_position()
