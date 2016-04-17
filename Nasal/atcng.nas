@@ -371,7 +371,7 @@ var parse_message = func(tag) {
 			msg = string.replace(msg,'{ack}',ack);
 		} else if(last_order['ord'] == 'cirrep') {
 			var ack = sprintf("report on %s",last_order['cirw']);
-			if (last_order['number'] > 1) {
+			if (last_order['number'] != nil and last_order['number'] > 1) {
 				var nm =sprintf(" number %s",last_order['number']); 
 				ack ~= nm;
 			}

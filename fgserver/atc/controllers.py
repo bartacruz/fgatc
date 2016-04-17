@@ -65,7 +65,8 @@ class Controller(object):
                 dist = get_distance(l.get_position(),runway.get_position())
                 head = get_heading_to_360(l.get_position(),runway.get_position())
                 adiff = angle_diff(head, float(runway.bearing))
-                if dist > 1*units.NM or adiff > 5 :
+                # TODO: Make this values configurables.
+                if dist > 3*units.NM or adiff > 20 :
                     ''' nop, he isn't'''
                     self.log("acft is not on landing path. removing LANDING state",l,dist, head,l.heading, adiff)
                     self.set_status(l,0,0)
@@ -76,6 +77,7 @@ class Controller(object):
             if s.number:
                 s.number=0
                 s.save()
+                self.log('No one landing and no one departing, let %s take off. %s,%s' % (s,s.id,s.number))
                 '''No one landing and no one departing, let them take off'''
                 self.manage(s.aircraft.requests.all().last())
         
@@ -121,6 +123,7 @@ class Controller(object):
         tag.save()
         if created:
             self.log("created", tag)
+        return tag
 
     def _init_response(self,request):
         order = Order(sender=self.comm,receiver=request.sender,date=self.next_order_date())
@@ -267,10 +270,10 @@ class Tower(Controller):
         response=self._init_response(request)
         response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
         count = self.comm.airport.tags.filter(status=PlaneInfo.SHORT).exclude(aircraft=request.sender).count()
-        count_others = self.comm.airport.tags.filter(status__in=[PlaneInfo.LINING_UP,PlaneInfo.LINED_UP, PlaneInfo.DEPARTING,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_FINAL,PlaneInfo.CIRCUIT_BASE]).exclude(aircraft=request.sender).count()
-        self.set_status(request.sender, PlaneInfo.SHORT,count)
+        count_others = self.comm.airport.tags.filter(status__in=[PlaneInfo.LINING_UP,PlaneInfo.LINED_UP, PlaneInfo.DEPARTING,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_FINAL,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_BASE]).exclude(aircraft=request.sender).count()
         tag = self.get_tag(request.sender)
-        
+        self.set_status(request.sender, PlaneInfo.SHORT,count)
+        self.log("holdingshort %s %s  %s %s %s" % (count_others,count,tag, tag.id,tag.number))
         if count_others or (tag.number and count) :
             response.add_param(Order.PARAM_ORDER, alias.WAIT)
             response.add_param(Order.PARAM_HOLD, 1)
@@ -308,7 +311,7 @@ class Tower(Controller):
         return response
     
     def _circuiters(self):
-            tags = self.comm.airport.tags.filter(status__in=[PlaneInfo.CIRCUIT_FINAL,PlaneInfo.CIRCUIT_STRAIGHT,PlaneInfo.CIRCUIT_BASE,PlaneInfo.CIRCUIT_DOWNWIND,PlaneInfo.CIRCUIT_CROSSWIND,]).order_by('-status')
+            tags = self.comm.airport.tags.filter(status__in=[PlaneInfo.LANDING,PlaneInfo.CIRCUIT_FINAL,PlaneInfo.CIRCUIT_STRAIGHT,PlaneInfo.CIRCUIT_BASE,PlaneInfo.CIRCUIT_DOWNWIND,PlaneInfo.CIRCUIT_CROSSWIND,]).order_by('-status','status_changed')
             return [x.aircraft for x in tags]
         
     def _report_circuit(self,request,cur_circuit,report_circuit,number=None):
@@ -316,8 +319,11 @@ class Tower(Controller):
         response.add_param(Order.PARAM_ORDER,alias.REPORT_CIRCUIT)
         response.add_param(Order.PARAM_CIRCUIT_WP,report_circuit)
         self.set_status(request.sender, cur_circuit)
-        number = self._circuiters().index(request.sender)
-        response.add_param(Order.PARAM_NUMBER,number+1)
+        try:
+            number = self._circuiters().index(request.sender)
+            response.add_param(Order.PARAM_NUMBER,number+1)
+        except:
+            pass
         response.message=get_message(response)
         self.set_status(request.sender, cur_circuit, number)
         return response
@@ -419,7 +425,7 @@ class Approach(Controller):
 
     def inbound(self,request):
         response=self._init_response(request)
-        circp = self.comm.airport.tags.filter(status__in=(PlaneInfo.CIRCUIT_FINAL,PlaneInfo.CIRCUIT_BASE,PlaneInfo.CIRCUIT_DOWNWIND,PlaneInfo.CIRCUIT_CROSSWIND,)).exclude(aircraft__callsign=request.sender.callsign).count()
+        circp = self.comm.airport.tags.filter(status__in=(PlaneInfo.LANDING,PlaneInfo.CIRCUIT_FINAL,PlaneInfo.CIRCUIT_BASE,PlaneInfo.CIRCUIT_DOWNWIND,PlaneInfo.CIRCUIT_CROSSWIND,)).exclude(aircraft__callsign=request.sender.callsign).count()
         ph = get_heading_to(request.sender.get_position(),self.active_runway().get_position())
         s = angle_diff(ph,float(self.active_runway().bearing))
         self.log("circp=%s, ph=%s, s=%s" % (circp,ph,s))

@@ -219,13 +219,13 @@ class Tower(Controller):
         self.set_status(request.sender, PlaneInfo.CLIMBING)
     
     def _report_circuit(self,request,cur_circuit,report_circuit):
+        self.set_status(request.sender, cur_circuit)
         response=self._init_response(request)
         response.add_param(Order.PARAM_ORDER,alias.REPORT_CIRCUIT)
         response.add_param(Order.PARAM_CIRCUIT_WP,report_circuit)
-        count = self.atc.tags.filter(status=cur_circuit).exclude(aircraft__callsign=request.sender.callsign).count()
+        count = self.atc.tags.filter(status__in=PlaneInfo.CIRCUITS).order_by('status','status_changed')
         response.add_param(Order.PARAM_NUMBER,count+1)
         response.message=get_message(response)
-        self.set_status(request.sender, cur_circuit)
         return response
 
     def crosswind(self,request):

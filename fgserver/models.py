@@ -87,7 +87,10 @@ class Runway(Model):
         
     def __init__(self, *args, **kwargs):
         Model.__init__(self, *args, **kwargs)
-        self._calculate_boundaries()
+        try:
+            self._calculate_boundaries()
+        except:
+            llogger.exception("Error calculating boundaries for %s " % self)
     
     def _calculate_boundaries(self):
         w2= self.width*units.FT/2

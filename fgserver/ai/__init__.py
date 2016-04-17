@@ -36,7 +36,7 @@ class PlaneInfo():
     TUNNED=18
     PARKING = 19
     LINING_UP=20
-    
+    CIRCUITS=[CIRCUIT_CROSSWIND,CIRCUIT_DOWNWIND,CIRCUIT_BASE,CIRCUIT_STRAIGHT,CIRCUIT_FINAL]
     CHOICES = (
         (0,'None'),               
         (STOPPED,'Stopped'),
