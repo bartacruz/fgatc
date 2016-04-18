@@ -236,7 +236,7 @@ class Circuit(FlightPlan):
             elif order in [alias.TAXI_TO, alias.LINEUP]:
                 rwy = instance.get_param(Order.PARAM_RUNWAY)
                 if not self.runway or self.runway.name != rwy:
-                    ''' the ATC refered us to a different runway. Obey '''
+                    ''' the ATC referred us to a different runway. Obey '''
                     self.log("regenerating flight plan for ATC's assigned runway %s " % rwy)
                     self.runway = self.airport.runways.get(name=rwy)
                     self.generate_waypoints()
