@@ -4,30 +4,35 @@ Created on Apr 14, 2015
 
 @author: bartacruz@gmail.com
 '''
+from __builtin__ import Exception
+import os 
 import socket
 from xdrlib import Unpacker
-from fgserver.messages import PROP_REQUEST, PROP_FREQ, PosMsg, PROP_CHAT,\
-    PROP_ORDER, alias, PROP_CHAT2, PROP_ORDER2, PROP_OID
-from fgserver.helper import cart2geod, Quaternion, Vector3D,\
-    move
+
+from django.core.cache import  get_cache
 from django.db.models.signals import post_save
 from django.dispatch.dispatcher import receiver
-from fgserver.models import Order, Aircraft, Request, Airport,\
-    airportsWithinRange
 from django.utils import timezone
-from fgserver.atc.models import Tower, ATC, Departure, Approach, Tag
-from fgserver import units, llogger, messages, get_controller
-from django.core.cache import  get_cache
-import os 
-from __builtin__ import Exception, max
+
+from fgserver import units, llogger, get_controller
+from fgserver.atc.models import Tag
+from fgserver.helper import cart2geod, Quaternion, Vector3D, \
+    move
+from fgserver.messages import PROP_REQUEST, PROP_FREQ, PosMsg, PROP_CHAT, \
+    PROP_ORDER, PROP_CHAT2, PROP_ORDER2, PROP_OID
+from fgserver.models import Order, Aircraft, Request, airportsWithinRange
+
+
 os.environ['DJANGO_SETTINGS_MODULE'] = 'fgserver.settings' 
-import django
 
 # Port that server listens
 server_port=5100
+
 # Relay server
 RELAY=('217.78.131.44',5000)
+
 RELAY_ENABLED=False
+
 UPDATE_RATE=2
 DATE_STARTED = timezone.now()
 MSG_MAGIC = 0x46474653
@@ -54,16 +59,6 @@ def error(*argv):
         msg += " %s" % arg
     llogger.error(msg)
 
-# def get_airport(icao):
-#     a = get_cache('airports').get(icao)
-#     if not a:
-#         try:
-#             a = Airport.objects.get(icao=icao)
-#             get_cache('airports').set(icao,a)
-#         except Airport.DoesNotExist as e:
-#             error("ERROR. Airport not found:",icao,e)
-#     return a
-
 def set_circuit(circuit):
     if circuit:
         if not _circuits.has_key(circuit.name):
@@ -80,14 +75,13 @@ def check_circuits(controller):
 def load_circuits(airport):
     for circuit in airport.circuits.filter(enabled=True):
         if not get_circuit(circuit.name):
+            set_circuit(circuit)
             circuit.init()
             set_aircraft(circuit.aircraft)
-            set_circuit(circuit)
             log("Circuit %s added" % circuit)
 
 def get_aicraft(callsign):
     a = _aaa.get(callsign)
-    #log(callsign,"a",a,"_aaa",_aaa)
     if not a:
         try:
             a,create = Aircraft.objects.get_or_create(callsign=pos.callsign())
@@ -154,7 +148,7 @@ def receive_order(aircraft,oid):
 
 def is_order_received(aircraft,oid):
     last = _received_orders.get(str(aircraft.id),0)
-    return int(oid) == int(last)
+    return int(oid) <= int(last)
     
 def save_cache():
     _last_update = get_cache('default').get('last_update')
@@ -325,7 +319,7 @@ def relay(data):
         try:
             relaysock.sendto(data, RELAY)
         except:
-            error("Error relaying data to server")
+            llogger.exception("Error relaying data to server")
     
     
 def process_pos(pos):
