@@ -1,14 +1,15 @@
-import logging
-from fgserver.settings import METAR_URL, METAR_UPDATE
-import urllib
 from datetime import datetime
-from fgserver import units, settings
-from metar.Metar import Metar
-from django.utils.module_loading import import_by_path
+import logging
 from threading import Thread
-from south.modelsinspector import timezone
-from django.db.models.signals import post_save
-from django.dispatch.dispatcher import receiver
+import urllib
+
+from django.utils.module_loading import import_by_path
+from metar.Metar import Metar
+
+from fgserver import units, settings
+from fgserver.settings import METAR_URL, METAR_UPDATE
+import threading
+
 
 llogger = logging.getLogger("fgserver")
 llogger.setLevel(logging.DEBUG)
@@ -96,3 +97,27 @@ def get_closest_metar(apt,max_range=80,unit=units.NM):
     else:
         return obs
 
+def setInterval(interval, times = -1):
+    # This will be the actual decorator,
+    # with fixed interval and times parameter
+    def outer_wrap(function):
+        # This will be the function to be
+        # called
+        def wrap(*args, **kwargs):
+            stop = threading.Event()
+
+            # This is another function to be executed
+            # in a different thread to simulate setInterval
+            def inner_wrap():
+                i = 0
+                while i != times and not stop.isSet():
+                    stop.wait(interval)
+                    function(*args, **kwargs)
+                    i += 1
+
+            t = threading.Timer(0, inner_wrap)
+            t.daemon = True
+            t.start()
+            return stop
+        return wrap
+    return outer_wrap
