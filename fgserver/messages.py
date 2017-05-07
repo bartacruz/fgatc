@@ -5,7 +5,8 @@ Created on Apr 16, 2015
 @author: bartacruz
 '''
 from xdrlib import Packer
-from fgserver import llogger
+from fgserver import llogger, settings
+import re
 
 
 PROP_FREQ = 10001
@@ -196,6 +197,20 @@ PROPERTIES = {
   10319: {'node': 'sim/multiplay/generic/int[19]', 'type':'INT'}
 }
 
+if getattr(settings,"MESSAGES_FILE",False):
+    fname =getattr(settings,"MESSAGES_FILE")
+    pattern = re.compile(r'.*{\s*(\d*),.*"(.*)",.*simgear::props::(\w*),')
+    props={}
+    with open(fname) as f:
+        for line in f:
+            
+            match = pattern.match(line)
+            #print line,match
+            if match:
+                props[int(match.group(1))]={'node': match.group(2), 'type':match.group(3)}
+    #print "properties",props           
+    PROPERTIES = props
+    
 class alias():
     CLEAR_CROSS='clearcross'
     CLEAR_LAND='clearland'
@@ -278,7 +293,7 @@ def decode_node(unp):
         prop['value'] = val
         return prop
     else:
-        print "Propiedad invalida: %d" % pid
+        #print "Propiedad invalida: %d" % pid
         return None
     
 class Header:
