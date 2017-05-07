@@ -94,7 +94,8 @@ class Runway(Model):
     
     def _calculate_boundaries(self):
         w2= self.width*units.FT/2
-        l2= self.length*units.FT/2
+        # add 50ft for runway start/end miscalculation"
+        l2= self.length*units.FT/2+50*units.FT
         bearing = float(self.bearing)
         pos = self.get_position()
         cat = sqrt(w2 * w2+l2*l2)
