@@ -1,4 +1,4 @@
-#FlightGear AI ATC and Aircraft multiplayer server
+# FlightGear AI ATC and Aircraft multiplayer server
 
 A complete FlightGear multiplayer server with AI ATC, AI Planes, interactive map. Messages are sent and received only in the tunned frequency. 
 
