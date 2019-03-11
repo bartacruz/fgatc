@@ -4,48 +4,43 @@ Created on Apr 14, 2015
 
 @author: bartacruz@gmail.com
 '''
-from __builtin__ import Exception
-import os 
 import socket
 from xdrlib import Unpacker
-
-from django.core.cache import  get_cache
+from fgserver.messages import PROP_REQUEST, PROP_FREQ, PosMsg, PROP_CHAT,\
+    PROP_ORDER, PROP_CHAT2, PROP_ORDER2, PROP_OID
+from fgserver.helper import cart2geod, Quaternion, Vector3D,\
+    move
 from django.db.models.signals import post_save
 from django.dispatch.dispatcher import receiver
-from django.utils import timezone
-
-from fgserver import units, llogger, get_controller
-from fgserver.atc.models import Tag
-from fgserver.helper import cart2geod, Quaternion, Vector3D, \
-    move
-from fgserver.messages import PROP_REQUEST, PROP_FREQ, PosMsg, PROP_CHAT, \
-    PROP_ORDER, PROP_CHAT2, PROP_ORDER2, PROP_OID
 from fgserver.models import Order, Aircraft, Request, airportsWithinRange
-
-
+from django.utils import timezone
+from fgserver.atc.models import Tag
+from fgserver import units, llogger, get_controller, settings
+from django.core.cache import  get_cache
+import os 
+from __builtin__ import Exception
+import time
+import sys
 os.environ['DJANGO_SETTINGS_MODULE'] = 'fgserver.settings' 
 
-# Port that server listens
-server_port=5100
 
-# Relay server
-RELAY=('217.78.131.44',5000)
+'''
+DEPRECATED
+see fgserver/server/mpserver.py
 
-RELAY_ENABLED=False
+'''
 
-UPDATE_RATE=2
 DATE_STARTED = timezone.now()
 MSG_MAGIC = 0x46474653
 
-orders = {}
-
-_aircrafts=[]
+ORDERS = {}
 POSITIONS = {}
-_aaa={}
-_circuits={}
+AIRCRAFTS={}
+CIRCUITS={}
 
 _last_orders={}
 _received_orders = {}
+_ai_thread = None
 
 def log(*argv):
     msg = "[Server]"
@@ -59,14 +54,17 @@ def error(*argv):
         msg += " %s" % arg
     llogger.error(msg)
 
+def sim_time():
+    return (timezone.now() - DATE_STARTED).total_seconds()
+
 def set_circuit(circuit):
     if circuit:
-        if not _circuits.has_key(circuit.name):
+        if not CIRCUITS.has_key(circuit.name):
             log("storing circuit",circuit.name)
-            _circuits[circuit.name]=circuit
+            CIRCUITS[circuit.name]=circuit
         
 def get_circuit(name):
-    return _circuits.get(name)
+    return CIRCUITS.get(name)
 
 def check_circuits(controller):
     log('checking circuits for %s' % controller)
@@ -81,7 +79,7 @@ def load_circuits(airport):
             log("Circuit %s added" % circuit)
 
 def get_aicraft(callsign):
-    a = _aaa.get(callsign)
+    a = AIRCRAFTS.get(callsign)
     if not a:
         try:
             a,create = Aircraft.objects.get_or_create(callsign=pos.callsign())
@@ -96,11 +94,7 @@ def get_aicraft(callsign):
     return a
 
 def set_aircraft(aircraft):
-    _aaa[aircraft.callsign]=aircraft
-    #get_cache('aircrafts').set(aircraft.callsign,aircraft)
-    if not _aircrafts.count(aircraft.callsign):
-        log("adding aircraft to cache: %s" % aircraft.callsign)
-        _aircrafts.append(aircraft.callsign)
+    AIRCRAFTS[aircraft.callsign]=aircraft
 
 def get_pos(callsign):
     pos = POSITIONS.get(callsign)
@@ -115,16 +109,16 @@ def set_pos(pos):
     
 def queue_order(order):
     log("queue_order.",order,order.date)
-    orders.setdefault(order.sender.id,[]).append(order)
+    ORDERS.setdefault(order.sender.id,[]).append(order)
     
         
 def process_queues():
-    for apt in orders:
-        if len(orders[apt]):
-            o = orders[apt][0]
+    for apt in ORDERS:
+        if len(ORDERS[apt]):
+            o = ORDERS[apt][0]
             dif =(timezone.now() - o.date).total_seconds()
             if dif > 1:
-                o = orders[apt].pop(0)
+                o = ORDERS[apt].pop(0)
                 o.confirmed=True
                 log("activating order ",o)
                 o.save()
@@ -152,14 +146,14 @@ def is_order_received(aircraft,oid):
     
 def save_cache():
     _last_update = get_cache('default').get('last_update')
-    if not _last_update or (timezone.now() - _last_update).total_seconds() > UPDATE_RATE:
-        for callsign in _aircrafts:
+    if not _last_update or (timezone.now() - _last_update).total_seconds() > settings.FGATC_UPDATE_RATE:
+        for callsign in AIRCRAFTS.keys():
             p = get_pos(callsign)
             a = get_aicraft(callsign)
             #log("saving aircraft %s" % a.__dict__)
             if p and sim_time() - p.sim_time > 10:
                 log("Deactivating aircraft: %s" % callsign, sim_time(),p.sim_time)
-                _aircrafts.remove(callsign)
+                AIRCRAFTS.pop(callsign)
                 a.state=0
             else:
                 a.state=1
@@ -187,7 +181,7 @@ def get_mpplanes(aircraft):
     sw = move(aircraft.get_position(),-135,50*units.NM,aircraft.altitude)
     ne = move(aircraft.get_position(),45,50*units.NM,aircraft.altitude)
     #afs = Aircraft.objects.filter(state__gte=1,lat__lte=ne.x, lat__gte=sw.x,lon__lte=ne.y,lon__gte=sw.y)
-    for af in _aaa.itervalues():
+    for af in AIRCRAFTS.itervalues():
         if af.callsign != aircraft.callsign and af.state >= 1 \
         and af.lat<=ne.x and af.lat>=sw.x\
         and af.lon<=ne.y and af.lon>=sw.y:
@@ -255,6 +249,7 @@ def send_pos(callsign):
             msg.lag=0.1
             msg.properties.set_prop(PROP_FREQ, request.receiver.get_FGfreq())
             sendto(msg.send(), aircraft.get_addr())
+
     ''' send mp and ai planes positions to player ''' 
     for mp in get_mpplanes(aircraft):
         if msg and mp.plans.count():
@@ -283,8 +278,28 @@ def send_pos(callsign):
             if oid_p:
                 receive_order(mp, oid_p['value'])
             
-def sim_time():
-    return (timezone.now() - DATE_STARTED).total_seconds()
+def update_aiplanes():
+    while cont: 
+        time.sleep(settings.FGATC_AI_INTERVAL)
+        for mp in AIRCRAFTS.values():
+            if mp.plans.count():
+                for p in mp.plans.all():
+                    if p.circuit:
+                        cir = get_circuit(p.circuit.name)
+                        if cir: 
+                            pos = cir.update(sim_time())
+                            if not pos.time:
+                                pos.time = sim_time()
+                                #print "setting time of %s to %s" % (pos.header.callsign, pos.time)
+                                
+                            set_circuit(cir)
+                            set_aircraft(cir.aircraft)
+                            set_pos(pos)
+                            oid_p = pos.get_property(PROP_OID)
+                            if oid_p:
+                                receive_order(mp, oid_p['value'])
+                    
+                
 
 def sendto(data,addr):
     global fgsock
@@ -315,9 +330,9 @@ def find_comm(request):
 
 def relay(data):
     global relaysock
-    if RELAY_ENABLED:
+    if getattr(settings, 'FGATC_RELAY_ENABLED',False):
         try:
-            relaysock.sendto(data, RELAY)
+            relaysock.sendto(data, settings.FGATC_RELAY_SERVER)
         except:
             llogger.exception("Error relaying data to server")
     
@@ -369,12 +384,16 @@ Tag.objects.all().delete()
 
 get_cache('default').set('last_update',timezone.now())
 
+
+
 fgsock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
 relaysock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-fglisten = ("localhost",server_port)
+fglisten = ("localhost",settings.FGATC_SERVER_PORT)
 fgsock.bind(fglisten)
 
 cont = True
+#_ai_thread = threading.Thread(None, update_aiplanes)
+#_ai_thread.start()
 
 # Main loop
 while cont:
