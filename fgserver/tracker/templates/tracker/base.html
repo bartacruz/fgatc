@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+{% block prehead %} {% endblock %}
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=0.8">
+
+<title>{% block tracker_title %}{{ site_name }}{% endblock %}</title> 
+{% block bootstrap_css %}
+<link rel="stylesheet"
+	href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
+{% endblock %}
+<link rel="stylesheet"
+	href="{{STATIC_URL}}tracker/css/flag-icon.min.css?{{ site_revision }}">
+<link rel="stylesheet"
+	href="{{STATIC_URL}}tracker/css/tracker.css?{{ site_revision }}">
+{% block extra_style %} {% endblock %}
+
+<script src="https://code.jquery.com/jquery-2.2.4.min.js"
+	integrity="sha256-BbhdlvQf/xTY9gja0Dq3HiwQF8LaCRTXxZKRutelT44="
+	crossorigin="anonymous"></script>
+<script
+	src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+<script type="text/javascript" src="{{STATIC_URL}}tracker/js/tracker.js"></script>
+<script type="text/javascript">
+	$(document).ready(function() {
+		
+	});
+</script>
+{% block extra_js %} {% endblock %}
+</head>
+<body class="tracker {% block body_class %} {% endblock %}">
+
+<div class="container content">{% block content %} {% endblock %}</div>
+
+<div class="clearfix"></div>
+<div class="container-fluid footer">
+</div>
+
+
+</body>

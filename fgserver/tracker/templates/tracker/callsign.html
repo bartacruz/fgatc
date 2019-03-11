@@ -1,0 +1,110 @@
+{% extends 'tracker/base.html' %}
+{% block extra_js %}
+<script type="text/javascript">
+var respuesta = null;
+	function img_loaded(a,b,c) {
+		console.debug("image_loaded",a,b,c);
+	}
+	function populate_flights(flist) {
+		var tmpl = $(".flight-badge.template");
+		for (i in flist) {
+			var flight = flist[i];
+			var badge = tmpl.clone();
+			badge.removeClass("template");
+			//badge.find(".screenshot .model-image").attr("src", "http://flightgear.org/legacy-Downloads/aircraft-2.0.0/" + flight.model + ".jpg").attr("title",flight.model);
+			for (tag in flight) {
+				badge.find("." + tag).html(flight[tag]);
+			}
+			var model = flight.model;
+			if (! model || model == null) {
+				model = flight.model_raw;
+			}
+			badge.find(".model").html(model);
+			badge.find(".screenshot .model-image").attr("src", "/static/tracker/models/" + flight.model_raw + "_thumbnail.jpg").attr("title",model);
+			badge.find(".row_number").html(flight.row);
+			badge.find(".start_location_icao").html(flight.start_location.icao);
+			if (flight.start_location.country) {
+				badge.find(".start_location_flag").addClass("flag-icon flag-icon-"+flight.start_location.country.toLowerCase());
+			}
+			badge.find(".end_location_icao").html(flight.end_location.icao);
+			$(".flights").append(badge);
+		}
+	}
+	
+	function populate_aircrafts(aircrafts) {
+		var tmpl = $(".aircraft-badge.template");
+		for (i in aircrafts) {
+			var acft = aircrafts[i];
+			var badge = tmpl.clone();
+			badge.removeClass("template");
+			var model = acft.model;
+			if (! model || model == null) {
+				model = acft.model_raw;
+			}
+			//badge.find(".screenshot .model-image").attr("src", "http://flightgear.org/legacy-Downloads/aircraft-2.0.0/" + acft.model + ".jpg");
+			badge.find(".screenshot .model-image").attr("src", "/static/tracker/models/" + acft.model_raw + "_thumbnail.jpg").attr("title",acft.model+" ("+acft.model_raw+")");
+			badge.find(".model").html(model);
+			badge.find(".duration").html(acft.duration);
+			badge.find(".effective").html(acft.effective_flight_time);
+			$(".aircrafts").append(badge);
+			
+		}
+			
+		
+	}
+	function populate_data(response) {
+		respuesta = response;
+		var resp = JSON.parse(response);
+		console.debug("response", response,resp);
+		var flist = resp.data.flight_list;
+		populate_flights(flist);
+		populate_aircrafts(resp.data.flight_time_by_type);
+		
+	}
+	$(document).ready(function() {
+		get_flights("barta",populate_data);
+	});
+</script>
+{% endblock %}
+{% block content %}
+<H1>
+	<span class="glyphicon glyphicon-user"></span><span class="callsign">{{ callsign }}</span>
+</H1>
+<div class="row">
+	<div class="col-sm-6 col-lg-4">
+		<h4>Flight log<br/><span class="small">Flights recorded after 2016-08-01</span></h4>
+		<div class="flights">
+			<div class="flight-badge cartouche template">
+				
+				<div class="screenshot"><img class="model-image img-responsive" src='/static/tracker/images/no-plane.jpg'  onerror="this.src='/static/tracker/images/no-plane.jpg'" /></div>
+				<div class="data">
+					<div class="flight-header">
+						<div class="pull-right"><span title="Total Flight Duration" class="duration label label-success"></span><span title="Effective Time Duration" class="effective_flight_time label label-warning"></span><span class="label label-info numwpts"></span></div>
+						<div><span class="badge row_number"></span><span class="model"></span></div>
+					</div>
+					<div class="departure">
+						<span class="label label-info start_location_icao"></span><span class="start_location_flag"></span><span class="start_time"></span>
+					</div>
+					<div class="arrival">
+						<span class="label label-primary end_location_icao"></span><span class="end_time"></span>
+					</div>
+				</div>
+				<div class="clearfix"></div>
+			</div>
+		</div>
+	</div>
+	<div class="col-sm-6 col-lg-4">
+		<h4>Planes <br/><small>Most used aircrafts by time</small></h4>
+		<div class="aircrafts">
+			<div class="aircraft-badge cartouche template">
+				<div class="screenshot"><img class="model-image img-responsive" src='/static/tracker/images/no-plane.jpg' onload="javascript:img_loaded" onerror="this.src='/static/tracker/images/no-plane.jpg'" /></div>
+				<div class="data">
+					<div class="model"></div>
+					<div class="time"><span title="Total Flight Duration" class="duration label label-success"></span><span title="Effective Time Duration" class="effective label label-warning"></span></div>
+				</div>
+				<div class="clearfix"></div>
+			</div>
+		</div>
+	</div>
+</div>
+{% endblock %}
