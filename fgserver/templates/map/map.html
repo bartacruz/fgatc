@@ -12,6 +12,7 @@
 <script src="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.js"></script>
 <script src="{{STATIC_URL}}js/rotated-marker.js"></script>
 <script src="{{STATIC_URL}}js/map.js"></script>
+<script src="{{STATIC_URL}}js/map-ws.js"></script>
 
 <link rel="stylesheet"
 	href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
@@ -86,7 +87,7 @@ body {
 	$( document ).ready(function() {
 		resize_map();
 		initMap(ll);
-		start();
+		map_start();
 		$(window).resize(resize_map);
 		$('#aircraft_list').on("click","li",pan_callsign);
 	});

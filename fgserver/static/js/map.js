@@ -23,7 +23,16 @@ function showcords(a,b,c){
 		_spot.setLatLng(pos);
 	}
 }
-
+function edit_osm() {
+	var lat = $('#lat').html();
+	var lon = $('#lon').html();
+	var zoom=16;
+	var url="http://www.openstreetmap.org/edit#map="+zoom+"/"+lat+"/"+lon;
+	var win = window.open(url, '_blank');
+	if (win) {
+		win.focus();
+	}
+}
 function initMap(ll) {
 	map = L.map('map').setView(ll,13);
 	map.on({click:showcords,});
@@ -58,12 +67,14 @@ function addPlane(fields) {
 	planes[callsign]= marker;
 	//console.debug(callsign,marker.getLatLng(),marker);
 }
-function start() {
+
+function map_start() {
 	_handler = setInterval(fg_update,2000);
 }
-function stop() {
+function map_stop() {
 	clearInterval(_handler);
 }
+
 function pan_callsign(a,b,c) {
 	var cs = $( this ).text();
 	var plane = planes[cs];
@@ -71,12 +82,18 @@ function pan_callsign(a,b,c) {
 	map.panTo([plane._latlng.lat,plane._latlng.lng]);
 	
 }
-function update_aircrafts(data,textStatus,jqXHR) {
+
+function update_aircrafts_XHR(data,textStatus,jqXHR) {
+	update_aircrafts(data.aircrafts)
+}
+function update_aircrafts(aircrafts) {
+	
+
 	//console.debug("update aircraft",data);
 	var ceeses=[]
 	var cslist=$('#aircraft_list');
-	for (i in data.aircrafts) {
-		var acft= data.aircrafts[i];
+	for (i in aircrafts) {
+		var acft= aircrafts[i];
 		//console.debug(i,acft);
 		if (planes[acft.fields.callsign]) {
 			updatePlane(acft.fields);
@@ -109,7 +126,7 @@ function fg_update(){
 		dataType: "json",
 		url: url,
 		data: data,
-		success: update_aircrafts,
+		success: update_aircrafts_XHR,
 		error: update_error
 	});
 }

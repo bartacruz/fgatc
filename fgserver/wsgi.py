@@ -8,7 +8,13 @@ https://docs.djangoproject.com/en/1.6/howto/deployment/wsgi/
 """
 
 import os
+import sys
+from fgserver.map.websocket import start_server_thread 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "fgserver.settings")
 
 from django.core.wsgi import get_wsgi_application
+print "ARGUMENTOS", sys.argv
+
+
 application = get_wsgi_application()
+start_server_thread()
