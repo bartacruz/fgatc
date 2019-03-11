@@ -287,7 +287,8 @@ var readmessage = func(node=nil) {
 }
 
 var set_comm = func(icao,controller) {
-	airport=findAirportsByICAO(icao)[0];
+	print("ATCNG set_comm ICAO=" ~ icao);
+	airport=airportinfo(icao);
 	set_controller(controller);
 	setprop(aptcode_node, airport.id);
 	setprop(aptname_node, airport.name);
