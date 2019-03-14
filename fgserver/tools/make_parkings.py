@@ -3,7 +3,7 @@
 
 import sys
 
-infile = open(sys.argv[1], 'r')
+infile = open(sys.argv[1], 'r', encoding="iso-8859-1")
 
 airport = sys.argv[2]
 

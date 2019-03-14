@@ -4,7 +4,6 @@ Created on Apr 15, 2015
 
 @author: bartacruz
 '''
-from __builtin__ import abs
 from threading import Thread
 
 from django.db.models.base import Model
@@ -21,6 +20,7 @@ from fgserver.settings import METAR_UPDATE
 from django.db.models.signals import post_save
 from metar.Metar import Metar
 from math import sqrt, atan
+from django.db import models
 
 
 class Airport(Model):
@@ -33,8 +33,12 @@ class Airport(Model):
     
     def get_position(self):
         return Position(float(self.lat),float(self.lon),float(self.altitude))
+    
     def __unicode__(self):
         return self.icao
+    
+    def __str__(self):
+        return str(self.icao)
     
     def active_runway(self):
         metar = self.metar.last()
@@ -76,7 +80,7 @@ def airportsWithinRange(pos,max_range, unit=units.NM):
 
 
 class Runway(Model):
-    airport=ForeignKey(Airport,related_name='runways')
+    airport=ForeignKey(Airport,on_delete=models.CASCADE,related_name='runways')
     name=CharField(max_length=3)
     bearing=DecimalField(default=0,max_digits=5,decimal_places=2)
     width= IntegerField(default=0)
@@ -91,6 +95,9 @@ class Runway(Model):
             self._calculate_boundaries()
         except:
             llogger.exception("Error calculating boundaries for %s " % self)
+    
+    def data(self):
+        return "%s@%s %s-%s @%s [%s,%s]" % (self.name,self.airport,self.lat, self.lon,self.altitude,self.bearing,self.length,)
     
     def _calculate_boundaries(self):
         w2= self.width*units.FT/2
@@ -144,7 +151,7 @@ class Comm(Model):
         (APP, 'Approach'),
         (DEP, 'Departure'),
     )
-    airport = ForeignKey(Airport, related_name="comms")
+    airport = ForeignKey(Airport, on_delete=models.CASCADE, related_name="comms")
     type = IntegerField(choices=TYPES)
     frequency = IntegerField()
     frequency.help_text="Frequency in MhZ * 100 (eg. 12345 for 123.45 Mhz)"
@@ -160,7 +167,7 @@ class Comm(Model):
         return "%s@%s" %(self.name, self.frequency)
 
 class MetarObservation(Model):
-    airport = ForeignKey(Airport,related_name='metar')
+    airport = ForeignKey(Airport, on_delete=models.CASCADE, related_name='metar')
     date = DateTimeField()
     cycle = IntegerField()
     observation = CharField(max_length=255)
@@ -191,11 +198,14 @@ class Aircraft(Model):
     
     def __unicode__(self):
         return self.callsign
+    
+    def __str__(self):
+        return str(self.__unicode__())
 
 class Request(Model):
     date = DateTimeField()
-    sender = ForeignKey(Aircraft, related_name='requests')
-    receiver = ForeignKey(Comm, related_name='requests', null=True,blank=True)
+    sender = ForeignKey(Aircraft, on_delete=models.CASCADE, related_name='requests')
+    receiver = ForeignKey(Comm, on_delete=models.CASCADE, related_name='requests', null=True,blank=True)
     request = CharField(max_length=255)
   
     def get_param(self,param):
@@ -209,11 +219,14 @@ class Request(Model):
 
     def __unicode__(self):
         return "%s: from %s = %s" %( self.id,self.sender,self.request)
+    
+    def __str__(self):
+        return str(self.__unicode__())
 
 class Order(Model):
     date = DateTimeField()
-    receiver = ForeignKey(Aircraft, related_name='orders')
-    sender = ForeignKey(Comm, related_name='orders')
+    receiver = ForeignKey(Aircraft, on_delete=models.CASCADE, related_name='orders')
+    sender = ForeignKey(Comm, on_delete=models.CASCADE, related_name='orders')
     order = CharField(max_length=255)
     message = CharField(max_length=255)
     confirmed = BooleanField(default=False) # by ATC
@@ -253,9 +266,7 @@ class Order(Model):
         self.add_param('oid', self.id)
         ret = {}
         for (k, v) in self._order.items():
-            if type(v) == unicode:
-                v = str(v)
-            ret[k]=v
+            ret[k]=str(v)
         return str(ret)
 
     def short(self):
@@ -277,15 +288,18 @@ class Order(Model):
             
     def __unicode__(self):
         return "%s: to %s = %s" %( self.id,self.receiver,self.order)
-
+    
+    def __str__(self):
+        return str(self.__unicode__())
+    
 class StartupLocation(Model):
-    airport = ForeignKey(Airport,related_name="startups")
+    airport = ForeignKey(Airport,on_delete=models.CASCADE, related_name="startups")
     name = CharField(max_length=60)
     lat = DecimalField(default=0,max_digits=10,decimal_places=6)
     lon = DecimalField(default=0,max_digits=10,decimal_places=6)
     altitude = IntegerField(default=0)
     heading = FloatField(default=0)
-    aircraft=ForeignKey(Aircraft,blank=True,null=True, related_name='startup_location')
+    aircraft=ForeignKey(Aircraft,on_delete=models.CASCADE, blank=True,null=True, related_name='startup_location')
     active = BooleanField(default=True)
 
     def get_position(self):

@@ -8,17 +8,14 @@ from fgserver.atc.models import Tag
 from fgserver.models import Order, Comm, Request
 from django.utils import timezone
 from fgserver.messages import alias
-from fgserver.ai import PlaneInfo
+from fgserver.ai.planes import PlaneInfo
 from random import randint
-from fgserver.atc import get_message
 from fgserver import get_qnh, units, llogger, get_controllers
-from math import sqrt, atan
-from fgserver.helper import normalize, move, point_inside_polygon, get_distance,\
-    get_heading_to, angle_diff, get_heading_to_360
+from fgserver.helper import get_distance, get_heading_to, angle_diff, get_heading_to_360
 from datetime import timedelta
 import time
 import threading
-from scipy.stats.morestats import circmean
+from fgserver.atc.functions import get_message
 
 class Controller(object):
     comm=None
@@ -197,7 +194,7 @@ class Controller(object):
         return '%s for %s' % (type(self).__name__, self.comm)
     
     def __str__(self):
-        return self.__unicode__().encode('utf-8')
+        return str(self.__unicode__())
     
 class Ground(Controller):
     def readytaxi(self,request):

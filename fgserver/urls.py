@@ -1,14 +1,12 @@
-from django.conf.urls import patterns, include, url
+from django.urls import path
 
 from django.contrib import admin
+from django.urls.conf import include
 admin.autodiscover()
 
-urlpatterns = patterns('',
-    # Examples:
-    # url(r'^$', 'fgserver.views.home', name='home'),
-    # url(r'^blog/', include('blog.urls')),
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('map/', include('fgserver.map.urls')),
+    path('tracker/', include('fgserver.tracker.urls')),
+    ]
 
-    url(r'^admin/', include(admin.site.urls)),
-    url(r'^map/', include('fgserver.map.urls')),
-    url(r'^tracker/', include('fgserver.tracker.urls')),
-)

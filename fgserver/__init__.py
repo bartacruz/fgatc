@@ -1,14 +1,14 @@
 from datetime import datetime
 import logging
 from threading import Thread
-import urllib
 
-from django.utils.module_loading import import_by_path
+from django.utils.module_loading import  import_string
 from metar.Metar import Metar
 
 from fgserver import units, settings
 from fgserver.settings import METAR_URL, METAR_UPDATE
 import threading
+from urllib import request
 
 
 llogger = logging.getLogger("fgserver")
@@ -43,7 +43,7 @@ def get_controller(comm):
     if not controller:
         try:
             llogger.debug("Creating controller for %s" % comm)
-            clazz = import_by_path(settings.DEFAULT_CONTROLLERS.get(comm.type))
+            clazz = import_string(settings.DEFAULT_CONTROLLERS.get(comm.type))
             llogger.debug("class=%s" % clazz)
             controller = clazz(comm)
             CONTROLLERS[comm.id]=controller
@@ -62,17 +62,18 @@ def get_controllers(airport,controller_type=None):
     return controllers
 
 def fetch_metar(icao):
+    url = "%s/%s.TXT" % (METAR_URL, icao)
     try:
-        url = "%s/%s.TXT" % (METAR_URL, icao)
-        urlh = urllib.urlopen(url)
+        urlh = request.urlopen(url)
         for line in urlh:
+            line = line.decode()
             if line.startswith(icao):
                 obs = Metar(line)
                 # print obs
                 return obs
     except:
-        pass
-    llogger.debug("No METAR station for %s" % icao)
+        llogger.exception("while searching for %s" % url)
+    llogger.debug("No METAR station for %s - %s" % (icao,url))
     return None
 
 def get_qnh(apt):

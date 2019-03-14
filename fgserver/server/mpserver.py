@@ -7,7 +7,7 @@ import socket
 
 from django.utils import timezone
 
-from fgserver import settings, llogger, units, messages, get_controller
+from fgserver import settings, units, messages, get_controller
 from fgserver.atc.models import Tag
 from fgserver.models import Aircraft, Order, airportsWithinRange, Request
 from xdrlib import Unpacker
@@ -15,11 +15,10 @@ from fgserver.messages import PosMsg
 import logging
 from fgserver.helper import move, cart2geod, Quaternion, Vector3D
 import time
-from Queue import Queue, Empty
 from threading import Thread
+from queue import Empty, Queue
 
 llogger = logging.getLogger(__name__)
-print __name__
 
 class FGServer():
     MSG_MAGIC = 0x46474653
@@ -80,8 +79,7 @@ class FGServer():
         self.fgsock.bind(fglisten)
         
         self.running = True
-        llogger.debug("Starting Run")
-        print "Starting"
+        llogger.info("Starting")
         
         # Main loop
         self._thread = Thread(target=self.process_incoming)
@@ -94,8 +92,7 @@ class FGServer():
                 llogger.exception("on main loop")
                 self.running=False
         
-        llogger.debug("End Run")
-        print "Finished"
+        llogger.info("End Run")
 
     def sim_time(self):
         return (timezone.now() - self.date_started).total_seconds()
@@ -103,14 +100,15 @@ class FGServer():
     
     def set_circuit(self,circuit):
         if circuit:
-            if not self.circuits.has_key(circuit.name):
-                llogger.info("storing circuit",circuit.name)
+            if not self.circuits.get(circuit.name,False):
+                llogger.info("storing circuit %s" % circuit.name)
                 self.circuits[circuit.name]=circuit
     
     def get_circuit(self,name):
         return self.circuits.get(name)
     
     def check_circuits(self,controller):
+        print(type(controller))
         llogger.info('checking circuits for %s' % controller)
         self.load_circuits(controller.comm.airport)
     
@@ -221,7 +219,7 @@ class FGServer():
         sw = move(aircraft.get_position(),-135,50*units.NM,aircraft.altitude)
         ne = move(aircraft.get_position(),45,50*units.NM,aircraft.altitude)
         #afs = Aircraft.objects.filter(state__gte=1,lat__lte=ne.x, lat__gte=sw.x,lon__lte=ne.y,lon__gte=sw.y)
-        for af in self.aircrafts.itervalues():
+        for af in self.aircrafts.values():
             if af.callsign != aircraft.callsign and af.state >= 1 \
             and af.lat<=ne.x and af.lat>=sw.x\
             and af.lon<=ne.y and af.lon>=sw.y:
@@ -355,7 +353,7 @@ class FGServer():
         freq = request.get_request().freq
         freq = freq.replace('.','').ljust(5,'0') # replace the dot and add padding
         tag = "%s-%s" % (request.sender.callsign,freq)
-       # TODO Clean the cache!!!  
+        # TODO Clean the cache!!!  
         comm = self.controllers.get(tag,None)
         if comm:
             return comm

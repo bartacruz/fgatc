@@ -3,27 +3,25 @@ Created on Apr 24, 2015
 
 @author: bartacruz
 '''
-from fgserver.helper import Position, get_distance, move, normdeg, Quaternion,\
+from fgserver.helper import Position, get_distance, move, normdeg,\
     elevate, get_heading_to, angle_diff
 from fgserver import units, llogger
-from __builtin__ import min
 from django.db.models.base import Model
 from django.db.models.fields.related import ForeignKey
 from django.db.models.fields import CharField, FloatField, IntegerField,\
     BooleanField
 from fgserver.models import Airport, Aircraft, Order
-from fgserver.ai import AIPlane, PlaneInfo
+from fgserver.ai.planes import AIPlane, PlaneInfo
 from fgserver.messages import alias
-from model_utils.managers import InheritanceManager
 from random import randint
 import threading
+from django.db import models
 
 class FlightPlan(Model):
     name = CharField(max_length=8)
     description = CharField(max_length=255,null=True,blank=True)
-    aircraft=ForeignKey(Aircraft, related_name="plans")
+    aircraft=ForeignKey(Aircraft, on_delete=models.CASCADE, related_name="plans")
 
-    objects = InheritanceManager()
     
     def update(self,time):
         pass
@@ -42,7 +40,7 @@ class FlightPlan(Model):
     
 class Circuit(FlightPlan):
     ''' A standard left-circuit over an airfield ''' 
-    airport=ForeignKey(Airport, related_name='circuits')
+    airport=ForeignKey(Airport, on_delete=models.CASCADE, related_name='circuits')
     radius = FloatField(default=2*units.NM)
     radius.description="Radius of the circuit (in meters)"
     altitude=FloatField(default=1000*units.FT)
@@ -270,7 +268,7 @@ class WayPoint(Model):
     TYPE_CHOICES=((POINT,'Point'),(AIRPORT,'Airport'),(NAV,'Nav'),(FIX,'Fix'),(TAXI,'Taxi'),(RWY,'Runway'),(PARKING,'Parking'),(PUSHBACK,'Pushback'),(CIRCUIT,'Circuit'),(HOLD,'Hold'),)
 
     ''' Common fields to all waypoints'''
-    flightplan = ForeignKey(FlightPlan, related_name="waypoints")
+    flightplan = ForeignKey(FlightPlan, on_delete=models.CASCADE, related_name="waypoints")
     name = CharField(max_length=20)
     description = CharField(max_length=255,null=True,blank=True)
     lat = FloatField(default=0)
@@ -292,7 +290,9 @@ class WayPoint(Model):
     def __unicode__(self):
         return "%s - %s: (%s,%s) @ %s" %(self.flightplan.name, self.name, WayPoint.TYPE_CHOICES[self.type][1],PlaneInfo.CHOICES[self.status][1],self.get_position().get_array())
 #        return "%s - %s: (%s,%s) @ %s" %(self.flightplan.name, self.name, self.type,self.status,self.get_position().get_array())
-
+    def __str__(self):
+        return str(self.__unicode__())
+            
 class CircuitWaypoint(WayPoint):
     CIRCUIT_STRAIGHT=0
     CIRCUIT_CROSSWIND=1

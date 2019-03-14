@@ -6,22 +6,20 @@ from django.db.models.base import Model
 from django.db.models.fields import CharField, IntegerField, DateTimeField
 from django.db.models.fields.related import ForeignKey
 from django.utils import timezone
-from model_utils.managers import InheritanceManager
-from model_utils.models import StatusModel
 
 from fgserver import units, llogger, get_qnh
 import fgserver
-from fgserver.ai import PlaneInfo
-from fgserver.atc import get_message
-from fgserver.helper import short_callsign, get_distance, move, normdeg, \
-    get_heading_to, angle_diff, normalize, point_inside_polygon, \
-    get_heading_to_360
+from fgserver.ai.planes import PlaneInfo
+from fgserver.helper import  get_distance, angle_diff, get_heading_to_360
 from fgserver.messages import alias
-from fgserver.models import Order, Airport, Aircraft, Request, Comm
+from fgserver.models import Order, Airport, Aircraft, Request
+from model_utils.models import StatusModel
+from fgserver.atc.functions import get_message
+from django.db import models
 
 
 class ATC(Model):
-    airport = ForeignKey(Airport, related_name="atc")
+    airport = ForeignKey(Airport, on_delete=models.CASCADE, related_name="atc")
     last_order_date = DateTimeField(null=True,blank=True)
     
     def manage(self, request):
@@ -96,7 +94,13 @@ class ATC(Model):
         fgserver.info("ATC %s" % self.airport.icao,*argv)
     
     def __unicode__(self):
-        return self.airport.icao
+        try:
+            return self.airport.icao.decode()
+        except:
+            return "%s" % self.airport
+    
+    def __str__(self):
+        return str(self.__unicode__())
     
     def next_order_date(self):
         d=timezone.now()
@@ -111,10 +115,8 @@ class ATC(Model):
         return self.airport.name
     
 class Controller(Model):
-    atc = ForeignKey(ATC, related_name="controllers")
+    atc = ForeignKey(ATC, on_delete=models.CASCADE, related_name="controllers")
     name = CharField(max_length=60,default="Controller")
-    
-    objects = InheritanceManager()
     
     def log(self,*argv):
         fgserver.info(self.name,*argv)
@@ -131,7 +133,7 @@ class Controller(Model):
     def get_tag(self,aircraft):
         tag,created = Tag.objects.get_or_create(atc=self.atc,aircraft=aircraft)
         if created:
-            print self.atc,": Controller tag created for ",aircraft
+            print("%s: Controller tag created for %s" % (self.atc,aircraft))
         return tag
     
     def _init_response(self,request):
@@ -178,7 +180,12 @@ class Controller(Model):
         else:
             response.message = order.message.replace(',', ', I say again,',1)
         return response
-     
+    
+    def __unicode__(self):
+        return self.name.decode()
+    
+    def __str__(self):
+        return str(self.__unicode__())
 
 class Tower(Controller):
 
@@ -328,8 +335,8 @@ class Tag(StatusModel):
     STATUS = PlaneInfo.CHOICES_STR
     
     #comm = ForeignKey(Comm, related_name='tags')
-    airport = ForeignKey(Airport, related_name='tags',null=True)
-    aircraft=ForeignKey(Aircraft,related_name='tags')
+    airport = ForeignKey(Airport, on_delete=models.CASCADE, related_name='tags',null=True)
+    aircraft=ForeignKey(Aircraft, on_delete=models.CASCADE, related_name='tags')
     number = IntegerField(default=1)
     ack_order=CharField(max_length=255,null=True,blank=True)
 

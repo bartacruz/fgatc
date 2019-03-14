@@ -275,7 +275,7 @@ def decode_node(unp):
     }
     
     pid = unp.unpack_uint()
-    if PROPERTIES.has_key(pid):
+    if PROPERTIES.get(pid,False):
         prop = PROPERTIES[pid].copy()
         prop['id'] = pid
         ptype = prop["type"]
@@ -314,8 +314,11 @@ class Header:
         self.msglen = unp.unpack_uint()
         unp.unpack_uint()  # reply_addr
         unp.unpack_uint()  # reply_port
-        self.callsign = unp.unpack_fstring(8).replace('\0', '')
-         
+#        self.callsign = unp.unpack_fstring(8).replace('\0', '')
+        cs = unp.unpack_fstring(8)
+        self.callsign = cs.replace(b'\0',b'').decode()
+        
+        
     def send(self):
         ''' packs the Header vars into a buffer '''
         unp = Packer()
@@ -325,7 +328,7 @@ class Header:
         unp.pack_uint(self.msglen)
         unp.pack_uint(0)  # reply_addr y reply_port
         unp.pack_uint(0)  # reply_addr y reply_port
-        unp.pack_fstring(8, self.callsign)
+        unp.pack_fstring(8, self.callsign.encode())
         return unp.get_buffer()
 
     def __str__(self):
@@ -434,8 +437,8 @@ class PosMsg:
 
     def send(self):
         try:
-            unp = Packer()
-            unp.pack_fstring(96, self.model)
+            unp = Packer() 
+            unp.pack_fstring(96, self.model.encode())
             unp.pack_double(self.time)
             unp.pack_double(self.lag)
             unp.pack_farray(3, self.position, unp.pack_double)
@@ -454,6 +457,7 @@ class PosMsg:
             return headbuf + msgbuf
         except:
             llogger.exception("ERROR creating msg")
+            print(self.model)
         
     def __str__(self):
         return "time=%s, position=%s, model=%s" % (self.time, self.position, self.model)

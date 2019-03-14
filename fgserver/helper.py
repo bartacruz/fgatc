@@ -8,7 +8,6 @@ Created on Apr 13, 2015
 from math import sqrt, fabs, atan2, pi, sin, cos, asin, acos
 from geographiclib.geodesic import Geodesic
 from scipy import rint
-from __builtin__ import float, min
 from random import randint
 from fgserver import units, llogger
 from fgserver.units import ERAD, RAD, EPSILON
@@ -22,12 +21,29 @@ LETTERS = [
 "uniform", "victor", "whiskey", "xray", "yankee", "zulu"
 ]
 NUMBERS=['zeero','one','too','tree','fower','fife','six','seven','eight','niner']
-    
-def short_callsign(callsign):
-        return "%s %s %s" % (LETTERS[ord(callsign[0].lower()) - ord('a')],
-                             LETTERS[ord(callsign[1].lower()) - ord('a')],
-                             LETTERS[ord(callsign[2].lower()) - ord('a')]
-                             )
+
+
+def say_char(c):
+    cs = str(c)
+    if cs.isalpha():
+        return LETTERS[ord(cs.lower()) - ord("a")]
+    if cs.isdigit():
+        return NUMBERS[int(c)]
+    return None
+        
+def short_callsign(callsign,length=3):
+    try:
+        callsign=callsign.replace("LV-","")
+        short = [x for x in [say_char(c) for c in callsign] if x ]
+        return " ".join(short[:length])
+#         return "%s %s %s" % (LETTERS[ord(cs[0].lower()) - ord('a')],
+#                              LETTERS[ord(cs[1].lower()) - ord('a')],
+#                              LETTERS[ord(cs[2].lower()) - ord('a')]
+#                              )
+    except:
+        llogger.exception("Trying to get short callsign of %s " % callsign )
+    return callsign
+
 def say_number(number):
     ns = str(number)
     ret = ''

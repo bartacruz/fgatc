@@ -6,8 +6,8 @@ Created on Apr 16, 2015
 '''
 from django.contrib import admin
 from django.contrib.admin.options import ModelAdmin, TabularInline
-from fgserver.ai.models import Circuit, WayPoint, FlightPlan
 from fgserver.atc.models import Controller, ATC, Tag
+from django.contrib.admin.decorators import register
 
 admin.autodiscover()
 
@@ -19,14 +19,22 @@ class TagInline(TabularInline):
     model=Tag
     extra=0
 
+@register(ATC)
 class ATCAdmin(ModelAdmin):
     search_fields = ['airport__name']
     list_display=('airport','airport_name')
-    inlines = [ControllerInline,TagInline]
+    inlines = [ControllerInline]
 
+@register(Controller)
 class ControllerAdmin(ModelAdmin):
     search_fields = ['atc__airport__name']
     list_display=('atc','name')
 
-admin.site.register(ATC, ATCAdmin)
-admin.site.register(Controller, ControllerAdmin)
+@register(Tag)
+class TagAdmin(ModelAdmin):
+    search_fields = ['airport__name']
+    list_display=('airport','aircraft')
+
+
+
+
