@@ -1,0 +1,26 @@
+#map {
+	height: 100%;
+	width: 100%;
+}
+
+#lat {
+	min-width: 150px;
+	text-align: right;
+	background-color: #ded;
+	padding-right: 5px;
+	border-radius: 4px;
+	margin-left: 0px;
+}
+
+#lon {
+	min-width: 150px;
+	text-align: right;
+	background-color: #edd;
+	padding-right: 5px;
+	border-radius: 4px;
+	margin-left: 0px;
+}
+
+body {
+	padding-top: 50px;
+}

@@ -9,6 +9,7 @@ from fgserver.tracker import views
 
 
 urlpatterns = [
-    path('callsign/',views.callsign, name="callsign"),
+    path ('',views.home),
+    path('callsign/<callsign>',views.callsign, name="callsign"),
     
 ]

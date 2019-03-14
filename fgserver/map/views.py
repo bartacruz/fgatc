@@ -14,11 +14,10 @@ from django.core.serializers import serialize
 from fgserver.ai.models import WayPoint
 
 def map_view(request):
-    icao=request.REQUEST.get('icao','SABE')
+    icao=request.GET.get('icao','SABE')
     airport = Airport.objects.get(icao=icao)
     return render_to_response('map/map.html',
-                    {'title': 'Map','airport': airport},
-                    context_instance=RequestContext(request))
+                    {'title': 'Map','airport': airport})
 
 def aircrafts(request):
     aircrafts = Aircraft.objects.filter(state__gte=1)
@@ -29,7 +28,7 @@ def aircrafts(request):
     return HttpResponse(json.dumps({'aircrafts': d,}), mimetype='application/javascript;charset=utf-8"')
 
 def flightplan(request):
-    callsign = request.REQUEST.get('callsign')
+    callsign = request.GET.get('callsign')
     wps = WayPoint.objects.filter(flightplan__aircraft__callsign=callsign)
     d = json.loads(serialize('json',wps ))
     return HttpResponse(json.dumps({'waypoints': d}), mimetype='application/javascript;charset=utf-8"')

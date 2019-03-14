@@ -13,7 +13,7 @@
 <link rel="stylesheet"
 	href="{{STATIC_URL}}tracker/css/flag-icon.min.css?{{ site_revision }}">
 <link rel="stylesheet"
-	href="{{STATIC_URL}}tracker/css/tracker.css?{{ site_revision }}">
+	href="{% static "tracker/css/tracker.css" %}">
 {% block extra_style %} {% endblock %}
 
 <script src="https://code.jquery.com/jquery-2.2.4.min.js"
