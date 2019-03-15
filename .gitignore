@@ -3,3 +3,4 @@ syntax: glob
 *.pyc
 *.md.html
 /runserver.sh
+/nohup.out
