@@ -307,15 +307,7 @@ class StartupLocation(Model):
     
     def __unicode__(self):
         return "%s@%s" %( self.name,self.airport)
-
-class Flight(Model):
-    callsign = CharField(max_length=20)
-    start_date = DateTimeField()
-    end_date = DateTimeField()
-    
-    
-    
-    
+  
 class MetarUpdater(Thread):
     apt = None
     
