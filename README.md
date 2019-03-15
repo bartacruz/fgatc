@@ -31,32 +31,17 @@ The project contains:
 
 ## Requirements
 
-* Python (tested with v2.7)
-* Django (tested with v1.6)
 
-  `pip install django==1.6.11`
+* Python 3.x (tested with v3.6)
+* Django 2.x(tested with v2.1.7)
+
 * Python database driver for your DB of choice (psycopg2, python-mysql,etc)  
 * [Geographiclib] (https://pypi.python.org/pypi/geographiclib)
-
-  Install with `pip install geographiclib`  
 * [Metar] (http://sourceforge.net/projects/python-metar/)
-
-  Download sources and install with `python setup.py install`
 * NumPy 
-
-  `pip install scipy`
 * [SciPy] (http://www.scipy.org/)
 
-  Install with `pip install scipy`
-* South 
-
-  Install with `pip install south`
-* Django Admin Bootstrapped (optional)
-
-  Install with `pip install django-admin-bootstrapped==1.6.3`
-
-  **Make sure you install the 1.6.3 version.** 
-  
+...and many others!
 
 Most of this packages (except python-metar) comes with all major Linux distributions. 
 Try installing them with Apt, Yum, etc.
@@ -69,22 +54,21 @@ If you want to create a virtualenv, use the `requirements.txt` file to install a
 0. Make sure you have all the requirements installed.
 1. Grab the code and place it in some directory (D'oh!).
 2. Create a database.
-3. Edit settings.py to suit your needs (mostly db configuration)
+3. Copy settings.py.dist to settings.py and edit to suit your needs (mostly db configuration)
 4. Generate the tables with
 
 	```
-	$ python manage.py syncdb 
 	$ python manage.py migrate
 	```
 
 5. Install the [Nasal script](Nasal/)
 
-There is a neat script in `fgserver/tools/airport_importer.py` that imports ALL the airports, whith runway and comm information, into the database from FlightGear's apt-dat.gz (or any X-Plane v810 airport file)
+There is a neat script in `fgserver/tools/airport_importer.py` that imports ALL the airports, whith runway and comm information, into the database from FlightGear's apt-dat.gz (or any X-Plane v1000 airport file)
 
 ## Usage
 
 1. Run the Django app: `$ python manage.py runserver`
-2. Point to your host, port 8000 (i.e.: <http://localhost:8000>) and do some admin stuff like:
+2. Point to your host (i.e.: <http://localhost:8000>) and do some admin stuff like:
   * Create airports and runways
   * Create AI Aircrafts.
 3. Run the server: `$ python server.py`
@@ -106,7 +90,7 @@ There is a neat script in `fgserver/tools/airport_importer.py` that imports ALL 
 
 [ ] Implement ground routes directions using Dijkstra's shortest path algorithm.
 
-[ ] Relay positions to FlightGear's official MP servers.
+[x] Relay positions to FlightGear's official MP servers.
 
 [ ] Enhance map interactions
 

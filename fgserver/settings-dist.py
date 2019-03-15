@@ -1,18 +1,14 @@
 """
 Django settings for fgserver project.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/1.6/topics/settings/
-
-For the full list of settings and their values, see
-https://docs.djangoproject.com/en/1.6/ref/settings/
 """
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 import os
 
-METAR_URL='http://weather.noaa.gov/pub/data/observations/metar/stations'
-METAR_UPDATE = 60*30 # in seconds
+#METAR_URL='http://weather.noaa.gov/pub/data/observations/metar/stations'
+METAR_URL='https://tgftp.nws.noaa.gov/data/observations/metar/stations'
+METAR_UPDATE = 60*60 # in seconds
+MESSAGES_FILE = '/opt/git/fgatc/multiplaymgr.cxx'
 DEFAULT_CONTROLLERS = {
         50:'fgserver.atc.controllers.Controller', # ATIS
         51: 'fgserver.atc.controllers.Controller', # UNICOM
@@ -21,12 +17,20 @@ DEFAULT_CONTROLLERS = {
         54: 'fgserver.atc.controllers.Tower', # Tower
         55: 'fgserver.atc.controllers.Approach', #Approach
         56: 'fgserver.atc.controllers.Departure', #Departure
-    }
-
+        }
 BROKER_URL = 'django://'
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
+# Port that server listens
+FGATC_SERVER_PORT=5100
+
+FGATC_AI_INTERVAL=0.1
+FGATC_UPDATE_RATE=2
+
+# Relay to FG multipĺayer servers
+FGATC_RELAY_ENABLED=True
+FGATC_RELAY_SERVER = ('217.78.131.42',5000)
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/1.6/howto/deployment/checklist/
@@ -35,18 +39,21 @@ BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 SECRET_KEY = '2iqo)@&ls#f#@$8-r)=t%h3u4ri$t$q4ec2h*pc^k=k5v%8_e%'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 TEMPLATE_DEBUG = True
 
 ALLOWED_HOSTS = []
-
+TEMPLATE_LOADERS = (
+    'django.template.loaders.filesystem.Loader',
+    'django.template.loaders.app_directories.Loader',
+) 
 
 # Application definition
 
 INSTALLED_APPS = (
-    'django_admin_bootstrapped',
     'django.contrib.admin',
+    'channels',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
@@ -55,10 +62,13 @@ INSTALLED_APPS = (
     'fgserver',
     'fgserver.ai',
     'fgserver.atc',
-    'south',
+    'fgserver.map',
+    'fgserver.tracker',
+    
 )
 
-MIDDLEWARE_CLASSES = (
+MIDDLEWARE = (
+    'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -68,26 +78,61 @@ MIDDLEWARE_CLASSES = (
 )
 
 ROOT_URLCONF = 'fgserver.urls'
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
+]
 
 WSGI_APPLICATION = 'fgserver.wsgi.application'
 
-
-# Database
-# https://docs.djangoproject.com/en/1.6/ref/settings/#databases
+# Channels configuration (websocket updates for the map)
+ASGI_APPLICATION = "fgserver.routing.application"
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [('127.0.0.1', 6379)],
+        },
+    },
+}
 
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': 'flightgear',
-        'USER': 'flightgear',
-        'PASSWORD': '',
+        'NAME': 'fgatc',
+        'USER': 'fgatc',
+        'PASSWORD': '********',
         'HOST': 'localhost',
         'PORT': '5432',
     }
 }
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+]
 
 # Internationalization
-# https://docs.djangoproject.com/en/1.6/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
 
@@ -101,9 +146,12 @@ USE_TZ = True
 
 
 # Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/1.6/howto/static-files/
 
 STATIC_URL = '/static/'
+STATIC_ROOT='/var/www/fgatc/static/'
+
+
+# TODO: Switch to memcached?
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
@@ -146,7 +194,7 @@ LOGGING = {
         },
         'debugfile':{
            'class':'logging.handlers.WatchedFileHandler',
-            'filename': '/tmp/operaciones-debug.log',
+            'filename': '/opt/log/fgatc.log',
             'formatter': 'verbose',
         },
     },
@@ -161,7 +209,7 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': True,
         },
-       'django': {
+        'django': {
             'handlers': ['console','debugfile'],
             'level': 'ERROR',
             'propagate': True,
