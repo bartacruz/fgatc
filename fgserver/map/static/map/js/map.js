@@ -101,7 +101,7 @@ function update_aircrafts(aircrafts) {
 		} else {
 			addPlane(acft.fields);
 			ceeses.push(acft.fields.callsign);
-			cslist.append("<li class='cs_li' id='cs_"+acft.fields.callsign+"'><a href='#'>"+acft.fields.callsign+"</a></li>");
+			cslist.append("<a class='dropdown-item cs_li' id='cs_"+acft.fields.callsign+"' href='#'>"+acft.fields.callsign+"</a>");
 		}
 	}
 	for (i in callsigns) {

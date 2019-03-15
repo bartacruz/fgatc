@@ -2,25 +2,17 @@
 	height: 100%;
 	width: 100%;
 }
-
-#lat {
-	min-width: 150px;
+.position {
+	margin-top:3px;
+	margin-bottom: 3px;
+	margin-left: 5px;
+	border: 1px solid #ddd;
+	border-radius: 5px;
+	min-width: 200px;
+}
+.position span { 
 	text-align: right;
-	background-color: #ded;
-	padding-right: 5px;
-	border-radius: 4px;
-	margin-left: 0px;
+	padding: 0px 5px;
+	margin: 0px;
 }
 
-#lon {
-	min-width: 150px;
-	text-align: right;
-	background-color: #edd;
-	padding-right: 5px;
-	border-radius: 4px;
-	margin-left: 0px;
-}
-
-body {
-	padding-top: 50px;
-}

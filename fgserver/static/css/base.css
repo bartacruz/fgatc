@@ -1,0 +1,22 @@
+#msg-pop {
+	display: none;
+}
+.blue {
+    background-color: #2196f3 !important;
+}
+
+footer.page-footer {
+    bottom: 0;
+    color: #fff;
+}
+
+footer.page-footer .footer-copyright {
+    overflow: hidden;
+    background-color: rgba(0,0,0,.2);
+    color: rgba(255,255,255,.6);
+}
+
+body.home {
+	background-image: url(../images/88298438.jpg);
+	background-size: cover;
+}
