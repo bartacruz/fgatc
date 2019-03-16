@@ -4,7 +4,7 @@ from random import randint
 
 from django.db.models.base import Model
 from django.db.models.fields import CharField, IntegerField, DateTimeField
-from django.db.models.fields.related import ForeignKey
+from django.db.models.fields.related import ForeignKey, OneToOneField
 from django.utils import timezone
 
 from fgserver import units, llogger, get_qnh
@@ -19,7 +19,7 @@ from django.db import models
 
 
 class ATC(Model):
-    airport = ForeignKey(Airport, on_delete=models.CASCADE, related_name="atc")
+    airport = OneToOneField(Airport, on_delete=models.CASCADE, related_name="atc")
     last_order_date = DateTimeField(null=True,blank=True)
     
     def manage(self, request):

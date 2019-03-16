@@ -7,8 +7,9 @@ Created on Apr 16, 2015
 from django.contrib import admin
 from django.contrib.admin.options import ModelAdmin, TabularInline
 from fgserver.models import Airport, Runway, Aircraft, Comm, StartupLocation,\
-    MetarObservation
+    MetarObservation, Order
 from fgserver.ai.models import Circuit
+from django.contrib.admin.decorators import register
 
 admin.autodiscover()
 
@@ -44,6 +45,9 @@ class RunwayAdmin(ModelAdmin):
 class AircraftAdmin(ModelAdmin):
     list_display=('callsign','lat','lon','altitude','last_request','last_order','state')
 
+@register(Order)
+class OrderAdmin(ModelAdmin):
+    pass
 
 admin.site.register(Airport, AirportAdmin)
 admin.site.register(Runway,RunwayAdmin)

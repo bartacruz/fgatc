@@ -23,6 +23,78 @@ from math import sqrt, atan
 from django.db import models
 
 
+class Cache(object):
+    ''' Implements a class-based basic cache. '''
+    _store = None
+    _map = None
+
+    @classmethod
+    def check(cls):
+        #print "%s check: %s" % (cls,cls._store)
+        if cls._store==None:
+            cls._store={}
+            cls._map = {}
+            cls.load_all()
+
+    @classmethod
+    def map(cls,map_id,instance_id,):
+        cls.check()
+        cls._map[map_id]=instance_id
+
+    @classmethod
+    def is_mapped(cls,map_id):
+        cls.check()
+        return cls._map.has_key(map_id)
+
+    @classmethod
+    def get_mapped(cls,map_id):
+        cls.check()
+        return cls.get(cls._map.get(map_id,None))
+    
+    @classmethod
+    def load(cls,instance_id):
+        return None
+
+    @classmethod
+    def load_all(cls):
+        return None
+
+    @classmethod
+    def get(cls,instance_id,force=False):
+        cls.check()
+        if not instance_id:
+            return None
+        if not force and cls._store.has_key(instance_id):
+#            llogger.debug("%s get: obteniendo %s|%s" % (cls,instance_id,force))
+            return cls._store.get(instance_id)
+        return cls.load(instance_id)
+
+    @classmethod
+    def has(cls,instance_id):
+        cls.check()
+        return cls._store.has_key(instance_id)
+
+    @classmethod
+    def keys(cls):
+        cls.check()
+        return cls._store.keys()
+
+    @classmethod
+    def values(cls):
+        cls.check()
+        return cls._store.values()
+    
+    @classmethod
+    def set(cls,instance_id,value):
+        cls.check()
+#       llogger.debug("%s set: seteando %s : %s" % (cls,instance_id,value))
+        cls._store[instance_id]=value
+
+    @classmethod
+    def remove(cls,instance_id):
+        cls.check()
+        return cls._store.pop(instance_id,None)
+
 class Airport(Model):
     icao=CharField(max_length=4, db_index=True)
     name=CharField(max_length=255)
@@ -65,6 +137,16 @@ class Airport(Model):
             debug(self.icao,"default runway: ",rwy)
             return rwy
 
+class Airports(Cache):
+    @classmethod
+    def load(cls, instance_id):
+        try:
+            instance = Airport.objects.get(pk=instance_id)
+            cls.set(instance_id,instance)
+            return instance
+        except Airport.DoesNotExist:
+            return None
+            
 
 def airportsWithinRange(pos,max_range, unit=units.NM):
     ne = move(pos, 45, max_range*unit, 0)
@@ -131,6 +213,17 @@ class Runway(Model):
     
     def __unicode__(self):
         return self.name
+
+class Runways(Cache):
+    @classmethod
+    def load(cls, instance_id):
+        try:
+            instance = Runway.objects.get(pk=instance_id)
+            cls.set(instance_id,instance)
+            cls.map(instance.airport_id, instance_id)
+            return instance
+        except Airport.DoesNotExist:
+            return None  
 
 class Comm(Model):
     
