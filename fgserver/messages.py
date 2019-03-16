@@ -505,6 +505,12 @@ class PosMsg:
     def request(self):
         return self.get_property(PROP_REQUEST)
     
+    def get_value(self,key,default=None):
+        try:
+            return self.get_property(key)["value"]
+        except:
+            return default
+        
     def get_property(self, key):
         return self.properties.get(key)
     

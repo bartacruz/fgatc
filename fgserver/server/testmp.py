@@ -5,7 +5,7 @@ Created on 16 mar. 2019
 '''
 import django
 from fgserver.messages import PosMsg
-from fgserver import messages, settings, setInterval
+from fgserver import messages, settings, setInterval, units
 from django.utils import timezone
 from time import sleep
 import socket
@@ -47,20 +47,35 @@ def get_msg():
         chat, chat2 = get_order_strings(order.message)
         msg.properties.set_prop(messages.PROP_CHAT,chat )
         msg.properties.set_prop(messages.PROP_CHAT2,chat2 )
-    print(msg)
+    #print(msg)
     return msg
 
 @setInterval(.5)
 def send_msg():
     msg = get_msg()
     incoming.put(msg)
-    print("Put",msg)
+    #print("Put",msg)
+
+def process_msg(pos):
+    old = aircrafts.get(pos.callsign(),False)
+    if not old :
+        print("New ACFT:", pos)
+    else:
+        old_freq = old.get_value(messages.PROP_FREQ) 
+        freq = pos.get_value(messages.PROP_FREQ)
+        if freq != old_freq:
+            print("ACFT %s changed freqs from %s to %s" % (pos.callsign(),old_freq,freq))
+    aircrafts[pos.header.callsign]=pos
+
+aircrafts = {}
 
 icao = "LOWI"
 incoming = Queue()
 
 date_started = timezone.now()
 airport = Airport.objects.get(icao=icao)
+airport.altitude = airport.altitude * units.FT
+print(airport.altitude)
 comm = airport.comms.filter(type=Comm.TWR).first()
 relaysock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
 fglisten = ("localhost",settings.FGATC_SERVER_PORT)
@@ -71,9 +86,9 @@ relaysock.setblocking(0)
 while relaysock:
     try:
         msg = incoming.get(False)
-        print("Sending",type(msg.send()),settings.FGATC_RELAY_SERVER)
+        #print("Sending",type(msg.send()),settings.FGATC_RELAY_SERVER)
         relaysock.sendto(msg.send(), settings.FGATC_RELAY_SERVER)
-        print("Sent",msg)
+        #print("Sent",msg)
     except Empty:
         pass
     try:
@@ -83,9 +98,7 @@ while relaysock:
         pos.receive(unp)
         pos.header.reply_addr=addr[0]
         pos.header.reply_port=addr[1]
-        if pos.has_property(messages.PROP_FREQ):
-            freq = pos.get_property(messages.PROP_FREQ)['value']
-            print("FREQ", freq,pos)
+        process_msg(pos)
         #print("Received",pos)
     except socket.error:
         pass

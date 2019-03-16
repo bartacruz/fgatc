@@ -75,7 +75,7 @@ var get_freq=func() {
 var set_freq=func(freq) {
 	frequency = freq;
 	setprop(freq_node,freq);
-	#setprop(freqchannel,freq);
+	setprop(freqchannel,freq);
 }
 var sendmessage = func(message="",dlg=1){
 	var msg = parse_message(message);
