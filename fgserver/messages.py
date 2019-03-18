@@ -435,12 +435,19 @@ class PropertyData:
         
     def get(self, key):
         return self.properties.get(key)
+    
     def get_value(self, key):
-        return self.properties.get(key)['value']
+        try:
+            return self.properties.get(key)['value']
+        except:
+            return None
+    
     def set(self, key, prop):
         self.properties[key] = prop
+    
     def has_key(self, key):
         return self.properties.get(key,None) is not None
+    
     def set_prop(self, key, value):
         prop = PROPERTIES.get(key)
         prop['value'] = value

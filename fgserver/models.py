@@ -15,7 +15,7 @@ from django.utils import timezone
 
 from fgserver import llogger, debug, units, get_closest_metar
 from fgserver.helper import normdeg, Position, get_distance, move, normalize,\
-    point_inside_polygon
+    point_inside_polygon, cart2geod, Quaternion, Vector3D
 from fgserver.settings import METAR_UPDATE
 from django.db.models.signals import post_save
 from metar.Metar import Metar
@@ -294,6 +294,21 @@ class Aircraft(Model):
     
     def __str__(self):
         return str(self.__unicode__())
+
+    def update_position(self,position=None):
+        '''
+        Updates aircraft's lat,lon,alt and heading from a PosMsg
+        '''
+        position = position or self.posmsg.position
+        geod = cart2geod(position)
+        self.lat=geod[0]
+        self.lon=geod[1]
+        self.altitude=geod[2]
+        
+        qor = Quaternion.fromAngleAxis(Vector3D.from_array(self.posmsg.orientation))
+        h10r = Quaternion.fromLatLon(self.lat, self.lon).conjugate().multiply(qor)
+        eul = h10r.getEuler().scale(units.RAD)
+        self.heading= eul.z
 
 class Request(Model):
     date = DateTimeField()
