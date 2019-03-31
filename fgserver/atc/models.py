@@ -3,7 +3,8 @@ from datetime import timedelta
 from random import randint
 
 from django.db.models.base import Model
-from django.db.models.fields import CharField, IntegerField, DateTimeField
+from django.db.models.fields import CharField, IntegerField, DateTimeField,\
+    BooleanField
 from django.db.models.fields.related import ForeignKey, OneToOneField
 from django.utils import timezone
 
@@ -21,6 +22,7 @@ from django.db import models
 class ATC(Model):
     airport = OneToOneField(Airport, on_delete=models.CASCADE, related_name="atc")
     last_order_date = DateTimeField(null=True,blank=True)
+    active  = BooleanField(default=False)
     
     def manage(self, request):
         for controller in self.controllers.all().select_subclasses():

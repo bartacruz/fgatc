@@ -17,6 +17,7 @@ var serverchannel="sim/multiplay/generic/string[18]";
 var serverchannel2="sim/multiplay/generic/string[15]";
 var servermsgchannel="sim/multiplay/generic/string[16]";
 var servermsgchannel2="sim/multiplay/generic/string[14]";
+var fgatcchannel="sim/multiplay/generic/string[19]";
 var atcnode=nil;
 var atclistener = nil;
 var selected_runway="";
@@ -221,13 +222,14 @@ var readorder = func(node=nil) {
 	print("INCOME ORDER");
 	var model_path=string.join("/",split("/",node.getPath())[0:3]);
 	var model_freq= getprop(model_path,freqchannel);
+	var order = node.getValue();
 	if (frequency != model_freq) {
 		print(sprintf("my freq=%s, sender's freq=%s",frequency,model_freq));
 		print(sprintf("Wrong frequency %s . Ignoring message: %s",model_freq,order));
 		return;
 	}
 
-	var order = node.getValue();
+	
 	if (order == nil or order == '') {
 		print("readorder: Empty order. returning");
 		return;
@@ -623,6 +625,7 @@ var multiupdate=func(a=nil,b=nil,c=nil) {
 #setlistener("/sim/signals/multiplayer-updated", multiupdate);
 # setlistener("/ai/models/model-added",func settimer(atcng.check_model,1));
 #check_models();
+setprop(fgatcchannel,"FGATC");
 setlistener("/ai/models/model-added",atcng.model_added,1,1);
 setlistener("/ai/models/model-removed",atcng.model_removed,0,1);
 setlistener("/instrumentation/comm/frequencies/selected-mhz",atcng.update,1,0);

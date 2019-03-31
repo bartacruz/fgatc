@@ -12,6 +12,9 @@ import socket
 from xdrlib import Unpacker
 from queue import Queue, Empty
 from fgserver.helper import cart2geod, Quaternion, Vector3D
+from django.dispatch.dispatcher import receiver
+from django.db.models.signals import post_save
+
 django.setup()
 
 from fgserver.models import Airport, Comm, Aircraft, Request,\
@@ -56,35 +59,40 @@ def find_comm(request):
     #self.controllers[tag]=None
     return None
 
-
-def get_msg():
+def get_pos_msg(airport):
     msg = PosMsg()
-    msg.send_from_comm(comm)
-    #msg.time = self.sim_time()
+    msg.send_from(airport)
     msg.time = sim_time()
     msg.lag=0.1
-    msg.properties.set_prop(messages.PROP_FREQ, str(comm.get_FGfreq()))
-    order = comm.orders.last()    
-    if order and not order.received:
-        print(order)
-        ostring, ostring2 = get_order_strings(order.get_order())
-        msg.properties.set_prop(messages.PROP_ORDER, ostring)
-        msg.properties.set_prop(messages.PROP_ORDER2, ostring2)
+    orders = Order.objects.filter(received=False, lost=False, sender__airport=airport).order_by('id')
+    if orders:
+        order = orders.first()
+        dif =(timezone.now() - order.date).total_seconds()
+        if dif > 2:
+            if dif > 6:
+                order.lost = True
+                order.save()
+            else:
+                print(order)
+                msg.properties.set_prop(messages.PROP_FREQ, str(order.sender.get_FGfreq()))
+
+                ostring, ostring2 = get_order_strings(order.get_order())
+                msg.properties.set_prop(messages.PROP_ORDER, ostring)
+                msg.properties.set_prop(messages.PROP_ORDER2, ostring2)
         
-        chat, chat2 = get_order_strings(order.message)
-        msg.properties.set_prop(messages.PROP_CHAT,chat )
-        msg.properties.set_prop(messages.PROP_CHAT2,chat2 )
-    #print(msg)
+                chat, chat2 = get_order_strings(order.message)
+                msg.properties.set_prop(messages.PROP_CHAT,chat )
+                msg.properties.set_prop(messages.PROP_CHAT2,chat2 )
     return msg
 
 @setInterval(1)
 def send_msg():
-    msg = get_msg()
+    msg = get_pos_msg(airport)
     incoming.put(msg)
     #print("Put",msg)
 
 def get_aircraft(callsign):
-    aircraft = aircrafts.get(pos.callsign(),None)
+    aircraft = aircrafts.get(callsign,None)
     if not aircraft:
         try:
             aircraft = Aircraft.objects.get(callsign=callsign)
@@ -99,14 +107,16 @@ def get_aircraft(callsign):
 
 
 def process_msg(pos):
-    aircraft = get_aircraft(pos.callsign())
     freq = pos.get_value(messages.PROP_FREQ)
+    if not freq:
+        return
+    aircraft = get_aircraft(pos.callsign())
     if not aircraft:
-        if freq:
-            aircraft=Aircraft(callsign=pos.callsign())
-            aircraft.posmsg = PosMsg()
-            aircraft.save()
-            aircrafts[pos.callsign()]=aircraft
+        aircraft=Aircraft(callsign=pos.callsign())
+        aircraft.posmsg = PosMsg()
+        aircraft.save()
+        aircrafts[pos.callsign()]=aircraft
+        
     old_freq = aircraft.posmsg.get_value(messages.PROP_FREQ) 
     if freq != old_freq:
         print("ACFT %s changed freqs from %s to %s" % (pos.callsign(),old_freq,freq))
@@ -143,43 +153,43 @@ def process_request(instance):
     else:
         llogger.warning("Ignoring request without receiver %s " % instance)    
 
+date_started = timezone.now()    
 aircrafts = {}
 
-icao = "SAAR"
-incoming = Queue()
-
-date_started = timezone.now()
-airport = Airport.objects.get(icao=icao)
-airport.altitude = airport.altitude * units.FT
-print(airport.altitude)
-comm = airport.comms.filter(type=Comm.TWR).first()
-relaysock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-fglisten = ("localhost",settings.FGATC_SERVER_PORT)
-send_msg()
-# relaysock.bind(fglisten)
-relaysock.setblocking(0)
-llogger.info("Starting")
-while relaysock:
-    try:
-        msg = incoming.get(False)
-        #print("Sending",type(msg.send()),settings.FGATC_RELAY_SERVER)
-        relaysock.sendto(msg.send(), settings.FGATC_RELAY_SERVER)
-        #print("Sent",msg)
-    except Empty:
-        pass
-    try:
-        data,addr = relaysock.recvfrom(1200)
-        unp = Unpacker(data)
-        pos = PosMsg()
-        pos.receive(unp)
-        pos.header.reply_addr=addr[0]
-        pos.header.reply_port=addr[1]
-        #print("Received",pos)
-        process_msg(pos)
-    except BlockingIOError:
-        pass
+if __name__ == "__main__":
     
-print("end")
+
+    icao = "SAZV"
+    incoming = Queue()
+    airport = Airport.objects.get(icao=icao)
+    comm = airport.comms.filter(type=Comm.TWR).first()
+    relaysock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+    fglisten = ("localhost",settings.FGATC_SERVER_PORT)
+    send_msg()
+    # relaysock.bind(fglisten)
+    relaysock.setblocking(0)
+    llogger.info("Starting")
+    while relaysock:
+        try:
+            msg = incoming.get(False)
+            #print("Sending",type(msg.send()),settings.FGATC_RELAY_SERVER)
+            relaysock.sendto(msg.send(), settings.FGATC_RELAY_SERVER)
+            #print("Sent",msg)
+        except Empty:
+            pass
+        try:
+            data,addr = relaysock.recvfrom(1200)
+            unp = Unpacker(data)
+            pos = PosMsg()
+            pos.receive(unp)
+            pos.header.reply_addr=addr[0]
+            pos.header.reply_port=addr[1]
+            #print("Received",pos)
+            process_msg(pos)
+        except BlockingIOError:
+            pass
+        
+    print("end")
  
 
 

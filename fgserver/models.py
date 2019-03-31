@@ -101,7 +101,7 @@ class Airport(Model):
     lat=DecimalField(default=0,max_digits=10,decimal_places=6)
     lon=DecimalField(default=0,max_digits=10,decimal_places=6)
     altitude=IntegerField(default=0)
-    
+    active = BooleanField(default=False)
     
     def get_position(self):
         return Position(float(self.lat),float(self.lon),float(self.altitude))
@@ -340,6 +340,7 @@ class Order(Model):
     confirmed = BooleanField(default=False) # by ATC
     received = BooleanField(default=False) # by aircraft radio
     acked = BooleanField(default=False) # by pilot
+    lost = BooleanField(default=False) # never received
     
     PARAM_ORDER='ord'
     PARAM_FREQUENCY='freq'
