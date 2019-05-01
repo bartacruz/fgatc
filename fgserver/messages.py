@@ -560,8 +560,9 @@ class PosMsg:
             msgbuf = unp.get_buffer()
             headbuf = self.header.send()
             self.header.msglen = len(headbuf + msgbuf)
-            # print "setting len=",self.header.msglen
+            #print("setting len=",self.header.msglen, len(headbuf + msgbuf))
             headbuf = self.header.send()
+            #print("len2=",self.header.msglen, len(headbuf+msgbuf))
             return headbuf + msgbuf
         except:
             llogger.exception("ERROR creating msg")

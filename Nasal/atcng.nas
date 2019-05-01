@@ -217,7 +217,6 @@ var check_model = func(node=nil) {
 	print(sprintf("check_model end. atc=%s, ml=%s",atcnode,size(ainodes)));
 	
 }
-
 var readorder = func(node=nil) {
 	print("INCOME ORDER");
 	var model_path=string.join("/",split("/",node.getPath())[0:3]);
@@ -601,7 +600,6 @@ var dialog = {
             removelistener(l);
         delete(gui.dialog, "\"" ~ me.title ~ "\"");
     },
-    
 #################################################################
     show : func {
     	if (atcng.airport == nil) {

@@ -20,7 +20,7 @@ django.setup()
 from fgserver.models import Airport, Comm, Aircraft, Request,\
     airportsWithinRange, Order
 
-
+MAX_TEXT_SIZE=768
 def get_order_strings(string):
     ''' 
     Split string into 2 strings if len > 127
@@ -30,6 +30,7 @@ def get_order_strings(string):
     if len(ostring) >=128:
         ostring2 = ostring[127:]
         ostring=ostring[:127]
+    #print("ORDER STRINGS",[ostring,ostring2])
     return ostring,ostring2    
 
 
@@ -69,7 +70,7 @@ def get_pos_msg(airport):
         order = orders.first()
         dif =(timezone.now() - order.date).total_seconds()
         if dif > 2:
-            if dif > 6:
+            if dif > 8:
                 order.lost = True
                 order.save()
             else:

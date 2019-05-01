@@ -60,7 +60,11 @@ if __name__ == "__main__":
             try:
                 msg = server.outgoing.get(False)
                 #llogger.debug("Sending message %s" % msg )
-                server.socket.sendto(msg.send(),settings.FGATC_RELAY_SERVER)
+                buff = msg.send()
+                if len(buff) > 1200: 
+                    llogger.warning("ERROR msg size=%d. Not sending" % len(buff))
+                else:
+                    server.socket.sendto(msg.send(),settings.FGATC_RELAY_SERVER)
             except Empty:
                 pass
         
