@@ -36,17 +36,17 @@ The project contains:
 * Django 2.x(tested with v2.1.7)
 
 * Python database driver for your DB of choice (psycopg2, python-mysql,etc)  
-* [Geographiclib] (https://pypi.python.org/pypi/geographiclib)
-* [Metar] (http://sourceforge.net/projects/python-metar/)
+* [Geographiclib](https://pypi.python.org/pypi/geographiclib)
+* [Metar](http://sourceforge.net/projects/python-metar/)
 * NumPy 
-* [SciPy] (http://www.scipy.org/)
+* [SciPy](http://www.scipy.org/)
 
-...and many others!
+...and many others listed in the [requirements file](requirements.txt)
 
 Most of this packages (except python-metar) comes with all major Linux distributions. 
 Try installing them with Apt, Yum, etc.
 
-If you want to create a virtualenv, use the `requirements.txt` file to install all the dependencies.
+If you want to use a virtualenv, use the `requirements.txt` file to install all the dependencies.
 
 ## Install
 
