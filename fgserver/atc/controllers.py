@@ -59,6 +59,7 @@ class Controller(object):
             '''there's someone landing and no one departing'''
             for ll in landing.all():
                 l = landing.first().aircraft
+                print("Landing?",l.get_position(),runway.get_position(),runway.bearing)
                 dist = get_distance(l.get_position(),runway.get_position())
                 head = get_heading_to_360(l.get_position(),runway.get_position())
                 adiff = angle_diff(head, float(runway.bearing))

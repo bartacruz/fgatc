@@ -6,12 +6,12 @@ Created on 20 mar. 2019
 import socketserver
 from fgserver.messages import PosMsg
 from fgserver import llogger, settings, setInterval
-from xdrlib import Unpacker
 from queue import Queue, Empty
 import threading
-from fgserver.server.testmp import process_msg, get_pos_msg
+from fgserver.server.testmp import process_msg, get_pos_msg, aircrafts
 from fgserver.models import Airport
-from fgserver.atc.models import ATC
+from fgserver.server.fgmpie import pie_msg, PacketData
+from django.utils import timezone
 
 class FGServer(socketserver.ThreadingMixIn, socketserver.UDPServer):
     incoming = Queue()
@@ -22,9 +22,9 @@ class FGHandler(socketserver.BaseRequestHandler):
     def handle(self):
         data = self.request[0]
         try:
-            unp = Unpacker(data)
+            unp = PacketData(data)
             pos = PosMsg()
-            pos.receive(unp)
+            pos.receive_pie(unp)
             pos.header.reply_addr=self.client_address[0]
             pos.header.reply_port=self.client_address[1]
             #print("Received",pos)
@@ -38,6 +38,11 @@ def send_msg():
     for airport in Airport.objects.filter(active=True):
         msg = get_pos_msg(airport)
         server.outgoing.put(msg)
+    for aircraft in aircrafts.values():
+        diff =(timezone.now() - aircraft.updated).total_seconds()
+        if diff < 2:
+            #print("saving",aircraft.__dict__)
+            aircraft.save()
     
 if __name__ == "__main__":
     HOST, PORT = "0.0.0.0", 5100
@@ -60,11 +65,8 @@ if __name__ == "__main__":
             try:
                 msg = server.outgoing.get(False)
                 #llogger.debug("Sending message %s" % msg )
-                buff = msg.send()
-                if len(buff) > 1200: 
-                    llogger.warning("ERROR msg size=%d. Not sending" % len(buff))
-                else:
-                    server.socket.sendto(msg.send(),settings.FGATC_RELAY_SERVER)
+                buff = pie_msg(msg)
+                server.socket.sendto(buff,settings.FGATC_RELAY_SERVER)
             except Empty:
                 pass
         

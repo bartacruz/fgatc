@@ -13,6 +13,12 @@ from django.contrib.admin.decorators import register
 
 admin.autodiscover()
 
+def activate(modeladmin, request, queryset):
+    queryset.update(active=True)
+activate.short_description = "Activate selected"
+def deactivate(modeladmin,request,queryset):
+    queryset.update(active=False)
+deactivate.short_description = "Deactivate selected"
 class CommInline(TabularInline):
     model = Comm
     extra=0
@@ -35,9 +41,10 @@ class MetarObservationInline(TabularInline):
     
 class AirportAdmin(ModelAdmin):
     search_fields = ['icao','name']
-    list_display=('icao','name','lat','lon')
+    list_display=('icao','name','lat','lon', 'active')
+    list_filter = ('active',) 
     inlines = [RunwayInline,CommInline, StartupInline, MetarObservationInline, CircuitInline]
-
+    actions = [activate, deactivate]
 class RunwayAdmin(ModelAdmin):
     search_fields = ['airport__icao','airport__name']
     list_display=('airport','name','bearing')

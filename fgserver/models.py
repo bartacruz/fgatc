@@ -37,6 +37,11 @@ class Cache(object):
             cls.load_all()
 
     @classmethod
+    def clean(cls):
+        cls._store={}
+        cls._map = {}
+    
+    @classmethod
     def map(cls,map_id,instance_id,):
         cls.check()
         cls._map[map_id]=instance_id
@@ -64,7 +69,7 @@ class Cache(object):
         cls.check()
         if not instance_id:
             return None
-        if not force and cls._store.has_key(instance_id):
+        if not force and cls._store.get(instance_id):
 #            llogger.debug("%s get: obteniendo %s|%s" % (cls,instance_id,force))
             return cls._store.get(instance_id)
         return cls.load(instance_id)
@@ -94,6 +99,7 @@ class Cache(object):
     def remove(cls,instance_id):
         cls.check()
         return cls._store.pop(instance_id,None)
+    
 
 class Airport(Model):
     icao=CharField(max_length=4, db_index=True)
@@ -278,6 +284,7 @@ class Aircraft(Model):
     ip=CharField(max_length=15,blank=True,null=True)
     port=CharField(max_length=5,blank=True,null=True)
     heading=FloatField(default=0)
+    updated = DateTimeField(blank=True,null=True)
     
     def get_addr(self):
         return (self.ip,int(self.port))
@@ -301,6 +308,7 @@ class Aircraft(Model):
         '''
         position = position or self.posmsg.position
         geod = cart2geod(position)
+        #print("updating position of %s" % self, position, geod)
         self.lat=geod[0]
         self.lon=geod[1]
         self.altitude=geod[2]
@@ -309,7 +317,18 @@ class Aircraft(Model):
         h10r = Quaternion.fromLatLon(self.lat, self.lon).conjugate().multiply(qor)
         eul = h10r.getEuler().scale(units.RAD)
         self.heading= eul.z
+        self.updated = timezone.now()
 
+class Aircrafts(Cache):
+    @classmethod
+    def load(cls, instance_id):
+        try:
+            instance = Aircrafts.objects.get(callsign=instance_id)
+            cls.set(instance_id,instance)
+            return instance
+        except Airport.DoesNotExist:
+            return None
+        
 class Request(Model):
     date = DateTimeField()
     sender = ForeignKey(Aircraft, on_delete=models.CASCADE, related_name='requests')

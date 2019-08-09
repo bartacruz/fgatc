@@ -400,6 +400,18 @@ class Header:
     reply_port = 0
     callsign = None
     
+    def receive_pie(self,unp):
+        self.magic = unp.pop_bytes(4)
+        self.version = unp.pop_bytes(4)
+        self.msgid = unp.pop_bytes(4)
+        self.msglen = unp.unpack_int()
+        unp.unpack_int()  # reply_addr
+        unp.unpack_int()  # reply_port
+#        self.callsign = unp.unpack_fstring(8).replace('\0', '')
+        cs = unp.unpack_padded_string(8)
+        self.callsign = cs
+        
+        
     def receive(self, unp):
         ''' unpacks the header data into the Header vars '''
         self.magic = unp.unpack_uint()
@@ -440,7 +452,10 @@ class PropertyData:
         try:
             return self.properties.get(key)['value']
         except:
-            return None
+            try:
+                return self.get(key)
+            except:
+                return None
     
     def set(self, key, prop):
         self.properties[key] = prop
@@ -454,6 +469,17 @@ class PropertyData:
         prop['id'] = key
         self.set(key, prop)
     
+    def receive_pie(self, unp, end):
+        #print ("receive pie", len(unp))
+        while len(unp) >= 4:
+            try:
+                code,value = unp.unpack_property()
+                #print(type(code),code,value)
+                self.properties[code] = value
+            except ValueError as e:
+                pass
+                #llogger.warning(str(e))
+                # print prop
     def receive(self, unp, end):
         while unp.get_position() < end:
             prop = decode_node(unp)
@@ -516,7 +542,10 @@ class PosMsg:
         try:
             return self.get_property(key)["value"]
         except:
-            return default
+            try:
+                return self.get_property(key)
+            except:
+                return default
         
     def get_property(self, key):
         return self.properties.get(key)
@@ -527,6 +556,22 @@ class PosMsg:
     def set_property(self, key, value):
         self.properties.set(key, value)
     
+    def receive_pie(self,unp):
+        self.header.receive_pie(unp)
+        #print("ver %s" % self.header.version)
+        self.model = unp.unpack_padded_string(96).strip()
+        self.time = unp.unpack_double()
+        self.lag = unp.unpack_double()
+        self.position = unp.unpack_fdouble(3)
+        self.orientation = unp.unpack_ffloat(3)
+        self.linear_vel = unp.unpack_ffloat(3)
+        self.angular_vel = unp.unpack_ffloat(3)
+        self.linear_accel = unp.unpack_ffloat(3)
+        self.angular_accel = unp.unpack_ffloat(3)
+        unp.pop_bytes(4)
+        #print(self,len(unp),"llamando a receive")
+        self.properties.receive_pie(unp, self.header.msglen)
+        
     def receive(self, unp):
         self.header.receive(unp)
         #print("ver %x" % self.header.version)

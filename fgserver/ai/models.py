@@ -4,18 +4,19 @@ Created on Apr 24, 2015
 @author: bartacruz
 '''
 from fgserver.helper import Position, get_distance, move, normdeg,\
-    elevate, get_heading_to, angle_diff
-from fgserver import units, llogger
+    elevate, get_heading_to, angle_diff, short_callsign, say_number
+from fgserver import units, llogger, messages
 from django.db.models.base import Model
 from django.db.models.fields.related import ForeignKey
 from django.db.models.fields import CharField, FloatField, IntegerField,\
     BooleanField
-from fgserver.models import Airport, Aircraft, Order
+from fgserver.models import Airport, Aircraft, Order, Cache
 from fgserver.ai.planes import AIPlane, PlaneInfo
 from fgserver.messages import alias
 from random import randint
 import threading
 from django.db import models
+import re
 
 class FlightPlan(Model):
     name = CharField(max_length=8)
@@ -31,6 +32,9 @@ class FlightPlan(Model):
 
     def __unicode__(self):
         return self.name
+    
+    def __str__(self):
+        return str(self.name)
     
     def log(self,*argv):
         msg = "[FP %s]" % self.name
@@ -215,44 +219,100 @@ class Circuit(FlightPlan):
 
     def process_order(self,instance):
         self.log(self.name,"procesando orden",instance)
-        if instance.receiver == self.aircraft and instance.confirmed:
-            order = instance.get_param(Order.PARAM_ORDER)
-            self._last_order = instance
-            self.aiplane.last_order = instance
-            if order == alias.TUNE_OK:
-                if self.aiplane.state == PlaneInfo.STOPPED:
-                    self.aiplane.set_state(PlaneInfo.PUSHBACK)
-                else:
-                    self.aiplane.check_request()
-            elif order == alias.TUNE_TO:
-                freq = instance.get_param(Order.PARAM_FREQUENCY).replace('.','')
-                self.log("retunning radio to %s" % freq)
-                comm = self.airport.comms.filter(frequency=freq).first()
-                self.aiplane.comm=comm
-                req = "req=tunein;freq=%s" % comm.get_FGfreq()
-                threading.Thread(target=self.aiplane.send_request,args=(req,'',)).start()
-            elif order in [alias.TAXI_TO, alias.LINEUP]:
-                rwy = instance.get_param(Order.PARAM_RUNWAY)
-                if not self.runway or self.runway.name != rwy:
-                    ''' the ATC refered us to a different runway. Obey '''
-                    self.log("regenerating flight plan for ATC's assigned runway %s " % rwy)
-                    self.runway = self.airport.runways.get(name=rwy)
-                    self.generate_waypoints()
-                    self.aiplane.waypoint = self.waypoint()
-                    self.log("Setting aiplane waypoint to %s " % self.aiplane.waypoint)
-                    
-                self.aiplane.set_state(PlaneInfo.TAXIING)
-                self._waiting=10
-            elif order == alias.CLEAR_TK:
-                if self.aiplane.state == PlaneInfo.SHORT:
-                    self.aiplane.set_state(PlaneInfo.LINING_UP)
-                else:
-                    self.aiplane.set_state(PlaneInfo.DEPARTING)
-                self._waiting=15
-    
+        if not instance.receiver == self.aircraft or not instance.confirmed:
+            llogger.warn("order is not for me or not confirmed! %s != %s or %s" % (instance.receiver, self.aircraft, instance.confirmed))
+            return
+        
+        order = instance.get_param(Order.PARAM_ORDER)
+        self._last_order = instance
+        self.aiplane.last_order = instance
+        self.readback(instance)
+        if order == alias.TUNE_OK:
+            if self.aiplane.state == PlaneInfo.STOPPED:
+                self.aiplane.set_state(PlaneInfo.PUSHBACK)
             else:
-                self.log("Circuit",self.aircraft.callsign,', order ignored', instance)
-            
+                self.aiplane.check_request()
+        elif order == alias.TUNE_TO:
+            freq = instance.get_param(Order.PARAM_FREQUENCY).replace('.','')
+            self.log("retunning radio to %s" % freq)
+            comm = self.airport.comms.filter(frequency=freq).first()
+            self.aiplane.comm=comm
+            req = "req=tunein;freq=%s" % comm.get_FGfreq()
+            threading.Thread(target=self.aiplane.send_request,args=(req,'',)).start()
+        elif order in [alias.TAXI_TO, alias.LINEUP]:
+            rwy = instance.get_param(Order.PARAM_RUNWAY)
+            if not self.runway or self.runway.name != rwy:
+                ''' the ATC refered us to a different runway. Obey '''
+                self.log("regenerating flight plan for ATC's assigned runway %s " % rwy)
+                self.runway = self.airport.runways.get(name=rwy)
+                self.generate_waypoints()
+                self.aiplane.waypoint = self.waypoint()
+                self.log("Setting aiplane waypoint to %s " % self.aiplane.waypoint)
+                
+            self.aiplane.set_state(PlaneInfo.TAXIING)
+            self._waiting=10
+        elif order == alias.CLEAR_TK:
+            if self.aiplane.state == PlaneInfo.SHORT:
+                self.aiplane.set_state(PlaneInfo.LINING_UP)
+            else:
+                self.aiplane.set_state(PlaneInfo.DEPARTING)
+            self._waiting=15
+
+        else:
+            self.log("Circuit",self.aircraft.callsign,', order ignored', instance)
+    
+    def readback(self,order):
+        templates={
+           alias.CLEAR_LAND:"clear to land runway {rwy}{qnh}",
+           alias.CLEAR_TOUCHNGO:"clear touch and go{onum} runway {rwy}{qnh}",
+           alias.CLEAR_TK : "cleared for take off runway {rwy}",
+           alias.GO_AROUND : "going around, report on {cirw}",
+           alias.JOIN_CIRCUIT:"{cirw} for {rwy} at {alt}{qnh}",
+           alias.CIRCUIT_STRAIGHT:"straight for {rwy}, report on {cirw}{qnh}",
+           alias.LINEUP : "line up on {rwy}{hld}",
+           alias.REPORT_CIRCUIT: 'report on {cirw}',
+           alias.STARTUP: "start up approved{qnh}",
+           alias.TAXI_TO: "taxi to {rwy}{via}{hld}{short}{lineup}",
+           alias.WAIT: "we wait", 
+           alias.SWITCHING_OFF: "switching off",
+           alias.TAXI_PARK: "parking {park}"
+        }
+        msg = templates.get(order.get_instruction())
+        if not msg:
+            llogger.info("No readback for %s" % order.get_instruction())
+            return
+        msg = re.sub(r'{cs}',short_callsign(order.receiver.callsign),msg)
+        msg = re.sub(r'{icao}',order.sender.airport.icao,msg)
+        msg = re.sub(r'{comm}',order.sender.identifier,msg)
+        msg = re.sub(r'{rwy}',say_number(order.get_param(Order.PARAM_RUNWAY,'')),msg)
+        msg = re.sub(r'{alt}',str(order.get_param(Order.PARAM_ALTITUDE,'')),msg)
+        msg = re.sub(r'{cirt}',order.get_param(Order.PARAM_CIRCUIT_TYPE,''),msg)
+        msg = re.sub(r'{cirw}',order.get_param(Order.PARAM_CIRCUIT_WP,''),msg)
+        msg = re.sub(r'{num}',str(order.get_param(Order.PARAM_NUMBER,'')),msg)
+        msg = re.sub(r'{freq}',str(order.get_param(Order.PARAM_FREQUENCY,'')),msg)
+        msg = re.sub(r'{conn}',str(order.get_param(Order.PARAM_CONTROLLER,'')),msg)
+        msg = re.sub(r'{park}',str(order.get_param(Order.PARAM_PARKING,'')),msg)
+        if order.get_param(Order.PARAM_NUMBER):
+            msg = re.sub(r'{onum}',', number %s' % order.get_param(Order.PARAM_NUMBER),msg)
+        if order.get_param(Order.PARAM_LINEUP):
+            msg = re.sub(r'{lineup}',' and line up',msg)
+        if order.get_param(Order.PARAM_HOLD):
+            msg = re.sub(r'{hld}',' and hold',msg)
+        if order.get_param(Order.PARAM_SHORT):
+            msg = re.sub(r'{short}',' short',msg)
+        
+        if order.get_param(Order.PARAM_QNH):
+            msg = re.sub(r'{qnh}','. QNH %s' % say_number(order.get_param(Order.PARAM_QNH)),msg)
+
+        # Clean up tags not replaced
+        msg = re.sub(r'{\w+}','',msg)
+        msg += ", %s" % short_callsign(order.receiver.callsign)
+        req = "req=roger;laor=%s" % order.get_instruction()
+        llogger.debug("readback: %s | %s" % (req,msg,))        
+        threading.Thread(target=self.aiplane.send_request,args=(req,msg,)).start()
+           
+class Circuits(Cache):            
+    pass
 
 class WayPoint(Model):
     POINT=0

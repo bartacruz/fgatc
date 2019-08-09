@@ -13,5 +13,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('map/', include('fgserver.map.urls')),
     path('tracker/', include('fgserver.tracker.urls')),
+    path('admin_tools/', include('admin_tools.urls')),
+    path('ajax_select/', include('ajax_select.urls')),
     ]
 

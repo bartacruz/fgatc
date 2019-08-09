@@ -6,7 +6,7 @@ Created on 24 de abr. de 2017
 from fgserver.helper import Position, get_distance, get_heading_to, Vector3D,\
     move, normdeg, Quaternion, geod2cart, normalize, say_number,\
     get_heading_to_360, short_callsign
-from fgserver.messages import PosMsg, PROP_CHAT, PROP_OID, alias
+from fgserver.messages import PosMsg, PROP_CHAT, PROP_OID, alias, PROP_FREQ
 from fgserver import units, get_controllers
 from fgserver.units import FT
 from fgserver.models import Aircraft, Request, Airport, Order, Comm
@@ -133,6 +133,7 @@ class AIPlane():
         if self.state != state:
             self.log("State changed from %s to %s" % (PlaneInfo.CHOICES[self.state][1],PlaneInfo.CHOICES[state][1]))
             changed = True
+            old_state=self.state
         self.state=state
         laor = getattr(self.circuit,'_last_order',None)
         if state in [PlaneInfo.STOPPED, PlaneInfo.PUSHBACK]\
@@ -176,7 +177,7 @@ class AIPlane():
             self.course = float(self.airport().active_runway().bearing)
                 
         if changed:
-            self.check_request()
+            self.check_request(old_state)
     
     def airport(self):
         return self.circuit.airport
@@ -192,15 +193,15 @@ class AIPlane():
     
     def send_request(self,req,msg):
         self.message=msg
-        req = "%s;mid=%s" % (req,randint(1000,9999))
+        req = "%s;freq=%s;mid=%s" % (req,self.comm.get_FGfreq(),randint(1000,9999))
         date=timezone.now()
         request = Request(sender=self.aircraft(),date=date,request=req)
         if self.comm:
             request.receiver=self.comm
-        self.log("Sending request",request)
+        self.log("Sending request",request,msg)
         request.save()
 
-    def check_request(self):
+    def check_request(self,old_state=None):
         self.log("check_request",self.waypoint.type, self.state)
         from fgserver.ai.models import WayPoint
         if not self.airport():
@@ -222,6 +223,10 @@ class AIPlane():
         elif self.state == PlaneInfo.CIRCUIT_FINAL:
             req = "req=final;apt=%s" % self.airport().icao
             msg="%s Tower, %s, Final for runway %s" % (self.comm.identifier, callsign,self.say_runway())
+            self.send_request(req,msg)    
+        elif self.state == PlaneInfo.TAXIING and old_state == PlaneInfo.TOUCHDOWN:
+            req = "req=clearrw;apt=%s" % self.airport().icao
+            msg="%s Tower, %s, clear of runway %s" % (self.comm.identifier, callsign,self.say_runway())
             self.send_request(req,msg)    
         elif self.state == PlaneInfo.PUSHBACK:
             req = "req=readytaxi;apt=%s" % self.airport().icao
@@ -312,16 +317,16 @@ class AIPlane():
         props.set_prop(302,self.speed*50)
         props.set_prop(312,self.speed*50)
         if self.comm:
-            props.set_prop(10001,str(self.comm.get_FGfreq()))
+            props.set_prop(PROP_FREQ,str(self.comm.get_FGfreq()))
         if self.last_order:
             props.set_prop(PROP_OID,str(self.last_order.id))
         if self.on_ground() or self.state == PlaneInfo.LANDING:
-            props.set_prop(1004,1)
+            #props.set_prop(1004,1)
             props.set_prop(201,1)
             props.set_prop(211,1)
             props.set_prop(221,1)
         else:
-            props.set_prop(1004,0)
+            #props.set_prop(1004,0)
             props.set_prop(201,0)
             props.set_prop(211,0)
             props.set_prop(221,0)
@@ -339,6 +344,7 @@ class AIPlane():
         pos.orientation=self.orientation.get_array()
         pos.position=self.position.get_array_cart()
         self._fill_properties(pos)
+        
         return pos
         
     def update_aircraft(self):

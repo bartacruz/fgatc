@@ -41,23 +41,26 @@ def find_comm(request):
     '''
     Find a Comm object with the request freq and inside a 50mi radius
     '''
-    # fgfs sends integer freqs in Mhz but apt.dat has freqs in 1/100 Mhz (integers) 
-    freq = request.get_request().freq
-    freq = freq.replace('.','').ljust(5,'0') # replace the dot and add padding
-    tag = "%s-%s" % (request.sender.callsign,freq)
-    # TODO Clean the cache!!!  
-#     comm = self.controllers.get(tag,None)
-#     if comm:
-#         return comm
-    llogger.debug("Finding COMM for %s" % tag)
-    apts = airportsWithinRange(request.sender.get_position(), 50, units.NM)
-    llogger.debug("Airports in range=%s " % apts)
-    for apt in apts:
-        c = apt.comms.filter(frequency=freq)
-        if c.count():
-            #self.controllers[tag]=c.first().id
-            return c.first().id
-    #self.controllers[tag]=None
+    try:
+        # fgfs sends integer freqs in Mhz but apt.dat has freqs in 1/100 Mhz (integers) 
+        freq = request.get_request().freq
+        freq = freq.replace('.','').ljust(5,'0') # replace the dot and add padding
+        tag = "%s-%s" % (request.sender.callsign,freq)
+        # TODO Clean the cache!!!  
+    #     comm = self.controllers.get(tag,None)
+    #     if comm:
+    #         return comm
+        llogger.debug("Finding COMM for %s" % tag)
+        apts = airportsWithinRange(request.sender.get_position(), 50, units.NM)
+        llogger.debug("Airports in range=%s " % apts)
+        for apt in apts:
+            c = apt.comms.filter(frequency=freq)
+            if c.count():
+                #self.controllers[tag]=c.first().id
+                return c.first().id
+        #self.controllers[tag]=None
+    except:
+        llogger.exception("Finding comm for %s" % request)
     return None
 
 def get_pos_msg(airport):
@@ -68,6 +71,9 @@ def get_pos_msg(airport):
     orders = Order.objects.filter(received=False, lost=False, sender__airport=airport).order_by('id')
     if orders:
         order = orders.first()
+        if not order.confirmed:
+            order.confirmed = True
+            order.save()
         dif =(timezone.now() - order.date).total_seconds()
         if dif > 2:
             if dif > 8:
@@ -76,7 +82,7 @@ def get_pos_msg(airport):
             else:
                 print(order)
                 msg.properties.set_prop(messages.PROP_FREQ, str(order.sender.get_FGfreq()))
-
+                msg.properties.set_prop(messages.PROP_OID, str(order.id)
                 ostring, ostring2 = get_order_strings(order.get_order())
                 msg.properties.set_prop(messages.PROP_ORDER, ostring)
                 msg.properties.set_prop(messages.PROP_ORDER2, ostring2)
@@ -108,34 +114,36 @@ def get_aircraft(callsign):
 
 
 def process_msg(pos):
-    freq = pos.get_value(messages.PROP_FREQ)
-    if not freq:
-        return
-    aircraft = get_aircraft(pos.callsign())
-    if not aircraft:
-        aircraft=Aircraft(callsign=pos.callsign())
-        aircraft.posmsg = PosMsg()
-        aircraft.save()
-        aircrafts[pos.callsign()]=aircraft
+    try:
+        freq = pos.get_value(messages.PROP_FREQ)
+        if not freq:
+            print("ignoring request without freq",pos.properties.properties)
+            return
+        aircraft = get_aircraft(pos.callsign())
+        if not aircraft:
+            aircraft=Aircraft(callsign=pos.callsign())
+            aircraft.posmsg = PosMsg()
+            aircraft.save()
+            aircrafts[pos.callsign()]=aircraft
         
-    old_freq = aircraft.posmsg.get_value(messages.PROP_FREQ) 
-    if freq != old_freq:
-        print("ACFT %s changed freqs from %s to %s" % (pos.callsign(),old_freq,freq))
-        aircraft.freq = freq
-    oid = pos.get_value(messages.PROP_OID)
-    old_oid = aircraft.posmsg.get_value(messages.PROP_OID)
-    if oid and oid != old_oid:
-        order = Order.objects.get(pk=oid)
-        order.received = True
-        order.save()
-        
-        
+        old_freq = aircraft.posmsg.get_value(messages.PROP_FREQ) 
+        if freq != old_freq:
+            print("ACFT %s changed freqs from %s to %s" % (pos.callsign(),old_freq,freq))
+            aircraft.freq = freq
+        oid = pos.get_value(messages.PROP_OID)
+        old_oid = aircraft.posmsg.get_value(messages.PROP_OID)
+        if oid and oid != old_oid:
+            order = Order.objects.get(pk=oid)
+            order.received = True
+            order.save()
+    
+        aircraft.posmsg = pos
+        aircraft.update_position()
+        request = pos.get_value(messages.PROP_REQUEST)
+    except:
+        llogger.exception("Processing msg")    
     
     
-    aircraft.posmsg = pos
-    aircraft.update_position()
-    
-    request = pos.get_value(messages.PROP_REQUEST)
     if request and request != aircraft.last_request:
         llogger.info("aircraft %s requests %s at %s. last=%s" % (aircraft.callsign, request, freq,aircraft.last_request) )
         aircraft.last_request = request
@@ -143,7 +151,10 @@ def process_msg(pos):
         req.receiver_id = find_comm(req)
         llogger.info("receiver=%s" % req.receiver )
         req.save()
-        process_request(req)
+        try:
+            process_request(req)
+        except:
+            llogger.exception("Processing request %s" % req)
         
 
 def process_request(instance):
