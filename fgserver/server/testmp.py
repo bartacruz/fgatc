@@ -82,7 +82,7 @@ def get_pos_msg(airport):
             else:
                 print(order)
                 msg.properties.set_prop(messages.PROP_FREQ, str(order.sender.get_FGfreq()))
-                msg.properties.set_prop(messages.PROP_OID, str(order.id)
+                msg.properties.set_prop(messages.PROP_OID, str(order.id))
                 ostring, ostring2 = get_order_strings(order.get_order())
                 msg.properties.set_prop(messages.PROP_ORDER, ostring)
                 msg.properties.set_prop(messages.PROP_ORDER2, ostring2)

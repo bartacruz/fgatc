@@ -25,7 +25,7 @@ var last_order=nil;
 var last_order_string=nil;
 var viewnode = "depart";
 var CONFIG_DLG = 0;
-
+var model_path = "";
 var LETTERS = [
 "alpha", "bravo", "charlie", "delta", "echo",
 "foxtrot", "golf", "hotel", "india", "juliet",
@@ -106,14 +106,21 @@ var orderlisteners={};
 var chatlisteners={};
 
 var _add_model=func(path) {
-	var mporders = sprintf("%s/%s",path,serverchannel);
-	var mpchat = sprintf("%s/%s",path,servermsgchannel);
-	
+	model_path=path;
+	var mporders = sprintf("%s/%s",path,oidnode);
 	#print(sprintf("Adding listener for new MP plane %s",path));
-	orderlisteners[path]=setlistener(mporders, atcng.readorder, 0, 0);
-	chatlisteners[path]=setlistener(mpchat, atcng.readmessage, 0, 0);
+	orderlisteners[path]=setlistener(mporders, atcng.read_incomming, 0, 0);
+	
 }
-
+var read_incomming = func(node) {
+	model_path=string.join("/",split("/",node.getPath())[0:3]);
+	var timer = maketimer(0.5,func(){
+		atcng.readorder();
+		atcng.readmessage();
+	});
+	timer.singleShot = 1;
+	timer.start();
+}
 var model_added = func(node) {
 	#print(sprintf("entering model added with %s",node));
 	#debug.dump(node);
@@ -128,15 +135,6 @@ var model_added = func(node) {
     	#debug.dump(orderlisteners);
 	
 	}
-	#print(sprintf("chatlisteners before: %s", chatlisteners));
-	#debug.dump(chatlisteners);
-	if (contains(chatlisteners,path)) {
-		print(sprintf("removing old chat listener for new MP plane %s",path));
-    	removelistener(chatlisteners[path]);
-    	delete(chatlisteners,path);
-    	#print(sprintf("chatlisteners after: %s", chatlisteners));
-	#	debug.dump(chatlisteners);
-	}
 	#var valid = getprop(path,'valid');
 	#print("valid=");
 	#debug.dump(valid);
@@ -145,7 +143,6 @@ var model_added = func(node) {
 		#settimer(func{atcng._add_model(mpnode)},1);
 		atcng._add_model(path);
 		debug.dump(orderlisteners);
-		debug.dump(chatlisteners);
 	#} else {
 	#	print(sprintf("ignoring invalid model %s",path));
 	#}
@@ -153,20 +150,12 @@ var model_added = func(node) {
 
 var model_removed = func(node) {
 	#print(sprintf("entering model removed with %s",node));
-	#debug.dump(node);
 	var path = node.getValue();
-	#debug.dump(orderlisteners);
 	if (contains(orderlisteners,path)) {
-	#	print(sprintf("removing old order listener for new MP plane %s",path));
-    	removelistener(orderlisteners[path]);
+		removelistener(orderlisteners[path]);
     	delete(orderlisteners,path);
 	}
-	#debug.dump(chatlisteners);
-	if (contains(chatlisteners,path)) {
-	#	print(sprintf("removing old chat listener for new MP plane %s",path));
-    	removelistener(chatlisteners[path]);
-    	delete(chatlisteners,path);
-	}
+	
 } 
 var check_models = func() {
 	print("Starting check_models");
@@ -219,9 +208,9 @@ var check_model = func(node=nil) {
 }
 var readorder = func(node=nil) {
 	print("INCOME ORDER");
-	var model_path=string.join("/",split("/",node.getPath())[0:3]);
 	var model_freq= getprop(model_path,freqchannel);
-	var order = node.getValue();
+	#var order = node.getValue();
+	var order = getprop(model_path,serverchannel);
 	if (frequency != model_freq) {
 		print(sprintf("my freq=%s, sender's freq=%s",frequency,model_freq));
 		print(sprintf("Wrong frequency %s . Ignoring message: %s",model_freq,order));
@@ -234,7 +223,6 @@ var readorder = func(node=nil) {
 		return;
 	}
 	var order2 = getprop(model_path,serverchannel2);
-	print("order2: " ~ order2);
 	if (order2 != nil and order2 != "") {
 		print("Concatenating order and order2");
 		order= order ~ order2;
@@ -267,9 +255,10 @@ var readorder = func(node=nil) {
 
 var readmessage = func(node=nil) {
 	print("INCOME MESSAGE");
-	var model_path=string.join("/",split("/",node.getPath())[0:3]);
+	
 	var model_freq= getprop(model_path,freqchannel);
-	var msg = node.getValue();
+	#var msg = node.getValue();
+	var msg = getprop(model_path,servermsgchannel);
 	if (frequency != model_freq) {
 		print(sprintf("my freq=%s, sender's freq=%s",frequency,model_freq));
 		print(sprintf("Wrong frequency %s . Ignoring message: %s",model_freq,msg));
