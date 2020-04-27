@@ -256,6 +256,7 @@ class Tower(Controller):
         if lined:
             response.add_param(Order.PARAM_ORDER,alias.GO_AROUND)
             response.add_param(Order.PARAM_CIRCUIT_WP,alias.CIRCUIT_BASE)
+            response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
             self.set_status(request.sender, PlaneInfo.APPROACHING)
         else:
             response.add_param(Order.PARAM_ORDER,alias.CLEAR_LAND)
@@ -271,6 +272,7 @@ class Tower(Controller):
         response = self._init_response(request)
         response.add_param(Order.PARAM_ORDER,alias.GO_AROUND)
         response.add_param(Order.PARAM_CIRCUIT_WP,alias.CIRCUIT_BASE)
+        response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
         self.set_status(aircraft, PlaneInfo.APPROACHING)
         response.message=get_message(response)
         return response
