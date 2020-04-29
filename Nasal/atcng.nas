@@ -374,6 +374,9 @@ var parse_message = func(tag) {
 		} else if(last_order['ord'] == 'cleartngo') {
 			var ack = sprintf("clear touch and go runway %s",last_order['rwy']);
 			msg = string.replace(msg,'{ack}',ack);
+		} else if(last_order['ord'] == 'around') {
+			var ack = sprintf("going around, will report on %s for %s",last_order['cirw'],last_order['rwy'] );
+			msg = string.replace(msg,'{ack}',ack);
 		} else if(last_order['ord'] == 'transition') {
 			var ack = sprintf("clear to cross at %s",last_order['alt']);
 			msg = string.replace(msg,'{ack}',ack);

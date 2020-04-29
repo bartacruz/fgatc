@@ -12,6 +12,12 @@ from ajax_select.admin import AjaxSelectAdmin
 
 admin.autodiscover()
 
+def activate(modeladmin, request, queryset):
+    queryset.update(enabled=True)
+activate.short_description = "Activate selected"
+def deactivate(modeladmin,request,queryset):
+    queryset.update(enabled=False)
+
 class WaypointInline(TabularInline):
     model=WayPoint
     extra=0
@@ -22,9 +28,10 @@ class CircuitInline(TabularInline):
 
 class FlightPlanAdmin(ModelAdmin):
     search_fields = ['name']
-    list_display=('name','description')
+    list_display=('name','description', 'aircraft','enabled')
     inlines = [WaypointInline]
-
+    actions = [activate, deactivate]
+    
 class CircuitAdmin(AjaxSelectAdmin):
     list_display=('name','airport','description','radius','altitude','enabled')
     search_fields = ['name','airport__icao','airport__name']

@@ -4,19 +4,32 @@ Created on 20 mar. 2019
 @author: julio
 '''
 import socketserver
-from fgserver.messages import PosMsg
-from fgserver import llogger, settings, setInterval
-from queue import Queue, Empty
 import threading
-from fgserver.server.testmp import process_msg, get_pos_msg, aircrafts
-from fgserver.models import Airport
-from fgserver.server.fgmpie import pie_msg, PacketData
+import django
+from queue import Queue, Empty
 from django.utils import timezone
 
+
+django.setup()
+
+from fgserver.models import Airport, Order, Aircrafts
+from fgserver.messages import PosMsg, sim_time
+from fgserver import llogger, settings, setInterval
+from fgserver.server.fgmpie import pie_msg, PacketData
+from fgserver.signals import message_received, signal_server_started
+from fgserver.server.utils import get_pos_msg, process_msg
+    
 class FGServer(socketserver.ThreadingMixIn, socketserver.UDPServer):
     incoming = Queue()
     outgoing = Queue()
-
+    _thread = None
+    
+    def init(self):
+        self._thread = threading.Thread(target=self.serve_forever)
+        self._thread.daemon = True
+        server_thread.start()
+    
+    
 class FGHandler(socketserver.BaseRequestHandler):
     
     def handle(self):
@@ -33,33 +46,54 @@ class FGHandler(socketserver.BaseRequestHandler):
         except:
             llogger.exception("While receiving message")
 
-@setInterval(1)
+def startup_tasks():
+    Order.objects.all().update(expired=True)
+    
+
+
+@setInterval(0.3)
 def send_msg():
     for airport in Airport.objects.filter(active=True):
         msg = get_pos_msg(airport)
+        #llogger.debug("Sending pos for AI ATC   %s" % msg)
         server.outgoing.put(msg)
-    for aircraft in aircrafts.values():
-        diff =(timezone.now() - aircraft.updated).total_seconds()
-        if diff < 2:
-            #print("saving",aircraft.__dict__)
-            aircraft.save()
+    
+    from fgserver.ai.models import FlightPlan
+    for plan in FlightPlan.objects.filter(enabled=True):
+        try:
+            pos = plan.aircraft.status.get_position_message()
+            #llogger.debug("Sending pos for AI plane %s" % pos)
+            server.outgoing.put(pos)
+        except:
+            llogger.exception("In loop")
+         
+        
+#     else:
+#         diff =(timezone.now() - (aircraft.updated or timezone.now())).total_seconds()
+#             if diff < 2:
+#                 #print("saving",aircraft.__dict__)
+#                 aircraft.save()
     
 if __name__ == "__main__":
     HOST, PORT = "0.0.0.0", 5100
     
     server = FGServer((HOST, PORT), FGHandler)
-
     server_thread = threading.Thread(target=server.serve_forever)
     server_thread.daemon = True
-
+    
+    startup_tasks()
+    
     try:
         server_thread.start()
+        signal_server_started.send_robust(None)
         print("Server started at {} port {}".format(HOST, PORT))
         send_msg()
         while True:
             try:
                 pos = server.incoming.get(True, .1)
+                message_received.send_robust(sender=server,msg=pos)
                 process_msg(pos)
+                
             except Empty:
                 pass
             try:

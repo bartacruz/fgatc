@@ -9,7 +9,7 @@ from threading import Thread
 from django.db.models.base import Model
 from django.db.models.fields import CharField, DecimalField, IntegerField, \
     DateTimeField, BooleanField, FloatField
-from django.db.models.fields.related import ForeignKey
+from django.db.models.fields.related import ForeignKey, OneToOneField
 from django.dispatch.dispatcher import receiver
 from django.utils import timezone
 
@@ -21,6 +21,13 @@ from django.db.models.signals import post_save
 from metar.Metar import Metar
 from math import sqrt, atan
 from django.db import models
+from django.contrib.gis.db.models.fields import PointField
+from builtins import staticmethod
+from fgserver.messages import PosMsg, PROP_FREQ, PROP_OID, PROP_CHAT,\
+    PROP_REQUEST, sim_time
+from fgserver.ai.common import PlaneInfo
+from django.contrib.gis.geos.point import Point
+
 
 
 class Cache(object):
@@ -106,6 +113,7 @@ class Airport(Model):
     name=CharField(max_length=255)
     lat=DecimalField(default=0,max_digits=10,decimal_places=6)
     lon=DecimalField(default=0,max_digits=10,decimal_places=6)
+    #location = PointField(verbose_name="Airport location", null=True, blank=True)
     altitude=IntegerField(default=0)
     active = BooleanField(default=False)
     
@@ -175,6 +183,7 @@ class Runway(Model):
     length= IntegerField(default=0)
     lat=DecimalField(default=0,max_digits=10,decimal_places=6)
     lon=DecimalField(default=0,max_digits=10,decimal_places=6)
+    #location = PointField(verbose_name="Runway location", null=True, blank=True)
     altitude =0
         
     def __init__(self, *args, **kwargs):
@@ -262,6 +271,9 @@ class Comm(Model):
         sf = str(self.frequency)
         return "%s.%s" % (sf[:3],sf[3:])
     
+    def __str__(self):
+        return self.__unicode__()
+    
     def __unicode__(self):
         return "%s@%s" %(self.name, self.frequency)
 
@@ -276,6 +288,7 @@ class Aircraft(Model):
     freq = CharField(max_length=10,blank=True,null=True)
     lat=DecimalField(default=0,max_digits=10,decimal_places=6)
     lon=DecimalField(default=0,max_digits=10,decimal_places=6)
+    #location = PointField(verbose_name="Aircraft location", null=True, blank=True)
     altitude=IntegerField(default=0)
     model = CharField(max_length=96,blank=True,null=True)
     state = IntegerField(default=0)
@@ -323,18 +336,109 @@ class Aircrafts(Cache):
     @classmethod
     def load(cls, instance_id):
         try:
-            instance = Aircrafts.objects.get(callsign=instance_id)
+            instance = Aircraft.objects.get(callsign=instance_id)
             cls.set(instance_id,instance)
             return instance
-        except Airport.DoesNotExist:
+        except Aircraft.DoesNotExist:
             return None
+
+class AircraftStatus(Model):
+    aircraft = OneToOneField(to=Aircraft, related_name='status', verbose_name='Aircraft status', on_delete=models.CASCADE)
+    date = DateTimeField(blank=True,null=True)
+    position = PointField(dim=3,verbose_name="Position", default=Point(0,0,0)) # lon,lat,alt
+    orientation = PointField(dim=3,verbose_name="Orientation", default=Point(0,0,0))
+    linear_vel = PointField(dim=3,verbose_name="Linear velocity", default=Point(0,0,0))
+    angular_vel = PointField(dim=3,verbose_name="Angular velocity", default=Point(0,0,0))
+    linear_accel = PointField(dim=3,verbose_name="Linear acceleration", default=Point(0,0,0))
+    angular_accel = PointField(dim=3,verbose_name="Angular acceleration", default=Point(0,0,0))
+    request=CharField(max_length=255,blank=True,null=True)
+    order=CharField(max_length=255,blank=True,null=True)
+    on_ground = BooleanField(default=False)
+    freq = IntegerField(default=0,blank=True,null=True)
+    message = CharField(max_length=255,blank=True,null=True)
+    state = IntegerField(default=0)
+    
+    @staticmethod
+    def _p2a(p):
+        return (p.x,p.y,p.z)
+    
+    def get_fg_freq(self): 
+        if not self.freq:
+            return None       
+        sf = str(self.freq)
+        return "%s.%s" % (sf[:3],sf[3:])
+    
+    def set_fg_freq(self,value):
+        if not value:
+            self.freq = None
+        self.freq = value.replace(".","")
         
+    def update_from_position(self,pos):
+        self.model = pos.model
+        self.date = timezone.now() # TODO: take it from time?
+        self.position = Point(pos.position)
+        self.orientation = Point(pos.orientation)
+        self.linear_accel = Point(pos.linear_accel)
+        self.linear_vel = Point(pos.linear_vel)
+        self.angular_vel = Point(pos.angular_vel)
+        self.angular_accel = Point(pos.angular_accel)
+        
+        # Properties
+        
+        self.set_fg_freq(pos.properties.get_value(PROP_FREQ))
+        self.order = pos.properties.get_value(PROP_OID)
+        self.request = pos.properties.get_value(PROP_REQUEST)
+        self.message = pos.properties.get_value(PROP_CHAT)
+        
+    def get_position_message(self):
+        pos = PosMsg()
+        pos.header.callsign=self.aircraft.callsign
+        pos.model = self.aircraft.model
+        pos.time = sim_time()
+        pos.lag = 0.1
+        pos.position=self._p2a(self.position)
+        pos.orientation=self._p2a(self.orientation)
+        pos.angular_vel=self._p2a(self.angular_vel)
+        pos.angular_accel=self._p2a(self.angular_accel)
+        pos.linear_vel=self._p2a(self.linear_vel)
+        pos.linear_accel=self._p2a(self.linear_accel)
+        
+        props = pos.properties
+        props.set_prop(PROP_FREQ,self.get_fg_freq())
+        # HACK
+        props.set_prop(302,self.linear_vel.x*50) # engine 0 rpms
+        props.set_prop(312,self.linear_vel.x*50) # engine 1 rpms
+        
+        if self.order:
+            props.set_prop(PROP_OID,str(self.order))
+        if self.request:
+            #llogger.debug("request=%s" % self.request)
+            props.set_prop(PROP_REQUEST,self.request)
+        # Landing gears
+        if self.on_ground or self.state == PlaneInfo.LANDING:
+            #props.set_prop(1004,1)
+            props.set_prop(201,1)
+            props.set_prop(211,1)
+            props.set_prop(221,1)
+        else:
+            #props.set_prop(1004,0)
+            props.set_prop(201,0)
+            props.set_prop(211,0)
+            props.set_prop(221,0)
+        props.set_prop(PROP_CHAT,self.message)
+        
+        return pos
+        
+    
 class Request(Model):
     date = DateTimeField()
     sender = ForeignKey(Aircraft, on_delete=models.CASCADE, related_name='requests')
     receiver = ForeignKey(Comm, on_delete=models.CASCADE, related_name='requests', null=True,blank=True)
     request = CharField(max_length=255)
-  
+    received = BooleanField(default=False) # by Server
+    processed = BooleanField(default=False) # by ATC or Server
+    
+    
     def get_param(self,param):
         r = self.get_request();
         return r.__dict__.get(param,None)
@@ -356,10 +460,11 @@ class Order(Model):
     sender = ForeignKey(Comm, on_delete=models.CASCADE, related_name='orders')
     order = CharField(max_length=255)
     message = CharField(max_length=255)
-    confirmed = BooleanField(default=False) # by ATC
+    sent_date = DateTimeField(null=True, blank=True)
+    expired = BooleanField(default=False) # by Server
     received = BooleanField(default=False) # by aircraft radio
     acked = BooleanField(default=False) # by pilot
-    lost = BooleanField(default=False) # never received
+    lost = BooleanField(default=False) # never received or acked
     
     PARAM_ORDER='ord'
     PARAM_FREQUENCY='freq'
@@ -425,6 +530,7 @@ class StartupLocation(Model):
     name = CharField(max_length=60)
     lat = DecimalField(default=0,max_digits=10,decimal_places=6)
     lon = DecimalField(default=0,max_digits=10,decimal_places=6)
+    #location = PointField(verbose_name="Location", null=True, blank=True)
     altitude = IntegerField(default=0)
     heading = FloatField(default=0)
     aircraft=ForeignKey(Aircraft,on_delete=models.CASCADE, blank=True,null=True, related_name='startup_location')

@@ -5,9 +5,10 @@ Created on Apr 16, 2015
 @author: bartacruz
 '''
 from django.contrib import admin
-from django.contrib.admin.options import ModelAdmin, TabularInline
+from django.contrib.admin.options import ModelAdmin, TabularInline,\
+    StackedInline
 from fgserver.models import Airport, Runway, Aircraft, Comm, StartupLocation,\
-    MetarObservation, Order
+    MetarObservation, Order, AircraftStatus
 from fgserver.ai.models import Circuit
 from django.contrib.admin.decorators import register
 
@@ -35,6 +36,10 @@ class StartupInline(TabularInline):
     model=StartupLocation
     extra=0
 
+class AircraftStatusInline(StackedInline):
+    model=AircraftStatus
+    extra=0
+
 class MetarObservationInline(TabularInline):
     model = MetarObservation
     extra = 0
@@ -51,9 +56,11 @@ class RunwayAdmin(ModelAdmin):
 
 class AircraftAdmin(ModelAdmin):
     list_display=('callsign','lat','lon','altitude','last_request','last_order','state')
+    inlines = [AircraftStatusInline]
 
 @register(Order)
 class OrderAdmin(ModelAdmin):
+    list_display=('id','date','sender','receiver','sent_date','expired','received','acked','lost')
     pass
 
 admin.site.register(Airport, AirportAdmin)

@@ -5,9 +5,14 @@ Created on Apr 16, 2015
 @author: bartacruz
 '''
 from xdrlib import Packer
-from fgserver import llogger, settings
-import re
 
+import re
+import simplejson as json
+import logging
+from django.conf import settings
+from django.utils import timezone
+
+llogger = logging.getLogger(__name__)
 
 PROP_FREQ = 10001
 
@@ -18,6 +23,12 @@ PROP_ORDER = 10118
 PROP_CHAT2 = 10114
 
 PROP_OID=10110
+
+date_started = timezone.now()
+
+def sim_time():
+    return (timezone.now() - date_started).total_seconds()
+
 
 
 # FlightGear's MP messages properties.(from v2.12)
@@ -506,10 +517,14 @@ class PosMsg:
     linear_accel = [0, 0, 0]
     angular_accel = [0, 0, 0]
     sim_time = None
+    
     def __init__(self):
         self.header = Header()
         self.properties = PropertyData()
     
+    def toJson(self):
+        return json.dumps(self, default=lambda o: o.__dict__)
+
     def get_request(self):
         ''' gets the player's request '''
         r = self.get_property(PROP_REQUEST)

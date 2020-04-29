@@ -40,7 +40,7 @@ class Controller(object):
         lining = self.comm.airport.tags.filter(status=PlaneInfo.LINING_UP)
         
         runway = self.active_runway()
-        self.log("check_waiting:",landing,lined,short,lining)
+        self.debug("check_waiting:",landing,lined,short,lining)
         if lined.count():
             '''there's someone taking-off'''
             for ll in lined.all():
@@ -71,30 +71,25 @@ class Controller(object):
                     return self.check_waiting() #check again
         elif short.count() and not lining.count():
             s = short.first()
-            self.log("Short number",s.number)
+            self.debug("Short number",s.number)
             if s.number:
                 s.number=0
                 s.save()
-                self.log('No one landing and no one departing, let %s take off. %s,%s' % (s,s.id,s.number))
+                self.debug('No one landing and no one departing, let %s take off. %s,%s' % (s,s.id,s.number))
                 '''No one landing and no one departing, let them take off'''
                 self.manage(s.aircraft.requests.all().last())
         
     def log(self,*argv):
         fgserver.info(self.comm,*argv)
+        
+    def debug(self,*argv):
+        fgserver.debug(self.comm,*argv)
 
     def active_runway(self):
         return self.comm.airport.active_runway()
     def rwy_name(self):
         return self.comm.airport.active_runway().name
         
-    def next_order_date(self):
-        d=timezone.now()
-        if self.last_order_date:
-            d = max([self.last_order_date,d])
-        self.last_order_date= d + timedelta(seconds=randint(5,12))
-        #print "LAST ORDER DATE",self.last_order_date
-        return self.last_order_date
-    
     def manages(self,req):
         # TODO: possible security leak?. A plane can issue a request with '__init__', or destroy. 
         return req and hasattr(self,req)
@@ -110,7 +105,7 @@ class Controller(object):
     def get_tag(self,aircraft):
         tag,created = Tag.objects.get_or_create(airport=self.comm.airport,aircraft=aircraft)
         if created:
-            self.log(": Controller tag created for %s " % aircraft)
+            self.debug(": Controller tag created for %s " % aircraft)
         return tag
     
     def set_status(self,aircraft,status,number=None):
@@ -120,14 +115,14 @@ class Controller(object):
             tag.number=number
         tag.save()
         if created:
-            self.log("created", tag)
+            self.debug("created", tag)
         return tag
 
     def _init_response(self,request):
-        order = Order(sender=self.comm,receiver=request.sender,date=self.next_order_date())
+        order = Order(sender=self.comm,receiver=request.sender,date=timezone.now())
         order.add_param(Order.PARAM_AIRPORT,self.comm.airport.icao)
         order.add_param(Order.PARAM_RECEIVER,request.sender.callsign)
-        #self.log("init response devuelve",order)
+        #self.debug("init response devuelve",order)
         return order
     
     def manage(self,request):
@@ -137,18 +132,18 @@ class Controller(object):
             response = handler(request)
             threading.Thread(target=check_waiting,args=(self,)).start()    
         else:
-            self.log("Rerouting request")
+            self.debug("Rerouting request")
             response= self.reroute(request)
         
         if response:
                 response.save()
-                self.log("Order saved",response)
+                self.debug("Order saved",response)
                 return True
         return False
     
     def reroute(self,request):
         c = self.find_controller(request)
-        self.log("reroute: controller=%s" % c)
+        self.debug("reroute: controller=%s" % c)
         if c:
             response=self._init_response(request)
             response.add_param(Order.PARAM_ORDER,alias.TUNE_TO)
@@ -165,10 +160,14 @@ class Controller(object):
         tag=self.get_tag(request.sender)
         tag.ack_order=request.get_request().laor
         tag.save()
+        order = tag.aircraft.orders.filter(received=True).last()
+        if order.get_instruction() == tag.ack_order:
+            self.log("Orden %s acked" % order)
+            order.acked = True
+            order.save()
         
     def tunein(self,request):
         response=self._init_response(request)
-        response.date = timezone.now() # inmediate
         response.message = ""
         response.add_param(Order.PARAM_CONTROLLER,self.comm.identifier)
         response.add_param(Order.PARAM_ORDER, alias.TUNE_OK)
@@ -177,10 +176,10 @@ class Controller(object):
     
     def reset(self,request):
         # TODO: Eeeewwww! change this!
-        Order.objects.filter(receiver=request.sender, confirmed=True).update(confirmed=False)
+        Order.objects.filter(receiver=request.sender, received=False).update(expired=True,lost=True)
         
     def repeat(self,request):
-        order = Order.objects.filter(receiver=request.sender, confirmed=True).order_by('-date').first()
+        order = Order.objects.filter(receiver=request.sender).exclude(sent_date=None).order_by('-date').first()
         response=self._init_response(request)
         rep = order.get_param(Order.PARAM_REPEAT,0) +1
         response._order = order._order
@@ -206,7 +205,7 @@ class Ground(Controller):
         self.pass_control(response, twr)
         count = self.comm.airport.tags.filter(status__in=(PlaneInfo.SHORT,PlaneInfo.TAXIING,)).count()
         count_others = self.comm.airport.tags.filter(status__in=[PlaneInfo.LINED_UP,PlaneInfo.LINING_UP, PlaneInfo.DEPARTING,PlaneInfo.LANDING]).count()
-        self.log("readytaxi",count,count_others)
+        self.debug("readytaxi",count,count_others)
         if not self.master or count or count_others:
             response.add_param(Order.PARAM_HOLD, 1)
             response.add_param(Order.PARAM_SHORT, 1)
@@ -239,7 +238,7 @@ class Tower(Controller):
 
     def configure(self):
         Controller.configure(self)
-        self.log("creating helpers...")
+        self.debug("creating helpers...")
         self.helpers=[]
         self.helpers.append(Ground(self.comm))
         self.helpers.append(Departure(self.comm))
@@ -250,10 +249,10 @@ class Tower(Controller):
     def manage(self, request):
         if Controller.manage(self, request):
             return True
-        self.log("Trying with helpers")
+        self.debug("Trying with helpers")
         for c in self.helpers:
             if c.manages(request.get_request().req):
-                self.log("Helper found: %s " % c )
+                self.debug("Helper found: %s " % c )
                 return c.manage(request)
         return False
 
@@ -271,7 +270,7 @@ class Tower(Controller):
         count_others = self.comm.airport.tags.filter(status__in=[PlaneInfo.LINING_UP,PlaneInfo.LINED_UP, PlaneInfo.DEPARTING,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_FINAL,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_BASE]).exclude(aircraft=request.sender).count()
         tag = self.get_tag(request.sender)
         self.set_status(request.sender, PlaneInfo.SHORT,count)
-        self.log("holdingshort %s %s  %s %s %s" % (count_others,count,tag, tag.id,tag.number))
+        self.debug("holdingshort %s %s  %s %s %s" % (count_others,count,tag, tag.id,tag.number))
         if count_others or (tag.number and count) :
             response.add_param(Order.PARAM_ORDER, alias.WAIT)
             response.add_param(Order.PARAM_HOLD, 1)
@@ -384,7 +383,7 @@ class Departure(Controller):
         response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
         count = self.comm.airport.tags.filter(status=PlaneInfo.SHORT).count()
         count_others = self.comm.airport.tags.filter(status__in=[PlaneInfo.LINING_UP,PlaneInfo.LINED_UP,PlaneInfo.LANDING]).count()
-        self.log("readytaxi",count,count_others)
+        self.debug("readytaxi",count,count_others)
         if count or count_others:
             response.add_param(Order.PARAM_HOLD, 1)
             response.add_param(Order.PARAM_SHORT, 1)
@@ -426,7 +425,7 @@ class Approach(Controller):
         circp = self.comm.airport.tags.filter(status__in=(PlaneInfo.LANDING,PlaneInfo.CIRCUIT_FINAL,PlaneInfo.CIRCUIT_BASE,PlaneInfo.CIRCUIT_DOWNWIND,PlaneInfo.CIRCUIT_CROSSWIND,)).exclude(aircraft__callsign=request.sender.callsign).count()
         ph = get_heading_to(request.sender.get_position(),self.active_runway().get_position())
         s = angle_diff(ph,float(self.active_runway().bearing))
-        self.log("circp=%s, ph=%s, s=%s" % (circp,ph,s))
+        self.debug("circp=%s, ph=%s, s=%s" % (circp,ph,s))
         if circp or s > 40:
             # other planes in circuit or not straight of rwy, must join.
             response.add_param(Order.PARAM_ORDER, alias.JOIN_CIRCUIT)
@@ -448,7 +447,9 @@ class Approach(Controller):
         return self.inbound(request)
         
 def check_waiting(tower):
+    llogger.debug("CHECK_WAITING")
     time.sleep(3)
+    llogger.debug("END CHECK_WAITING")
     tower.check_waiting()
     
 

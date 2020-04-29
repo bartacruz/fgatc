@@ -3,93 +3,21 @@ Created on 24 de abr. de 2017
 
 @author: julio
 '''
-from fgserver.helper import Position, get_distance, get_heading_to, Vector3D,\
-    move, normdeg, Quaternion, geod2cart, normalize, say_number,\
-    get_heading_to_360, short_callsign
-from fgserver.messages import PosMsg, PROP_CHAT, PROP_OID, alias, PROP_FREQ
-from fgserver import units, get_controllers
-from fgserver.units import FT
-from fgserver.models import Aircraft, Request, Airport, Order, Comm
-from django.utils import timezone
-from datetime import timedelta
-from random import randint, random
-import fgserver
-
-
-
-class PlaneInfo():
+from fgserver.helper import Position, get_heading_to_360, short_callsign,\
+    move, normdeg, Quaternion, normalize, say_number
     
+from fgserver.messages import PosMsg, PROP_CHAT, PROP_OID, alias, PROP_FREQ
+from fgserver.models import Request, Order, Comm, AircraftStatus
+from django.utils import timezone
+from random import randint
+import fgserver
+from fgserver.ai.common import PlaneInfo
+from fgserver import units
+from django.contrib.gis.geos.point import Point
 
-    DEFAULT_MODEL="Aircraft/c310/Models/c310-dpm.xml"
 
-    STOPPED = 1
-    PUSHBACK = 2
-    TAXIING = 3
-    DEPARTING = 4
-    TURNING = 5
-    CLIMBING = 6
-    CRUISING = 7
-    APPROACHING = 8
-    LANDING = 9
-    TOUCHDOWN = 10
-    CIRCUIT_CROSSWIND=11
-    CIRCUIT_DOWNWIND=12
-    CIRCUIT_BASE=13
-    CIRCUIT_STRAIGHT=14
-    CIRCUIT_FINAL=15
-    SHORT=16
-    LINED_UP=17
-    TUNNED=18
-    PARKING = 19
-    LINING_UP=20
-    CIRCUITS=[CIRCUIT_CROSSWIND,CIRCUIT_DOWNWIND,CIRCUIT_BASE,CIRCUIT_STRAIGHT,CIRCUIT_FINAL]
-    CHOICES = (
-        (0,'None'),               
-        (STOPPED,'Stopped'),
-        (PUSHBACK,'Pushback'),
-        (TAXIING,'Taxiing'),
-        (DEPARTING,'Departing'),
-        (TURNING,'Turning'),
-        (CLIMBING,'Climbing'),
-        (CRUISING,'Cruising'),
-        (APPROACHING,'Approaching'),
-        (LANDING,'Landing'),
-        (TOUCHDOWN,'Touchdown'),
-        (CIRCUIT_CROSSWIND,'Crosswind'),
-        (CIRCUIT_DOWNWIND,'Downwind'),
-        (CIRCUIT_BASE,'Base'),
-        (CIRCUIT_STRAIGHT,'Straight'),
-        (CIRCUIT_FINAL,'Final'),
-        (SHORT,'Short of runway'),
-        (LINED_UP,'Lined up'),
-        (TUNNED,'Tunned'),
-        (PARKING,'Parking'),
-        (LINING_UP,'Lining up'),
-    )
-    CHOICES_STR = (
-        ('0','None'),               
-        (str(STOPPED),'Stopped'),
-        (str(PUSHBACK),'Pushback'),
-        (str(TAXIING),'Taxiing'),
-        (str(DEPARTING),'Departing'),
-        (str(TURNING),'Turning'),
-        (str(CLIMBING),'Climbing'),
-        (str(CRUISING),'Cruising'),
-        (str(APPROACHING),'Approaching'),
-        (str(LANDING),'Landing'),
-        (str(TOUCHDOWN),'Touchdown'),
-        (str(CIRCUIT_CROSSWIND),'Crosswind'),
-        (str(CIRCUIT_DOWNWIND),'Downwind'),
-        (str(CIRCUIT_BASE),'Base'),
-        (str(CIRCUIT_STRAIGHT),'Straight'),
-        (str(CIRCUIT_FINAL),'Final'),
-        (str(SHORT),'Short of runway'),
-        (str(LINED_UP),'Lined up'),
-        (str(TUNNED),'Tunned'),
-        (str(PARKING),'Parking'),
-        (str(LINING_UP),'Lining up'),
-    )
-         
+
+
 class AIPlane():
     circuit = None
     state = 0
@@ -108,6 +36,7 @@ class AIPlane():
     target_altitude=0
     comm=None
     last_order=None
+    request = None
         
     def callsign(self):
         return self.circuit.aircraft.callsign
@@ -200,6 +129,7 @@ class AIPlane():
             request.receiver=self.comm
         self.log("Sending request",request,msg)
         request.save()
+        self.request = request
 
     def check_request(self,old_state=None):
         self.log("check_request",self.waypoint.type, self.state)
@@ -241,7 +171,7 @@ class AIPlane():
             msg="%s Tower, %s, holding short of runway %s" % (self.comm.identifier, callsign,self.say_runway())
             self.send_request(req,msg)
         elif self.state== PlaneInfo.STOPPED and self.waypoint.type == WayPoint.PARKING:
-            req = "req=tunein;freq=%s" % self.comm.get_FGfreq()
+            req = "req=tunein"
             self.send_request(req,'',)
         elif self.state== PlaneInfo.CLIMBING:
             req = "req=leaving;apt=%s" % self.airport().icao
@@ -334,6 +264,7 @@ class AIPlane():
             props.set_prop(PROP_CHAT,self.message)
         
     def get_pos_message(self):
+        raise DeprecationWarning("Llamado a get_message")
         pos = PosMsg()
         pos.header.callsign=self.callsign()
         pos.model = self.aircraft().model
@@ -353,29 +284,26 @@ class AIPlane():
         a.lon = self.position.y
         a.altitude = self.position.z
         a.heading= self.course
+        try:
+            status = a.status
+        except:
+            status = AircraftStatus(aircraft=a)
+        status.position= Point(self.position.get_array_cart())
+        status.orientation = Point(self.orientation.get_array())
+        status.linear_vel = Point(self.linear_velocity.get_array_cart())
+        status.angular_vel = Point([0,0,0])
+        status.linear_accel = Point([0,0,0])
+        status.angular_accel = Point([0,0,0])
+        status.state=self.state
+        if self.request:
+            status.request = self.request.request
+        if self.last_order:
+            status.order = self.last_order.id
+        status.freq = self.comm.frequency
+        status.message = self.message
+        status.on_ground = self.on_ground()
+        return status
         #print "upd",a.lat,a.lon,a.altitude,a.heading
         
         
 
-class StatePlane(object):
-    states = ['stopped','pushback','taxiing','departing','turn'] 
-    STOPPED = 1
-    PUSHBACK = 2
-    TAXIING = 3
-    DEPARTING = 4
-    TURNING = 5
-    CLIMBING = 6
-    CRUISING = 7
-    APPROACHING = 8
-    LANDING = 9
-    TOUCHDOWN = 10
-    CIRCUIT_CROSSWIND=11
-    CIRCUIT_DOWNWIND=12
-    CIRCUIT_BASE=13
-    CIRCUIT_STRAIGHT=14
-    CIRCUIT_FINAL=15
-    SHORT=16
-    LINED_UP=17
-    TUNNED=18
-    PARKING = 19
-    LINING_UP=20

@@ -11,6 +11,7 @@ from scipy import rint
 from random import randint
 from fgserver import units, llogger
 from fgserver.units import ERAD, RAD, EPSILON
+from pyproj.geod import Geod
 
 
 LETTERS = [
@@ -22,6 +23,7 @@ LETTERS = [
 ]
 NUMBERS=['zeero','one','too','tree','fower','fife','six','seven','eight','niner']
 
+GEOID = Geod(ellps='WGS84')
 
 def say_char(c):
     cs = str(c)
@@ -238,9 +240,13 @@ class Position(Vector3D):
     def to_cart(self):
         c = self.get_array_cart()
         return Position(c[0], c[1], c[2])
+    
     @staticmethod
     def fromV3D(v3d):
         return Position(v3d.x, v3d.y, v3d.z)
+    
+    def __str__(self):
+        return self.__unicode__()
     
 class Quaternion():
     w = 0

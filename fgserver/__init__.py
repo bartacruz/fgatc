@@ -15,6 +15,10 @@ llogger = logging.getLogger("fgserver")
 llogger.setLevel(logging.DEBUG)
 
 
+from .celery import app as celery_app
+
+__all__ = ('celery_app',)
+
 def info(sender,*argv):
     msg = "[%s]" % sender
     for arg in argv:
