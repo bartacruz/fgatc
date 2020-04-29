@@ -167,7 +167,7 @@ class PacketData:
             elif prop_type == FgmsType.V2_ShortFloat1:
                 right_value = scaled_float(prop_value, 10)
             elif prop_type == FgmsType.V1_String:
-                right_value = len(prop_value)
+                right_value = len(prop_value or "")
             else: # ATC-pie should not need: V2_ShortFloat3, V2_ShortFloat4
                 raise ValueError('Unhandled tight packing of prop %d' % prop_code)
             pint = prop_code << 16 | right_value

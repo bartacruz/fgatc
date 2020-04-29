@@ -28,7 +28,7 @@ def process_msg(pos):
         try:
             aircraft = Aircraft.objects.get(callsign=pos.callsign())
         except Aircraft.DoesNotExist:
-            llogger.info("Creating new Aircraft %s" % aircraft)
+            llogger.info("Creating new Aircraft %s" % pos.callsign())
             aircraft=Aircraft(callsign=pos.callsign())
             aircraft.save()
         try: 
@@ -37,7 +37,7 @@ def process_msg(pos):
             llogger.info("Creating new AircraftStatus for %s" % aircraft)
             status = AircraftStatus(aircraft=aircraft)
             status.save()
-        llogger.debug("Status %s from %s on %s,  order=%s,  updated=%s" % (status.id, aircraft, status.freq, status.order, status.date)) 
+        #llogger.debug("Status %s from %s on %s,  order=%s,  updated=%s" % (status.id, aircraft, status.freq, status.order, status.date)) 
         freq = pos.get_value(messages.PROP_FREQ)
         if not freq:
             #llogger.debug("Ignoring request without freq from %s" % aircraft)
@@ -113,7 +113,7 @@ def get_pos_msg(airport):
     msg.properties.set_prop(messages.PROP_CHAT2,chat2 )
     
     try:
-        status = AircraftStatus.objects.get(aircraft__callsign=airport.icao)
+        status,created = AircraftStatus.objects.get_or_create(aircraft__callsign=airport.icao)
         status.order = str(order.id)
         status.freq = order.sender.frequency
         status.date = timezone.now()

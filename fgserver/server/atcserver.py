@@ -12,7 +12,7 @@ from django.utils import timezone
 
 django.setup()
 
-from fgserver.models import Airport, Order, Aircrafts
+from fgserver.models import Airport, Order, Aircrafts, AircraftStatus
 from fgserver.messages import PosMsg, sim_time
 from fgserver import llogger, settings, setInterval
 from fgserver.server.fgmpie import pie_msg, PacketData
@@ -62,7 +62,10 @@ def send_msg():
     for plan in FlightPlan.objects.filter(enabled=True):
         try:
             pos = plan.aircraft.status.get_position_message()
-            #llogger.debug("Sending pos for AI plane %s" % pos)
+            server.outgoing.put(pos)
+        except AircraftStatus.DoesNotExist:
+            AircraftStatus(aircraft=plan.aircraft, date=timezone.now()).save()
+            pos = plan.aircraft.status.get_position_message()
             server.outgoing.put(pos)
         except:
             llogger.exception("In loop")
