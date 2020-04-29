@@ -10,12 +10,14 @@ from django.utils import timezone
 from fgserver.messages import alias
 from fgserver.ai.planes import PlaneInfo
 from random import randint
-from fgserver import get_qnh, units, llogger, get_controllers
+from fgserver import get_qnh, units, get_controllers
 from fgserver.helper import get_distance, get_heading_to, angle_diff, get_heading_to_360
-from datetime import timedelta
 import time
 import threading
 from fgserver.atc.functions import get_message
+import logging
+
+llogger = logging.getLogger(__name__)
 
 class Controller(object):
     comm=None
@@ -259,6 +261,11 @@ class Tower(Controller):
     def clearrw(self,request):
         response=self._init_response(request)
         response.add_param(Order.PARAM_ORDER, alias.TAXI_PARK)
+        pk = self.comm.airport.startups.filter(aircraft=request.sender).first()
+        if not pk:
+            pk=self.comm.airport.startups.filter(aircraft=None).first()
+        if pk:
+            response.add_param(Order.PARAM_PARKING, pk.id)
         response.message=get_message(response)
         self.set_status(request.sender, PlaneInfo.PARKING)
         return response

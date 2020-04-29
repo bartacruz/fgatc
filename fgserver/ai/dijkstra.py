@@ -173,9 +173,8 @@ def shit_to_deg(val):
     return res
 
 #icao = "SADF"
-def dj_waypoints(runway, start, endp):
+def dj_waypoints(icao, start, endp):
     print('dj_waypoints from %s to %s' % (start,endp))
-    icao = runway.airport.icao
     root = ET.parse(os.path.join(settings.FGATC_FG_SCENERY,"Airports",icao[0],icao[1],icao[2],"%s.groundnet.xml" % icao))
     
     vstart = None

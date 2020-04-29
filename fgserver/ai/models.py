@@ -10,7 +10,7 @@ from django.db.models.base import Model
 from django.db.models.fields.related import ForeignKey
 from django.db.models.fields import CharField, FloatField, IntegerField,\
     BooleanField
-from fgserver.models import Airport, Aircraft, Order, Cache
+from fgserver.models import Airport, Aircraft, Order, Cache, StartupLocation
 from fgserver.ai.planes import AIPlane, PlaneInfo
 from fgserver.messages import alias
 from random import randint
@@ -34,9 +34,10 @@ class FlightPlan(Model):
     enabled = BooleanField(default=False)
         
     def get_handler(self):
-        if not hasattr(self, '_handler_instance'):
+        if not hasattr(self, '_handler'):
             handler_class=import_string(self.handler)
-            self._handler_instance = handler_class()
+            self._handler = handler_class(self)
+        return self._handler
          
     def update(self,time):
         self.get_handler().update(time)
@@ -55,7 +56,12 @@ class FlightPlan(Model):
         for arg in argv:
             msg += " %s" % arg
         llogger.info(msg)
-
+    
+    def debug(self,*argv):
+        msg = "[FP %s]" % self.name
+        for arg in argv:
+            msg += " %s" % arg
+        llogger.info(msg)
  
 class Circuit(FlightPlan):
     ''' A standard left-circuit over an airfield ''' 
@@ -73,14 +79,19 @@ class Circuit(FlightPlan):
         self._last_order=None
         self.aircraft.state=2
         self.runway = None
-        self.generate_waypoints()
+        self.waypoints.all().delete()
+        self.get_handler()
+        #self.generate_waypoints()
+        
         self.aiplane = AIPlane(self)
+        self.aiplane.position = self.waypoint().get_position()
         self.aiplane.update_aircraft()
         self.aircraft.save()
-        self.log(self.name,": init called")
+        self.aircraft.status.save()
+        self.debug(self.name,": init called")
     
     def _wait(self,seconds):
-        self.log("Waiting %s seconds" % seconds)
+        self.debug("Waiting %s seconds" % seconds)
         self._waiting = seconds
         
     def started(self):
@@ -110,6 +121,7 @@ class Circuit(FlightPlan):
             s1.save()
         return s1
 
+    
     def generate_waypoints(self, short=True):
         self.waypoints.all().delete()
         if not self.runway:
@@ -120,20 +132,20 @@ class Circuit(FlightPlan):
         left = normdeg(straight-90)
         right = normdeg(straight+90)
         apalt=float(self.airport.altitude*units.FT+2)
-        self.log("runway length", runway.length,runway.length/2)
-        self.log("Short? %s" % short)
+        self.debug("runway length", runway.length,runway.length/2)
+        self.debug("Short? %s" % short)
         rwystart = move(runway.position(), reverse, runway.length/2,apalt)
         rwyend = move(runway.position(), straight, runway.length/2,apalt)
         s1 = self.get_startup_location()
         
         if s1:
             position = s1.get_position()
-            self.log("STARTUP LOCATION=%s" % s1)
+            self.debug("STARTUP LOCATION=%s" % s1)
         else:
             position = move(rwystart,left,runway.width,apalt)
         p1 = Point((position.y,position.x))
         p2 = Point((rwystart.y,rwyend.x))
-        taxi = dj_waypoints(runway,p1, p2)
+        taxi = dj_waypoints(self.airport.icao,p1, p2)
         self.create_waypoint(position, "FParking %s"%runway.name, WayPoint.PARKING, PlaneInfo.STOPPED)
         if taxi and len(taxi) > 2:
             
@@ -169,12 +181,12 @@ class Circuit(FlightPlan):
         position = move(position,normdeg(straight+190),self.radius*0.6,apalt+self.altitude)
         self.create_waypoint(position, "Cruising 5", WayPoint.POINT, PlaneInfo.CRUISING)
         position = move(position,normdeg(straight+230),self.radius*0.6,apalt+self.altitude)
-        self.create_waypoint(position, "Cruising 6", WayPoint.POINT, PlaneInfo.CRUISING)
+        self.create_waypoint(position, "Cruising 6", WayPoint.POINT, PlaneInfo.APPROACHING)
         position = move(rwyend,right,self.radius,apalt+self.altitude+1000*units.FT)
         self.create_waypoint(position, "Crosswind %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_CROSSWIND)
         position = move(position,left,self.radius*2,apalt+self.altitude)
         self.create_waypoint(position, "Downwind %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_DOWNWIND)
-        position = move(position,reverse,self.radius+runway.length*units.FT,apalt+self.altitude)
+        position = move(position,reverse,self.radius*2+runway.length,apalt+self.altitude)
         self.create_waypoint(position, "Base %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_BASE)
         position = move(position,right,self.radius,apalt+500*units.FT)
         self.create_waypoint(position, "Final %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_FINAL)
@@ -187,7 +199,7 @@ class Circuit(FlightPlan):
         self.create_waypoint(position, "Taxi 2 %s"%runway.name, WayPoint.TAXI, PlaneInfo.TAXIING)
         position = move(rwystart,left,30*units.FT,apalt)
         self.create_waypoint(position, "Parking %s"%runway.name, WayPoint.PARKING, PlaneInfo.STOPPED)
-        self.log("waypoints created")
+        self.debug("waypoints created")
 
     def waypoint(self):
         if self.waypoints.all().count() <= self._waypoint:
@@ -210,10 +222,10 @@ class Circuit(FlightPlan):
             self.log("ERROR: aiplane is null!")
             return
         
-        if self._waiting:
+        if self._waiting or plane.state == PlaneInfo.STOPPED:
             self._waiting= max(0,self._waiting-dt)
             self._time=time
-            llogger.debug("WAITING: %s" % self._waiting)
+            llogger.debug("WAITING on %s: %s" % (plane.get_state_label(),self._waiting,))
             return
         wp = self.waypoint()
         if not wp:
@@ -230,11 +242,11 @@ class Circuit(FlightPlan):
             nang = angle_diff(course, ncourse) 
             seconds_before = nang/plane.turn_rate+2
         turn_dist = dist_to - dist*seconds_before/(dt*2)
-        #self.log("sec before",seconds_before,'turn_dist',turn_dist)
+        #self.debug("sec before",seconds_before,'turn_dist',turn_dist)
         step = False
         if dist >= abs(turn_dist):
-            self.log("reached waypoint %s" % wp)
-            self.log(nang,seconds_before,dist,dist_to,turn_dist)
+            self.debug("Reached waypoint %s" % wp)
+            self.debug(nang,seconds_before,dist,dist_to,turn_dist)
             
             dist = min(dist,dist_to)
             #plane.course = course
@@ -245,13 +257,13 @@ class Circuit(FlightPlan):
             if wp.type == WayPoint.HOLD:
                 self._wait(5)
             self._waypoint += 1
-            self.log("Next wp:",self._waypoint,self.waypoint())
+            self.debug("Next wp:",self._waypoint,self.waypoint())
             if self.waypoint():
                 plane.waypoint = self.waypoint()
                 plane.target_altitude=self.waypoint().get_position().z
-                self.log("Next course: ",course,plane.course,plane.target_course,plane.next_course(0.1))
-#                self.log("target altitude %sm" % plane.target_altitude)
-#                self.log("heading",plane.course,plane.heading_to(wp.get_position()))
+                self.debug("Next course: ",course,plane.course,plane.target_course,plane.next_course(0.1))
+#                self.debug("target altitude %sm" % plane.target_altitude)
+#                self.debug("heading",plane.course,plane.heading_to(wp.get_position()))
             else:
                 self.circuit.end()
         self._time = time
@@ -260,7 +272,7 @@ class Circuit(FlightPlan):
             status = plane.update_aircraft()
             status.date = timezone.now()
             status.save()
-            #self.log("status saved",status.id, status.freq, status.order)
+            #self.debug("status saved",status.id, status.freq, status.order)
         except:
             llogger.exception("Updating plane status")
 #         pos =  plane.get_pos_message()
@@ -289,7 +301,7 @@ class Circuit(FlightPlan):
                     self.aiplane.check_request()
             elif order == alias.TUNE_TO:
                 freq = instance.get_param(Order.PARAM_FREQUENCY).replace('.','')
-                self.log("retunning radio to %s" % freq)
+                self.debug("retunning radio to %s" % freq)
                 comm = self.airport.comms.filter(frequency=freq).first()
                 self.aiplane.comm=comm
                 req = "req=tunein;freq=%s" % comm.get_FGfreq()
@@ -298,21 +310,29 @@ class Circuit(FlightPlan):
                 rwy = instance.get_param(Order.PARAM_RUNWAY)
                 if not self.runway or self.runway.name != rwy or instance.short():
                     ''' the ATC refered us to a different runway. Obey '''
-                    self.log("regenerating flight plan for ATC's assigned runway %s " % rwy)
+                    self.debug("Generating waypoints for ATC's assigned runway %s " % rwy)
                     self.runway = self.airport.runways.get(name=rwy)
-                    self.generate_waypoints(instance.short())
+                    self._handler.generate_taxi_waypoints(self.aiplane.position,self.runway,instance.short())
+                    #self.generate_waypoints(instance.short())
                     self.aiplane.waypoint = self.waypoint()
-                    self.log("Setting aiplane waypoint to %s " % self.aiplane.waypoint)
+                    self.debug("Setting aiplane waypoint to %s " % self.aiplane.waypoint)
                     
                 self.aiplane.set_state(PlaneInfo.TAXIING)
                 self._wait(10)
             elif order == alias.CLEAR_TK:
+                self._handler.generate_circuit_waypoints(self.runway)
                 if self.aiplane.state == PlaneInfo.SHORT:
                     self.aiplane.set_state(PlaneInfo.LINING_UP)
                 else:
                     self.aiplane.set_state(PlaneInfo.DEPARTING)
                 self._wait(10)
-    
+            elif order in [alias.CIRCUIT_STRAIGHT, alias.JOIN_CIRCUIT]:
+                rwy = instance.get_param(Order.PARAM_RUNWAY)
+                if not self.runway or self.runway.name != rwy:
+                    self.debug("Generating waypoints for ATC's assigned runway approach %s " % rwy)
+                    self.runway = self.airport.runways.get(name=rwy)
+                self._handler.generate_landing_waypoints(self.runway)
+            
             else:
                 self.log("Circuit",self.aircraft.callsign,', order ignored', instance)
         except:
@@ -356,7 +376,12 @@ class Circuit(FlightPlan):
             msg = re.sub(r'{hld}',' and hold',msg)
         if order.get_param(Order.PARAM_SHORT):
             msg = re.sub(r'{short}',' short',msg)
-        
+        if order.get_param(Order.PARAM_PARKING):
+            try:
+                startup = StartupLocation.objects.get(pk=order.get_param(Order.PARAM_PARKING))
+                msg = re.sub(r'{park}',startup.name.replace("_"," "),msg)
+            except StartupLocation.DoesNotExist:
+                pass
         if order.get_param(Order.PARAM_QNH):
             msg = re.sub(r'{qnh}','. QNH %s' % say_number(order.get_param(Order.PARAM_QNH)),msg)
 

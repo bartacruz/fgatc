@@ -385,10 +385,10 @@ class AircraftStatus(Model):
         
         # Properties
         
-        self.set_fg_freq(pos.properties.get_value(PROP_FREQ))
-        self.order = pos.properties.get_value(PROP_OID)
-        self.request = pos.properties.get_value(PROP_REQUEST)
-        self.message = pos.properties.get_value(PROP_CHAT)
+        self.set_fg_freq(pos.properties.get_value(PROP_FREQ)) or ""
+        self.order = pos.properties.get_value(PROP_OID) or ""
+        self.request = pos.properties.get_value(PROP_REQUEST) or ""
+        self.message = pos.properties.get_value(PROP_CHAT) or ""
         
     def get_position_message(self):
         pos = PosMsg()

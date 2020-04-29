@@ -74,7 +74,7 @@ class AIPlane():
             self.target_vertical_speed=1    
         elif state == PlaneInfo.TAXIING or (state==PlaneInfo.SHORT and not laor.short()) or state == PlaneInfo.LINING_UP:
             self.turn_rate = 50
-            self.speed = 10*units.KNOTS
+            self.speed = 20*units.KNOTS
             self.target_vertical_speed=1
         elif state == PlaneInfo.DEPARTING or state==PlaneInfo.LINED_UP:
             self.turn_rate = 3
@@ -120,6 +120,10 @@ class AIPlane():
             runway = self.airport().active_runway()
         return say_number(runway.name)
     
+    def get_state_label(self,state=None):
+        state = state or self.state
+        return PlaneInfo.CHOICES[state][1]
+        
     def send_request(self,req,msg):
         self.message=msg
         req = "%s;freq=%s;mid=%s" % (req,self.comm.get_FGfreq(),randint(1000,9999))
@@ -141,6 +145,10 @@ class AIPlane():
         if self.state == PlaneInfo.CIRCUIT_CROSSWIND:
             req = "req=crosswind;apt=%s" % self.airport().icao
             msg="%s Tower, %s, Crosswind for runway %s" % (self.comm.identifier, callsign,self.say_runway())
+            self.send_request(req,msg)
+        elif self.state == PlaneInfo.APPROACHING:
+            req = "req=inbound;apt=%s" % self.airport().icao
+            msg="%s, %s, for inbound approach" % (self.comm.identifier, callsign)
             self.send_request(req,msg)
         elif self.state == PlaneInfo.CIRCUIT_DOWNWIND:
             req = "req=downwind;apt=%s" % self.airport().icao
