@@ -21,6 +21,8 @@ from django.utils import timezone
 from django.conf import settings
 from django.utils.module_loading import import_string
 import logging
+from .dijkstra import dj_waypoints
+from django.contrib.gis.geos.point import Point
 
 llogger = logging.getLogger(__name__)
 
@@ -66,8 +68,8 @@ class Circuit(FlightPlan):
     def init(self):
         self._waypoint=0
         self._time=0
-        self._waiting=randint(30,180)
-        #self._waiting=5
+        #self._waiting=randint(30,180)
+        self._waiting=10
         self._last_order=None
         self.aircraft.state=2
         self.runway = None
@@ -102,13 +104,13 @@ class Circuit(FlightPlan):
     def get_startup_location(self):     
         s1 = self.airport.startups.filter(aircraft = self.aircraft).first()
         if not s1:
-            s1 = self.airport.startups.filter(active=True,aircraft=None).first()
+            s1 = self.airport.startups.filter(active=True,aircraft=None).order_by("?").first()
         if s1:
             s1.aircraft=self.aircraft
             s1.save()
         return s1
 
-    def generate_waypoints(self):
+    def generate_waypoints(self, short=True):
         self.waypoints.all().delete()
         if not self.runway:
             self.runway = self.airport.active_runway()
@@ -119,20 +121,37 @@ class Circuit(FlightPlan):
         right = normdeg(straight+90)
         apalt=float(self.airport.altitude*units.FT+2)
         self.log("runway length", runway.length,runway.length/2)
+        self.log("Short? %s" % short)
         rwystart = move(runway.position(), reverse, runway.length/2,apalt)
         rwyend = move(runway.position(), straight, runway.length/2,apalt)
         s1 = self.get_startup_location()
+        
         if s1:
             position = s1.get_position()
             self.log("STARTUP LOCATION=%s" % s1)
         else:
             position = move(rwystart,left,runway.width,apalt)
+        p1 = Point((position.y,position.x))
+        p2 = Point((rwystart.y,rwyend.x))
+        taxi = dj_waypoints(runway,p1, p2)
         self.create_waypoint(position, "FParking %s"%runway.name, WayPoint.PARKING, PlaneInfo.STOPPED)
-        position = move(rwystart,left,runway.width*1.2,apalt)
-        self.create_waypoint(position, "Short %s"%runway.name, WayPoint.HOLD, PlaneInfo.SHORT)
+        if taxi and len(taxi) > 2:
+            
+            for way in taxi[:-2]:
+                p=Position(way.point.y,way.point.x)
+                self.create_waypoint(p, "Taxi %s" % way.id, WayPoint.TAXI, PlaneInfo.TAXIING)
+            position=Position(taxi[-2].point.y, taxi[-2].point.x)
+        else:
+            position = move(rwystart,left,runway.width*1.2,apalt)
+        if short:
+            sstate = PlaneInfo.SHORT
+        else:
+            sstate = PlaneInfo.TAXIING
+        self.create_waypoint(position, "Short %s"%runway.name, WayPoint.HOLD, sstate)
+                
         position = move(rwystart,straight,30,apalt)
         self.create_waypoint(position, "Hold %s"%runway.name, WayPoint.HOLD, PlaneInfo.LINED_UP)
-        position = move(rwystart,straight,runway.length*0.75,apalt)
+        position = move(rwystart,straight,runway.length*0.7,apalt)
         self.create_waypoint(position, "Rotate %s"%runway.name, WayPoint.RWY, PlaneInfo.DEPARTING)
         # get to 10 meters altitude after exit the runway, then start climbing
         position = elevate(rwyend,apalt+10)
@@ -277,11 +296,11 @@ class Circuit(FlightPlan):
                 threading.Thread(target=self.aiplane.send_request,args=(req,'',)).start()
             elif order in [alias.TAXI_TO, alias.LINEUP]:
                 rwy = instance.get_param(Order.PARAM_RUNWAY)
-                if not self.runway or self.runway.name != rwy:
+                if not self.runway or self.runway.name != rwy or instance.short():
                     ''' the ATC refered us to a different runway. Obey '''
                     self.log("regenerating flight plan for ATC's assigned runway %s " % rwy)
                     self.runway = self.airport.runways.get(name=rwy)
-                    self.generate_waypoints()
+                    self.generate_waypoints(instance.short())
                     self.aiplane.waypoint = self.waypoint()
                     self.log("Setting aiplane waypoint to %s " % self.aiplane.waypoint)
                     
