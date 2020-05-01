@@ -56,7 +56,7 @@ class Cache(object):
     @classmethod
     def is_mapped(cls,map_id):
         cls.check()
-        return cls._map.has_key(map_id)
+        return map_id in cls._map
 
     @classmethod
     def get_mapped(cls,map_id):
@@ -84,7 +84,7 @@ class Cache(object):
     @classmethod
     def has(cls,instance_id):
         cls.check()
-        return cls._store.has_key(instance_id)
+        return instance_id in cls._store
 
     @classmethod
     def keys(cls):
@@ -426,7 +426,7 @@ class AircraftStatus(Model):
             props.set_prop(211,0)
             props.set_prop(221,0)
         props.set_prop(PROP_CHAT,self.message)
-        
+#         print("Returning pos %s" % pos )
         return pos
         
     
