@@ -1,0 +1,324 @@
+var my_callsign = getprop("/sim/multiplay/callsign");
+var root="/sim/fgatc";
+var orders={};
+var messages={};
+var requests={};
+
+var controller = nil;
+var airport = nil;
+var selected_runway = "";
+
+var channel_message ="sim/multiplay/generic/string[16]";
+var channel_message2 ="sim/multiplay/generic/string[14]";
+var channel_request ="sim/multiplay/generic/string[17]";
+var channel_order ="sim/multiplay/generic/string[18]";
+var channel_order2 ="sim/multiplay/generic/string[15]";
+var channel_oid = "sim/multiplay/generic/string[10]";
+
+var channel_freq ="sim/multiplay/transmission-freq-hz";
+var channel_atc_message="/sim/messages/atc";
+var channel_mp_message="/sim/messages/mp-plane";
+var channel_pilot_message="/sim/messages/pilot";
+
+var radio_on=0;
+var frequency_1 = nil;
+var frequency_2 = nil;
+
+var last_order = nil;
+
+var check_freq = func(freq) {
+	return (radio_on and (freq == frequency_1 or freq == frequency_2));
+}
+
+var check_models = func(){
+	foreach (var n; props.globals.getNode("ai/models", 1).getChildren("multiplayer")) {
+		if (!n.getNode("valid").getValue()) {
+			continue;
+		}
+		
+		var freq = n.getNode(channel_freq).getValue();
+			
+		var callsign = n.getNode("callsign").getValue();
+		var order = n.getNode(channel_order).getValue() or "";
+		var order2 = n.getNode(channel_order2).getValue() or "";
+		order = order ~ order2;
+				  
+		if (!contains(orders,callsign) or orders[callsign] != order) {
+		    orders[callsign]=order;
+		    porder = parse_order(order);
+		    if (!check_freq(freq)){
+		    	print(sprintf("[FGATC] Ignoring order not on my freq: %s; %s and %s: %s",freq,frequency_1,frequency_2, order));
+		    } else if (porder['to'] != my_callsign) {
+		    	print(sprintf("[FGATC] Ignoring order for other: %s; %s", porder['to'], order));
+		    } else {
+		    	print(sprintf("[FGATC] New order from %s; %s",callsign,order));
+		    	process_order(porder);
+		    }
+		    
+		}
+
+		var message = n.getNode(channel_message).getValue() or "";
+		var message2 = n.getNode(channel_message2).getValue() or "";
+		message = message ~ message2;
+		if (!contains(messages,callsign) or messages[callsign] != message) {
+		    
+		    messages[callsign]=message;
+		    if (check_freq(freq)){
+		    	print(sprintf("[FGATC] New message from %s",callsign,message));
+		    	if ( contains(n.getNode("sim/model/path"),"ATC") ) {
+		    		setprop(channel_atc_message,message);
+		    	} else {
+		    		setprop(channel_atc_message,message);
+		    	}
+		    } else {
+		    	print(sprintf("[FGATC] Ignoring message not on my freq: %s; %s and %s: %s",freq,frequency_1,frequency_2, message));
+		    }
+		}
+	}
+}
+
+var set_radio = func(apt=nil,contr=nil) {
+	airport = apt;
+	setprop(root ~ "/airport", apt == nil ? '':apt);
+	controller = contr;
+	setprop(root ~ "/controller", controller == nil ? '':controller);
+	if (controller) {
+		screen.log.write(sprintf("Tunned to %s", controller),0.7, 1.0, 0.7);
+	}
+}
+
+var set_frequency = func(node) {
+	print("[FGATC] Set frequency");
+	if ( ! getprop("/systems/electrical/outputs/comm")) {
+		radio_on=0;
+		set_radio();
+		return;
+	}
+	radio_on=1;
+	var f1 = getprop("/instrumentation/comm/frequencies/selected-mhz");
+	var comm1 = getprop("/instrumentation/comm/power-btn");
+	var f2 = getprop("/instrumentation/comm[1]/frequencies/selected-mhz");
+	var comm2 = getprop("/instrumentation/comm[1]/power-btn");
+	print(sprintf("[FGATC] Set frequency %s,%s,&s,%s", comm1,f1,comm2,f2));
+	
+	if (comm1 and f1 != frequency_1) {
+		print(sprintf("[FGATC] New frequency on COM1: %s (old: %s)",f1,frequency_1));
+		frequency_1 = f1;
+		sendmessage('tunein',0);
+	}
+	if (comm2 and f2 != frequency_2) {
+		print(sprintf("[FGATC] New frequency on COM2: %s (old: %s)",f2,frequency_2));
+		frequency_2 = f2;
+	}
+}
+
+var parse_order = func(order=nil) {
+	var aux=sprintf("return %s",order);
+	var ff = call(compile,[aux],var err=[]);
+	if (size(err)) {
+		print(sprintf("[FGATC]: ERROR processing order %s: %s", order,err));
+		return nil;
+	}
+	return ff();
+}
+
+var process_order = func(order=nil) {
+	if (order == nil or order == "") {
+		print("[FGATC]: Empty order. returning");
+		return;
+	}
+	last_order = order;
+	if (last_order['rwy']){
+		selected_runway=last_order['rwy'];
+	}
+	
+	if (last_order['ord']=='tuneok') {
+		set_radio(last_order['apt'],last_order['atc']);
+	} else {
+		print( sprintf("[FGATC] Dummy %s (not sent)",parse_message("roger") ) );
+	}
+	setprop( channel_oid, sprintf("%s",last_order['oid']));
+	#print(sprintf("ATCNG incoming order=%s",order));
+	#compute_flow(laor);
+
+}
+
+##### MESSAGES #####
+
+var messages = {
+	roger:'{ack}{qnh}{tuneto}, {cs}',
+	repeat:'{apt}, {cs}, say again',
+	startup: '{apt}, {cs}, request startup clearance',
+	readytaxi: '{apt}, {cs}, ready to taxi',
+	holdingshort: '{apt}, {cs}, holding short {rwyof}',
+	readytko: '{apt}, {cs}, ready for takeoff',
+	leaving: '{apt}, {cs}, leaving airfield',
+	transition: '{apt}, {cs} to transition your airspace',
+	inbound: '{apt}, {cs} for inbound approach',
+	crosswind: '{apt}, {cs}, crosswind for runway {rwy}',
+	downwind: '{apt}, {cs}, downwind for runway {rwy}',
+	base: '{apt}, {cs}, turning base for runway {rwy}',
+	final: '{apt}, {cs}, final for runway {rwy}{tngo}',
+	straight: '{apt}, {cs}, straight for runway {rwy}',
+	clearrw: '{apt}, {cs}, clear {rwyof}',
+	around: '{apt}, {cs}, going around',
+	withyou: '{apt}, {cs}, with you at {alt} feet, heading {heading}',
+	tunein: '',
+	
+};
+
+var LETTERS = [
+	"alpha", "bravo", "charlie", "delta", "echo",
+	"foxtrot", "golf", "hotel", "india", "juliet",
+	"kilo", "lima", "mike", "november", "oscar",
+	"papa", "quebec", "romeo", "sierra", "tango",
+	"uniform", "victor", "whiskey", "xray", "yankee", "zulu"
+];
+
+var NUMBERS=['zero','one','two','three','four','five','six','seven','eight','niner'];
+
+var sendmessage = func(message="",dlg=1){
+	var msg = parse_message(message);
+	var request = sprintf("req=%s;freq=%.2f;mid=%s",message,frequency_1,int(rand()*10000));
+	if (message=='roger' and last_order != nil){
+		request = sprintf("%s;laor=%s",request,last_order['ord']);
+	}
+	if (get_option('tngo')) {
+		request = sprintf("%s;tngo=1",request);
+	}
+	if (get_option('remain')) {
+		request = sprintf("%s;remain=1",request);
+	}
+	print(sprintf("[FGATC] Sendmessage: %s | %s",request , msg));
+	setprop(channel_request,request);
+	setprop(channel_message,msg);
+	setprop(channel_pilot_message,msg);
+	if (dlg) {
+		fgatcdialog.dialog.destroy();
+	}
+};
+
+var repeat = func() {
+	print("[FGATC]: repeat");
+	fgatc.sendmessage("repeat");
+};
+
+# Readback last order
+var readback = func() {
+	sendmessage("roger");
+};
+
+var short_callsign=func(callsign){
+	var base='a';
+	var cs = string.lc(callsign);
+	return sprintf("%s %s %s", LETTERS[cs[0] - base[0]],
+                             LETTERS[cs[1] - base[0]],
+                             LETTERS[cs[2] - base[0]]
+                             );
+};
+
+var say_number=func(number) {
+	if (number==nil) {
+		return number;
+	}
+	var arr=split('',""~(number));
+	forindex(n;arr ){
+		arr[n]= NUMBERS[arr[n]];
+	}
+	return string.join(' ', arr);
+}
+
+var get_option = func(option=nil) {
+	var prop = fgatc.root ~ "/options/" ~ option;
+	return getprop(prop);
+};
+
+var parse_message = func(tag) {
+	if(tag == nil or tag == "") {
+		return "";
+	}
+	var msg = messages[tag];
+	if (msg == nil or msg == "") {
+		return "";
+	}
+	# print (sprintf("parse_message. tag=%s, msg=%s",tag,msg));
+	var sc = short_callsign(my_callsign);
+	msg = string.replace(msg,'{cs}',sc);
+	msg = string.replace(msg,'{rwy}',selected_runway);
+	msg = string.replace(msg,'{rwyto}', "to runway " ~ selected_runway);
+	msg = string.replace(msg,'{rwyof}', "of runway  " ~ selected_runway);
+	msg = string.replace(msg,'{apt}',controller);
+	msg = string.replace(msg,'{alt}',int(getprop("/position/altitude-ft")));
+	msg = string.replace(msg,'{heading}',say_number(int(getprop("/orientation/heading-magnetic-deg"))));
+	if (get_option('tngo')) {
+		msg = string.replace(msg,'{tngo}', " for touch and go");
+	} else {
+		msg = string.replace(msg,'{tngo}', "");
+	}		
+	if (tag == "roger") {
+		if(last_order['ord'] == 'taxito') {
+			var ack = sprintf("taxi to %s",last_order['rwy']);
+			if (last_order['short']) {
+				ack ~= " and hold";
+			}
+			msg = string.replace(msg,'{ack}',ack);
+		} else if(last_order['ord'] == 'cleartk') {
+			msg = string.replace(msg,'{ack}','Cleared for takeoff');
+		} else if(last_order['ord'] == 'startup') {
+			msg = string.replace(msg,'{ack}','start up approved');
+		} else if(last_order['ord'] == 'join') {
+			var ack = sprintf("%s for %s at %s",last_order['cirw'],last_order['rwy'],last_order['alt']);
+			msg = string.replace(msg,'{ack}',ack);
+		} else if(last_order['ord'] == 'cirrep') {
+			var ack = sprintf("report on %s",last_order['cirw']);
+			if (last_order['number'] != nil and last_order['number'] > 1) {
+				var nm =sprintf(" number %s",last_order['number']); 
+				ack ~= nm;
+			}
+			msg = string.replace(msg,'{ack}',ack);
+		} else if(last_order['ord'] == 'clearland') {
+			var ack = sprintf("clear to land runway %s",last_order['rwy']);
+			msg = string.replace(msg,'{ack}',ack);
+		} else if(last_order['ord'] == 'cleartngo') {
+			var ack = sprintf("clear touch and go runway %s",last_order['rwy']);
+			msg = string.replace(msg,'{ack}',ack);
+		} else if(last_order['ord'] == 'around') {
+			var ack = sprintf("going around, will report on %s for %s",last_order['cirw'],last_order['rwy'] );
+			msg = string.replace(msg,'{ack}',ack);
+		} else if(last_order['ord'] == 'transition') {
+			var ack = sprintf("clear to cross at %s",last_order['alt']);
+			msg = string.replace(msg,'{ack}',ack);
+		} else if(last_order['ord'] == 'tuneok') {
+			msg = string.replace(msg,'{ack}','Roger');
+			msg = string.replace(msg,'{tuneto}','');
+		} else if(last_order['ord'] == 'straight') {
+			var ack = sprintf("straight-in runway %s, report on %s",last_order['rwy'],last_order['cirw']);
+			msg = string.replace(msg,'{ack}',ack);
+		} else {
+			msg = string.replace(msg,'{ack}','Roger');
+		}
+		if(last_order['atc'] == nil) {
+			msg = string.replace(msg,'{tuneto}','');
+		} else {
+			var tuneto = sprintf(", %s on %s",last_order['atc'], last_order['freq']);
+			msg = string.replace(msg,'{tuneto}',tuneto);
+		}
+		if (last_order['qnh'] != nil) {
+			msg = string.replace(msg,'{qnh}', sprintf(" QNH %s",last_order['qnh']));
+		} else {
+			msg = string.replace(msg,'{qnh}', '');
+		}
+	}
+	return msg;
+};
+
+##### MAIN ######
+setlistener("/instrumentation/comm/frequencies/selected-mhz",fgatc.set_frequency,1,0);
+setlistener("/instrumentation/comm/power-btn",fgatc.set_frequency,1,0);
+setlistener("/instrumentation/comm[1]/frequencies/selected-mhz",fgatc.set_frequency,1,0);
+setlistener("/instrumentation/comm[1]/power-btn",fgatc.set_frequency,1,0);
+setlistener("/control/switches/master-avionics",fgatc.set_frequency,1,0);
+
+var models_timer = maketimer(1,check_models);
+models_timer.start();
+print("[FGATC] Started");
