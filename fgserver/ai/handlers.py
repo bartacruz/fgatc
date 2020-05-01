@@ -76,7 +76,7 @@ class CircuitHandler():
         rwystart = move(runway.position(), normdeg(runway.bearing-180), runway.length/2,apalt)
         
         straight=runway.bearing
-        position = move(rwystart,straight.bearing,15,apalt)
+        position = move(rwystart,straight,15,apalt)
         self.create_waypoint(position, "Departure %s" % runway.name, WayPoint.RWY, PlaneInfo.DEPARTING)
         position = move(rwystart,straight,roll,apalt)
         self.create_waypoint(position, "Rotate %s" % runway.name, WayPoint.RWY, PlaneInfo.DEPARTING)
