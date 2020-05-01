@@ -4,7 +4,7 @@ Created on 28 abr. 2020
 @author: julio
 '''
 from fgserver.models import Aircrafts, Aircraft, Order, airportsWithinRange,\
-    AircraftStatus
+    AircraftStatus, Cache
 from fgserver.messages import PosMsg, alias, sim_time
 from fgserver import messages, units
 import logging
@@ -14,6 +14,9 @@ from fgserver.signals import signal_order_sent, signal_order_expired
 from django.core.exceptions import ObjectDoesNotExist
 
 llogger = logging.getLogger(__name__)
+
+class AckedOrders(Cache):
+    pass
 
 def get_aircraft(callsign):
     aircraft = Aircrafts.get(callsign)
@@ -43,17 +46,19 @@ def process_msg(pos):
             #llogger.debug("Ignoring request without freq from %s" % aircraft)
             return
         
-        if not "ATC" in pos.model and status.get_fg_freq() != freq:
-            llogger.info("Aircraft %s changed freqs from %s to %s" % (pos.callsign(),status.get_fg_freq(),freq))
+#         if not "ATC" in pos.model and status.get_fg_freq() != freq:
+#             llogger.info("Aircraft %s changed freqs from %s to %s" % (pos.callsign(),status.get_fg_freq(),freq))
         
         oid = pos.get_value(messages.PROP_OID)
-        if not "ATC" in pos.model and oid and status.order != oid:
+        if oid and not "ATC" in pos.model and not AckedOrders.has(oid):
             try:
-                llogger.debug("orden nueva %s -> %s" % (status.order,oid,))
+                #llogger.debug("orden nueva %s -> %s" % (status.order,oid,))
                 order = Order.objects.get(pk=oid)
-                order.received = True
-                order.save()
-                llogger.debug("Order marked as received %s" % order)   
+                if not order.received:
+                    order.received = True
+                    order.save()
+                    llogger.debug("Order marked as received %s" % order)
+                AckedOrders.set(oid, order)   
             except:
                 llogger.exception("al recibir orden %s" % oid)
                 
@@ -65,13 +70,17 @@ def process_msg(pos):
         llogger.exception("Processing msg")
 
 ORDER_DELAY=3
-ORDER_MIN_LIFESPAN=3
+ORDER_MIN_LIFESPAN=7
 ORDER_MAX_LIFESPAN=10
 def get_pos_msg(airport):
     msg = PosMsg()
     msg.send_from(airport)
     msg.time = sim_time()
     msg.lag=1
+    
+    # HACK clean chat
+    msg.properties.set_prop(messages.PROP_CHAT,"" )
+    msg.properties.set_prop(messages.PROP_CHAT2,"")
     # TODO: sort by type and then by order id (priorities)
     orders = Order.objects.filter(expired=False, lost=False, sender__airport=airport).order_by('id')
     order = orders.first()

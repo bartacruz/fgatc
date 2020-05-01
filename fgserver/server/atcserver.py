@@ -51,7 +51,7 @@ def startup_tasks():
     
 
 
-@setInterval(0.2)
+@setInterval(0.5)
 def send_msg():
     for airport in Airport.objects.filter(active=True):
         msg = get_pos_msg(airport)

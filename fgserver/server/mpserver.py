@@ -357,9 +357,9 @@ class FGServer():
         comm = self.controllers.get(tag,None)
         if comm:
             return comm
-        llogger.debug("Finding COMM for %s" % tag)
+        #llogger.debug("Finding COMM for %s" % tag)
         apts = airportsWithinRange(request.sender.get_position(), 50, units.NM)
-        llogger.debug("Airports in range=%s " % apts)
+        #llogger.debug("Airports in range=%s " % apts)
         for apt in apts:
             c = apt.comms.filter(frequency=freq)
             if c.count():
