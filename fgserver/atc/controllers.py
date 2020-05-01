@@ -3,7 +3,6 @@ Created on 31/07/2015
 
 @author: julio
 '''
-import fgserver
 from fgserver.atc.models import Tag
 from fgserver.models import Order, Comm, Request
 from django.utils import timezone
@@ -28,7 +27,7 @@ class Controller(object):
     def __init__(self,comm):
         self.comm = comm
         self.configure()
-        llogger.info("Controller type %s for %s created" % (type(self).__name__, comm))
+        llogger.debug("Controller type %s for %s created" % (type(self).__name__, comm))
     
     
     def configure(self):
@@ -49,7 +48,7 @@ class Controller(object):
                 a = ll.aircraft
                 if not runway.on_runway(a.get_position()):
                     ''' nop, there isn't'''
-                    self.log("acft not in runway. removing LINED_UP state",a)
+                    self.debug("acft not in runway. removing LINED_UP state",a)
                     self.set_status(a, 0, 0)
                     return self.check_waiting() #check again
             if landing.count():
@@ -68,7 +67,7 @@ class Controller(object):
                 # TODO: Make this values configurables.
                 if dist > 3*units.NM or adiff > 20 :
                     ''' nop, he isn't'''
-                    self.log("acft is not on landing path. removing LANDING state",l,dist, head,l.heading, adiff)
+                    self.debug("acft is not on landing path. removing LANDING state",l,dist, head,l.heading, adiff)
                     self.set_status(l,0,0)
                     return self.check_waiting() #check again
         elif short.count() and not lining.count():
@@ -82,10 +81,17 @@ class Controller(object):
                 self.manage(s.aircraft.requests.all().last())
         
     def log(self,*argv):
-        fgserver.info(self.comm,*argv)
+        msg = "[%s]" % self.comm
+        for arg in argv:
+            msg += " %s" % arg
+        llogger.info(msg)
         
     def debug(self,*argv):
-        fgserver.debug(self.comm,*argv)
+        msg = "[%s]" % self.comm
+        for arg in argv:
+            msg += " %s" % arg
+        llogger.debug(msg)
+        
 
     def active_runway(self):
         return self.comm.airport.active_runway()
@@ -164,7 +170,7 @@ class Controller(object):
         tag.save()
         order = tag.aircraft.orders.filter(received=True).last()
         if order.get_instruction() == tag.ack_order:
-            self.log("Orden %s acked" % order)
+            self.debug("Orden %s acked" % order)
             order.acked = True
             order.save()
         
