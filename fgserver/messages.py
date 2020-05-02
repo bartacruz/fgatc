@@ -553,6 +553,9 @@ class PosMsg:
     def request(self):
         return self.get_property(PROP_REQUEST)
     
+    def get_order(self):
+        return self.get_property(PROP_ORDER)
+    
     def get_value(self,key,default=None):
         try:
             return self.get_property(key)["value"]

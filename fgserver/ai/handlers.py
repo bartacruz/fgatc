@@ -62,8 +62,8 @@ class CircuitHandler():
                 
             position=Position(taxi[-1].point.y, taxi[-1].point.x, apalt)
             if isinstance(pos2, Runway):
-                self.create_waypoint(position, "Ramping for %s" % pos2.name, WayPoint.TAXI, PlaneInfo.TAXIING)
-                position = move(rwystart,pos2.bearing,10,apalt)
+#                 self.create_waypoint(position, "Ramping for %s" % pos2.name, WayPoint.TAXI, PlaneInfo.TAXIING)
+#                 position = move(rwystart,pos2.bearing,10,apalt)
                 self.create_waypoint(position, "Lineup %s"% pos2.name, WayPoint.HOLD, PlaneInfo.LINED_UP)
             else:
                 self.create_waypoint(position, "Taxi step ", WayPoint.TAXI, PlaneInfo.TAXIING)
@@ -76,12 +76,12 @@ class CircuitHandler():
         rwystart = move(runway.position(), normdeg(runway.bearing-180), runway.length/2,apalt)
         
         straight=runway.bearing
-        position = move(rwystart,straight,15,apalt)
-        self.create_waypoint(position, "Departure %s" % runway.name, WayPoint.RWY, PlaneInfo.DEPARTING)
+        position = move(rwystart,straight,roll/5,apalt)
+        self.create_waypoint(position, "Roll start %s" % runway.name, WayPoint.RWY, PlaneInfo.DEPARTING) # Set to start roll
         position = move(rwystart,straight,roll,apalt)
         self.create_waypoint(position, "Rotate %s" % runway.name, WayPoint.RWY, PlaneInfo.DEPARTING)
         # get to 20 meters altitude after exit the runway, then start climbing
-        position = move(rwystart,straight,runway.length*0.9,apalt+20)
+        position = move(rwystart,straight,runway.length+roll/5,apalt+30)
         self.create_waypoint(position, "Departure %s" % runway.name, WayPoint.RWY, PlaneInfo.CLIMBING)
         #self.create_waypoint(position, "Departure %s"%runway.name, WayPoint.RWY, PlaneInfo.CLIMBING)
         position = move(position,straight,radius,apalt+altitude)

@@ -92,7 +92,7 @@ def get_pos_msg(airport):
     
     if not order.sent_date:
         order.sent_date=timezone.now()
-        llogger.info("Sending order %s" % order)
+        llogger.info("Sending order from %s : %s" % (order.sender,order,))
         order.save()
         
         signal_order_sent.send_robust(None,order=order)
@@ -121,14 +121,15 @@ def get_pos_msg(airport):
     msg.properties.set_prop(messages.PROP_CHAT,chat )
     msg.properties.set_prop(messages.PROP_CHAT2,chat2 )
     
-    try:
-        status,created = AircraftStatus.objects.get_or_create(aircraft__callsign=airport.icao)
-        status.order = str(order.id)
-        status.freq = order.sender.frequency
-        status.date = timezone.now()
-        status.save()
-    except:
-        llogger.exception("Updating status for %s" % airport)
+#     try:
+#         aircraft = Aircraft.objects.get_or_create(callsign=airport.icao)
+#         status,created = AircraftStatus.objects.get_or_create(aircraft__callsign=airport.icao)
+#         status.order = str(order.id)
+#         status.freq = order.sender.frequency
+#         status.date = timezone.now()
+#         status.save()
+#     except:
+#         llogger.exception("Updating status for %s" % airport)
     return msg
 
 def find_comm(request):

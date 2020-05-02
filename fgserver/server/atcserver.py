@@ -29,6 +29,12 @@ class FGServer(socketserver.ThreadingMixIn, socketserver.UDPServer):
         self._thread.daemon = True
         server_thread.start()
     
+    def put(self,msg):
+        self.outgoing.put(msg)
+    
+    def get(self,msg):
+        self.incoming.get(msg)
+    
     
 class FGHandler(socketserver.BaseRequestHandler):
     

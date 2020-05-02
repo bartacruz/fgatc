@@ -280,8 +280,59 @@ class Circuit(FlightPlan):
 #         if request:
 #             pos.properties.set_prop(messages.PROP_REQUEST, request.request)
 #         return pos
-
+    
     def process_order(self,instance):
+        if not instance or instance == self.last_order:
+            return
+        try:
+            order = instance.get(Order.PARAM_ORDER,None)
+            self._last_order = instance
+            self.aiplane.last_order = instance
+            self.readback(instance)
+            if order == alias.TUNE_OK:
+                if self.aiplane.state == PlaneInfo.STOPPED:
+                    self.aiplane.set_state(PlaneInfo.PUSHBACK)
+                else:
+                    self.aiplane.check_request()
+            elif order == alias.TUNE_TO:
+                freq = instance.get(Order.PARAM_FREQUENCY,None).replace('.','')
+                self.debug("retunning radio to %s" % freq)
+                comm = self.airport.comms.filter(frequency=freq).first()
+                self.aiplane.comm=comm
+                req = "req=tunein;freq=%s" % comm.get_FGfreq()
+                threading.Thread(target=self.aiplane.send_request,args=(req,'',)).start()
+            elif order in [alias.TAXI_TO, alias.LINEUP]:
+                rwy = instance.get(Order.PARAM_RUNWAY, None)
+                if not self.runway or self.runway.name != rwy or instance.short():
+                    ''' the ATC refered us to a different runway. Obey '''
+                    self.debug("Generating waypoints for ATC's assigned runway %s " % rwy)
+                    self.runway = self.airport.runways.get(name=rwy)
+                    self._handler.generate_taxi_waypoints(self.aiplane.position,self.runway,instance.short())
+                    #self.generate_waypoints(instance.short())
+                    self.aiplane.waypoint = self.waypoint()
+                    self.debug("Setting aiplane waypoint to %s " % self.aiplane.waypoint)
+                    
+                self.aiplane.set_state(PlaneInfo.TAXIING)
+                self._wait(10)
+            elif order == alias.CLEAR_TK:
+                self._handler.generate_circuit_waypoints(self.runway)
+                if self.aiplane.state == PlaneInfo.SHORT:
+                    self.aiplane.set_state(PlaneInfo.LINING_UP)
+                else:
+                    self.aiplane.set_state(PlaneInfo.DEPARTING)
+                self._wait(10)
+            elif order in [alias.CIRCUIT_STRAIGHT, alias.JOIN_CIRCUIT]:
+                rwy = instance.get(Order.PARAM_RUNWAY, None)
+                if not self.runway or self.runway.name != rwy:
+                    self.debug("Generating waypoints for ATC's assigned runway approach %s " % rwy)
+                    self.runway = self.airport.runways.get(name=rwy)
+                self._handler.generate_landing_waypoints(self.runway)
+            
+            else:
+                self.log("Circuit",self.aircraft.callsign,', order ignored', instance)
+        except:
+            llogger.exception("Processing order %s" % order)
+    def process_order_old(self,instance):
         self.log(self.name,"procesando orden",instance,self._last_order)
         if not instance.receiver == self.aircraft or not instance.sent_date:
             llogger.warn("order is not for me or not confirmed! %s != %s or %s" % (instance.receiver, self.aircraft, instance.sent_date))
@@ -393,7 +444,15 @@ class Circuit(FlightPlan):
         threading.Thread(target=self.aiplane.send_request,args=(req,msg,)).start()
            
 class Circuits(Cache):            
-    pass
+    
+    @classmethod
+    def load(cls, instance_id):
+        try:
+            circuit = Circuit.objects.get(pk=instance_id)
+            cls.set(instance_id,circuit)
+            return circuit
+        except:
+            return None
 
 class WayPoint(Model):
     POINT=0

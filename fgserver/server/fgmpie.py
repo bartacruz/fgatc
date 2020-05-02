@@ -27,8 +27,6 @@ Created on 1 may. 2019
 #
 
 import struct
-from fgserver.models import Airport
-from fgserver.server.testmp import get_pos_msg
 from datetime import timedelta
 
 

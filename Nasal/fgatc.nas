@@ -17,7 +17,7 @@ var channel_oid = "sim/multiplay/generic/string[10]";
 
 var channel_freq ="sim/multiplay/transmission-freq-hz";
 var channel_atc_message="/sim/messages/atc";
-var channel_mp_message="/sim/messages/mp-plane";
+var channel_mp_message="/sim/messages/ai-plane";
 var channel_pilot_message="/sim/messages/pilot";
 
 var radio_on=0;
@@ -42,11 +42,16 @@ var check_models = func(){
 		var order = n.getNode(channel_order).getValue() or "";
 		var order2 = n.getNode(channel_order2).getValue() or "";
 		order = order ~ order2;
+		
+		var updated = 0;
 				  
 		if (!contains(orders,callsign) or orders[callsign] != order) {
+			updated = 1;
 		    orders[callsign]=order;
 		    porder = parse_order(order);
-		    if (!check_freq(freq)){
+		    if (porder == nil or size(porder) == 0) {
+		    	 print(sprintf("[FGATC] Ignoring empty order from %s: %s; %s",callsign,order, porder));
+		    } else if (!check_freq(freq)){
 		    	print(sprintf("[FGATC] Ignoring order not on my freq: %s; %s and %s: %s",freq,frequency_1,frequency_2, order));
 		    } else if (porder['to'] != my_callsign) {
 		    	print(sprintf("[FGATC] Ignoring order for other: %s; %s", porder['to'], order));
@@ -56,22 +61,30 @@ var check_models = func(){
 		    }
 		    
 		}
-
+		var request = n.getNode(channel_request).getValue();
+		if (request and (!contains(requests,callsign) or requests[callsign] != request)) {
+			requests[callsign] = request;
+			updated = 1;
+		}
+		
 		var message = n.getNode(channel_message).getValue() or "";
 		var message2 = n.getNode(channel_message2).getValue() or "";
 		message = message ~ message2;
-		if (!contains(messages,callsign) or messages[callsign] != message) {
-		    
+		if (!contains(messages,callsign) or messages[callsign] != message or updated) {
 		    messages[callsign]=message;
-		    if (check_freq(freq)){
-		    	print(sprintf("[FGATC] New message from %s",callsign,message));
-		    	if ( contains(n.getNode("sim/model/path"),"ATC") ) {
+		    if (message == nil or size(message) == 0) {
+		    	print(sprintf("[FGATC] Ignoring empty message from %s: %s", callsign, message));	
+		    } else if (message and check_freq(freq)){
+		    	var model = n.getNode("sim/model/path").getValue();
+		    	print(sprintf("[FGATC] New message from %s (%s): %s",callsign,model, message));
+		    	if ( find("ATC",model)+1 ) { 
 		    		setprop(channel_atc_message,message);
 		    	} else {
-		    		setprop(channel_atc_message,message);
+		    		
+		    		setprop(channel_mp_message,message);
 		    	}
 		    } else {
-		    	print(sprintf("[FGATC] Ignoring message not on my freq: %s; %s and %s: %s",freq,frequency_1,frequency_2, message));
+		    	print(sprintf("[FGATC] Ignoring message on freq %s (mine %s and %s): %s", freq, frequency_1,frequency_2, message));
 		    }
 		}
 	}
@@ -139,9 +152,33 @@ var process_order = func(order=nil) {
 	}
 	setprop( channel_oid, sprintf("%s",last_order['oid']));
 	#print(sprintf("ATCNG incoming order=%s",order));
-	#compute_flow(laor);
+	compute_flow();
 
 }
+
+var compute_flow = func() {
+	var next="";
+	var lao =last_order['ord']; 
+	if ( lao == 'startup') {
+		next = "readytaxi";
+	} else if (lao == 'taxito') {
+		if (last_order['short']) {
+			next = "holdingshort";
+		} else {
+			next = "readytko";
+		}
+	} else if (lao == 'clearland') {
+		next = "clearrw";
+	} else if (lao == 'cleartk' or lao == "cleartngo") {
+		next = "leaving";
+	} else if (lao == 'join' or lao == 'cirrep') {
+		var cirw = last_order['cirw'];
+		next = cirw;
+	} 
+	var nn =fgatc.root ~ "/next"; 
+	print(sprintf("[FGATC] compute flow. node=%s, next=%s",nn,next));
+	setprop(nn,next);
+};
 
 ##### MESSAGES #####
 

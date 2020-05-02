@@ -9,34 +9,11 @@ var reset = func() {
 
 var flow_next = func() {
 	var next = getprop(fgatc.root ~ "/next");
-	if (next != "") {
+	if (next != nil and next != "") {
 		fgatc.sendmessage(next);
 	}
 }
 
-var compute_flow = func() {
-	var next="";
-	var lao =fgatc.last_order['ord']; 
-	if ( lao == 'startup') {
-		next = "readytaxi";
-	} else if (lao == 'taxito') {
-		if (fgatc.last_order['short']) {
-			next = "holdingshort";
-		} else {
-			next = "readytko";
-		}
-	} else if (lao == 'clearland') {
-		next = "clearrw";
-	} else if (lao == 'cleartk' or lao == "cleartngo") {
-		next = "leaving";
-	} else if (lao == 'join' or lao == 'cirrep') {
-		var cirw = fgatc.last_order['cirw'];
-		next = cirw;
-	} 
-	var nn =fgatc.root ~ "/next"; 
-	print(sprintf("compute flow. node=%s, next=%s",nn,next));
-	setprop(nn,next);
-};
 var get_dialog_column=func(tag){
 	var legend= fgatc.parse_message(tag);	
 	var col ={ type: "button", legend: legend, code: tag, halign: "right", callback: "fgatc.sendmessage" };
