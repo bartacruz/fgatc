@@ -456,8 +456,8 @@ class PropertyData:
     def __init__(self):
         self.properties = {}
         
-    def get(self, key):
-        return self.properties.get(key)
+    def get(self, key, default=None):
+        return self.properties.get(key, default)
     
     def get_value(self, key):
         try:
@@ -554,7 +554,8 @@ class PosMsg:
         return self.get_property(PROP_REQUEST)
     
     def get_order(self):
-        return self.get_property(PROP_ORDER)
+        order = '%s%s' % (self.get_property(PROP_ORDER),self.get_property(PROP_ORDER2))
+        return order
     
     def get_value(self,key,default=None):
         try:
@@ -566,7 +567,7 @@ class PosMsg:
                 return default
         
     def get_property(self, key):
-        return self.properties.get(key)
+        return self.properties.get(key,'')
     
     def has_property(self, key):
         return self.properties.has_key(key)

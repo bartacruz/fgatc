@@ -405,6 +405,7 @@ class AircraftStatus(Model):
         
         props = pos.properties
         props.set_prop(PROP_FREQ,self.get_fg_freq())
+        #print(self.freq,self.get_fg_freq(),pos.get_value(PROP_FREQ))
         # HACK
         props.set_prop(302,self.linear_vel.x*50) # engine 0 rpms
         props.set_prop(312,self.linear_vel.x*50) # engine 1 rpms
@@ -467,6 +468,7 @@ class Order(Model):
     lost = BooleanField(default=False) # never received or acked
     
     PARAM_ORDER='ord'
+    PARAM_OID='oid'
     PARAM_FREQUENCY='freq'
     PARAM_RUNWAY='rwy'
     PARAM_PARKING='park'
