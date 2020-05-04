@@ -9,6 +9,6 @@ from fgserver.map import views
 urlpatterns = [
     
     path('', views.map_view, name='map_view'),
-    path('', views.aircrafts, name='aircrafts'),
-    path('', views.flightplan, name='flightplan'),
+    path('aircrafts/', views.aircrafts, name='aircrafts'),
+    path('flightplan/', views.flightplan, name='flightplan'),
 ]

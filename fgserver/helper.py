@@ -25,6 +25,8 @@ NUMBERS=['zeero','one','too','tree','fower','fife','six','seven','eight','niner'
 
 GEOID = Geod(ellps='WGS84')
 
+
+
 def say_char(c):
     cs = str(c)
     if cs.isalpha():
@@ -400,6 +402,17 @@ def get_heading_to_360(fro, to):
     info = Geodesic.WGS84.Inverse(fro.x, fro.y, to.x, to.y)
     heading = info['azi2']
     return normalize(heading)
+
+def get_heading(position,orientation):
+    '''
+    position: a Point object with lon,lat,(cartesian) and altitude (in meters)
+    orientation: a Point object with axis angle orientation
+    '''
+    pos = Position.from_array(position).to_geod()
+    qor = Quaternion.fromAngleAxis(Vector3D.from_array(orientation))
+    h10r = Quaternion.fromLatLon(pos.x, pos.y).conjugate().multiply(qor)
+    eul = h10r.getEuler().scale(units.RAD)
+    return normalize(eul.z)
 
 def random_callsign():
     return "%s%s-%s%s%s" % (chr(randint(65, 90)), chr(randint(65, 90)), chr(randint(65, 90)), chr(randint(65, 90)), chr(randint(65, 90)))

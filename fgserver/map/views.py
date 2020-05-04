@@ -7,10 +7,9 @@ Created on Apr 22, 2015
 from django.shortcuts import render
 from fgserver.models import Airport, Aircraft
 import json
-from django.http.response import HttpResponse
+from django.http.response import HttpResponse, JsonResponse
 from django.core.serializers import serialize
 from fgserver.ai.models import WayPoint
-from django.template.context import RequestContext
 
 def map_view(request):
     icao=request.GET.get('icao','SABE')
@@ -24,13 +23,13 @@ def aircrafts(request):
     for aircraft in aircrafts:
         acfts.append(aircraft)
     d = json.loads(serialize('json',acfts ))
-    return HttpResponse(json.dumps({'aircrafts': d,}), mimetype='application/javascript;charset=utf-8"')
+    return HttpResponse(json.dumps({'aircrafts': d,}), content_type='application/json;charset=utf-8"')
 
 def flightplan(request):
     callsign = request.GET.get('callsign')
-    wps = WayPoint.objects.filter(flightplan__aircraft__callsign=callsign)
+    wps = WayPoint.objects.filter(flightplan__aircraft__callsign=callsign).order_by('id')
     d = json.loads(serialize('json',wps ))
-    return HttpResponse(json.dumps({'waypoints': d}), mimetype='application/javascript;charset=utf-8"')
+    return JsonResponse({'waypoints': d})
 
     
 

@@ -9,8 +9,11 @@ from uuid import uuid4
 from channels.layers import get_channel_layer
 import json
 from django.core.serializers import serialize
-from fgserver.models import Aircraft
+from fgserver.models import Aircraft, AircraftStatus, Airport
 from asgiref.sync import async_to_sync
+from fgserver.helper import Quaternion, Vector3D, get_heading, cart2geod
+from datetime import timedelta
+from django.utils import timezone
 
 class Updater():
     thread = None
@@ -20,6 +23,27 @@ class Updater():
     def update(cls):
         if not cls.thread:
             cls.thread=uuid4().hex
+            
+        least = timezone.now() - timedelta(seconds=10)    
+        Aircraft.objects.all().update(state=0)
+        statuses = AircraftStatus.objects.filter(date__gte=least)
+        for status in statuses:
+            position = cart2geod(status.position)
+            status.aircraft.lat = position[0]
+            status.aircraft.lon = position[1]
+            status.aircraft.altitude = position[2]
+            status.aircraft.heading = round(get_heading(status.position, status.orientation),2)
+            status.aircraft.state=1
+            status.aircraft.updated = timezone.now()
+            status.aircraft.save()
+        for airport in Airport.objects.filter(active=True):
+            try:
+                aircraft = Aircraft.objects.get(callsign=airport.icao)
+                aircraft.state = 1;
+                aircraft.save();
+            except:
+                pass
+
         aircrafts = Aircraft.objects.filter(state__gte=1)
         if not aircrafts.count():
             return
