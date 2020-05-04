@@ -10,6 +10,7 @@ from django.contrib.gis.geos.point import Point
 from django.contrib.gis.geos.linestring import LineString
 from django.contrib.gis.ptr import CPointerBase
 import math
+from _functools import reduce
 
 # Fix nasty bug in geodjango
 
@@ -171,6 +172,16 @@ def shit_to_deg(val):
     v2 = val[4:]
     res = round( (float(v1)+float(v2)/60)*mult, 7)
     return res
+
+def closest_node(icao,pos):
+    ppos = Point(pos.y,pos.x)
+    root = ET.parse(os.path.join(settings.FGATC_FG_SCENERY,"Airports",icao[0],icao[1],icao[2],"%s.groundnet.xml" % icao))
+    nodes = [Point(
+            shit_to_deg(n.attrib.get('lon')),
+            shit_to_deg(n.attrib.get('lat')),
+            ) for n in list(root.findall('.//TaxiNodes/node')) if n.attrib.get('isOnRunway')=='1']
+    n = reduce(lambda x,y: x if x.distance(ppos) < y.distance(ppos) else y,nodes)
+    return n
 
 #icao = "SADF"
 def dj_waypoints(icao, start, endp):

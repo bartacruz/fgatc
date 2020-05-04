@@ -72,17 +72,21 @@ class CircuitHandler():
         radius = self.circuit.radius
         apalt=float(runway.airport.altitude*units.FT+2)
         altitude = self.circuit.altitude
-        roll = randrange(1900,max(3000,runway.length))
         rwystart = move(runway.position(), normdeg(runway.bearing-180), runway.length/2,apalt)
         
         straight=runway.bearing
-        position = move(rwystart,straight,roll/5,apalt)
+        position = move(rwystart,straight,80,apalt)
         self.create_waypoint(position, "Roll start %s" % runway.name, WayPoint.RWY, PlaneInfo.DEPARTING) # Set to start roll
-        position = move(rwystart,straight,roll,apalt)
-        self.create_waypoint(position, "Rotate %s" % runway.name, WayPoint.RWY, PlaneInfo.DEPARTING)
+        position = move(rwystart,straight,300,apalt)
+        self.create_waypoint(position, "Rotate1 %s" % runway.name, WayPoint.RWY, PlaneInfo.DEPARTING)
+        position = move(position,straight,350,apalt+3)
+        self.create_waypoint(position, "Rotate2 %s" % runway.name, WayPoint.RWY, PlaneInfo.DEPARTING)
         # get to 20 meters altitude after exit the runway, then start climbing
-        position = move(rwystart,straight,runway.length+roll/5,apalt+30)
-        self.create_waypoint(position, "Departure %s" % runway.name, WayPoint.RWY, PlaneInfo.CLIMBING)
+#         position = move(rwystart,straight,int(runway.length*0.9),apalt+20)
+#         self.create_waypoint(position, "Departure %s" % runway.name, WayPoint.RWY, PlaneInfo.DEPARTING)
+        # get to 20 meters altitude after exit the runway, then start climbing
+        position = move(position,straight,750,apalt+10)
+        self.create_waypoint(position, "Climbing %s" % runway.name, WayPoint.RWY, PlaneInfo.CLIMBING)
         #self.create_waypoint(position, "Departure %s"%runway.name, WayPoint.RWY, PlaneInfo.CLIMBING)
         position = move(position,straight,radius,apalt+altitude)
         self.create_waypoint(position, "Cruising", WayPoint.POINT, PlaneInfo.CRUISING)
@@ -118,8 +122,16 @@ class CircuitHandler():
         position = move(position,right,radius,apalt+500*units.FT)
         self.create_waypoint(position, "Final %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_FINAL)
         position = move(rwystart,reverse,30,apalt+15)
-        self.create_waypoint(position, "Flare %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.LANDING)
-        position = move(rwystart,straight,20,apalt)
+        self.create_waypoint(position, "Flare 1 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.LANDING)
+        position = move(position,straight,100,apalt+10)
+        self.create_waypoint(position, "Flare 2 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.LANDING)
+        position = move(position,straight,100,apalt+5)
+        self.create_waypoint(position, "Flare 3 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.LANDING)
+        position = move(position,straight,100,apalt)
+        self.create_waypoint(position, "Touchdown %s"%runway.name, WayPoint.RWY, PlaneInfo.TOUCHDOWN)
+        position = move(position,straight,180,apalt)
+        self.create_waypoint(position, "Landing Roll %s" % runway.name, WayPoint.RWY, PlaneInfo.HOLD)
+        # TODO: Create parking
         
     def create_waypoint(self,position, name, atype, status):
         self.circuit.create_waypoint(position,name,atype,status)

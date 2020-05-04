@@ -29,6 +29,7 @@ class PlaneInfo():
     TUNNED=18
     PARKING = 19
     LINING_UP=20
+    HOLD = 21
     CIRCUITS=[CIRCUIT_CROSSWIND,CIRCUIT_DOWNWIND,CIRCUIT_BASE,CIRCUIT_STRAIGHT,CIRCUIT_FINAL]
     CHOICES = (
         (0,'None'),               
@@ -48,6 +49,7 @@ class PlaneInfo():
         (CIRCUIT_STRAIGHT,'Straight'),
         (CIRCUIT_FINAL,'Final'),
         (SHORT,'Short of runway'),
+        (HOLD,'On Hold'),
         (LINED_UP,'Lined up'),
         (TUNNED,'Tunned'),
         (PARKING,'Parking'),
@@ -71,6 +73,7 @@ class PlaneInfo():
         (str(CIRCUIT_STRAIGHT),'Straight'),
         (str(CIRCUIT_FINAL),'Final'),
         (str(SHORT),'Short of runway'),
+        (str(HOLD),'On Hold'),
         (str(LINED_UP),'Lined up'),
         (str(TUNNED),'Tunned'),
         (str(PARKING),'Parking'),
