@@ -18,15 +18,15 @@ class AIConfig(AppConfig):
     
     def ready(self):
         AppConfig.ready(self)
-        from fgserver.ai.tasks import do_ai_process_order
-        from fgserver.ai.tasks import do_ai_start_loop
+#         from fgserver.ai.tasks import do_ai_process_order
+#         from fgserver.ai.tasks import do_ai_start_loop
         
-        signal_order_sent.connect(
-            do_ai_process_order,
-            dispatch_uid="ai_process_order")
-        signal_server_started.connect(
-            do_ai_start_loop,
-            dispatch_uid="ai_start_loop")
-        logger.debug("Hooked")
-        app.conf.task_routes['fgserver.ai.tasks.*']={'queue':'ai'}
+#         signal_order_sent.connect(
+#             do_ai_process_order,
+#             dispatch_uid="ai_process_order")
+#         signal_server_started.connect(
+#             do_ai_start_loop,
+#             dispatch_uid="ai_start_loop")
+#         logger.debug("Hooked")
+#         app.conf.task_routes['fgserver.ai.tasks.*']={'queue':'ai'}
         
