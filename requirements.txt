@@ -13,7 +13,6 @@ daphne==2.2.5
 Django==2.1.7
 django-model-utils==3.1.2
 django-polymorphic==2.0.3
-geographiclib==1.49
 hiredis==1.0.0
 hyperlink==18.0.0
 idna==2.8
@@ -24,6 +23,7 @@ numpy==1.16.2
 oauthlib==3.0.1
 psycopg2==2.7.7
 PyHamcrest==1.9.0
+pyproj==2.6.0
 pytz==2018.9
 requests==2.21.0
 requests-oauthlib==1.2.0

@@ -6,7 +6,6 @@ Created on Apr 13, 2015
 '''
 
 from math import sqrt, fabs, atan2, pi, sin, cos, asin, acos
-from geographiclib.geodesic import Geodesic
 from scipy import rint
 from random import randint
 from fgserver import units, llogger
@@ -390,18 +389,23 @@ class Quaternion():
         
     
 def get_distance(fro, to, unit=units.M):
-    info = Geodesic.WGS84.Inverse(fro.x, fro.y, to.x, to.y)
-    return info['s12'] / unit
-
+    #info = Geodesic.WGS84.Inverse(fro.x, fro.y, to.x, to.y)
+    #return info['s12'] / unit
+    f,b,d = GEOID.inv(fro.x, fro.y, to.x, to.y)
+    return d/unit
+    
+    
 def get_heading_to(fro, to):
-    info = Geodesic.WGS84.Inverse(fro.x, fro.y, to.x, to.y)
-    heading = info['azi2']
-    return normalize(heading)
+#     info = Geodesic.WGS84.Inverse(fro.x, fro.y, to.x, to.y)
+#     heading = info['azi2']
+    f,b,d = GEOID.inv(fro.x, fro.y, to.x, to.y)
+    return normalize(b)
 
 def get_heading_to_360(fro, to):
-    info = Geodesic.WGS84.Inverse(fro.x, fro.y, to.x, to.y)
-    heading = info['azi2']
-    return normalize(heading)
+#     info = Geodesic.WGS84.Inverse(fro.x, fro.y, to.x, to.y)
+#     heading = info['azi2']
+#     return normalize(heading)
+    return get_heading_to(fro, to)
 
 def get_heading(position,orientation):
     '''
