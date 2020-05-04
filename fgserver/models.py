@@ -15,7 +15,7 @@ from django.utils import timezone
 
 from fgserver import llogger, debug, units, get_closest_metar
 from fgserver.helper import normdeg, Position, get_distance, move, normalize,\
-    point_inside_polygon, cart2geod, Quaternion, Vector3D
+    point_inside_polygon, cart2geod, Quaternion, Vector3D, GEOID
 from fgserver.settings import METAR_UPDATE
 from django.db.models.signals import post_save
 from metar.Metar import Metar
@@ -27,6 +27,8 @@ from fgserver.messages import PosMsg, PROP_FREQ, PROP_OID, PROP_CHAT,\
     PROP_REQUEST, sim_time
 from fgserver.ai.common import PlaneInfo
 from django.contrib.gis.geos.point import Point
+from django.contrib.gis.geos.linestring import LinearRing
+from django.contrib.gis.geos.polygon import Polygon
 
 
 
@@ -197,9 +199,9 @@ class Runway(Model):
         return "%s@%s %s-%s @%s [%s,%s]" % (self.name,self.airport,self.lat, self.lon,self.altitude,self.bearing,self.length,)
     
     def _calculate_boundaries(self):
-        w2= self.width*units.FT/2
-        # add 50ft for runway start/end miscalculation"
-        l2= self.length*units.FT/2+50*units.FT
+        w2= self.width/2
+        # add 5mft for runway start/end miscalculation"
+        l2= self.length/2+5
         bearing = float(self.bearing)
         pos = self.get_position()
         cat = sqrt(w2 * w2+l2*l2)
@@ -210,14 +212,20 @@ class Runway(Model):
         angles.append(normalize(bearing - alpha))
         angles.append(normalize(bearing + alpha -180 ))
         angles.append(normalize(bearing - alpha -180 ))
-        #self.log("self angles", angles)        
-        self._boundaries=[]
+        #self.log("self angles", angles)
+        points=[]
         for angle in angles:
-            p = move(pos, angle, cat, pos.z)
-            self._boundaries.append((p.x,p.y))
+            lon,lat,raz = GEOID.fwd(pos.y,pos.x,angle,cat)
+            points.append(Point(lon,lat))
+        points.append(points[0]) # lose the ring
         
+        self._boundaries=Polygon(points)
+                
     def on_runway(self,pos):
-        return point_inside_polygon(pos.x,pos.y,self._boundaries)
+        if isinstance(pos, Point):
+            return self._boundaries.contains(pos)
+        point = Point(pos.y,pos.x) 
+        return self._boundaries.contains(point)
     
     def position(self):
         ''' alias'''
