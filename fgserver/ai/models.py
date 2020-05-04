@@ -23,6 +23,7 @@ from django.utils.module_loading import import_string
 import logging
 from .dijkstra import dj_waypoints
 from django.contrib.gis.geos.point import Point
+import time
 
 llogger = logging.getLogger(__name__)
 
@@ -74,8 +75,8 @@ class Circuit(FlightPlan):
     def init(self):
         self._waypoint=0
         self._time=0
-        #self._waiting=randint(30,180)
-        self._waiting=10
+        self._waiting=randint(30,180)
+        #self._waiting=10
         self._last_order=None
         self.aircraft.state=2
         self.runway = None
@@ -98,9 +99,7 @@ class Circuit(FlightPlan):
     
     def end(self):
         self.log("End of circuit %s" % self.name)
-        self._waypoint=0
-        self.aiplane = AIPlane(self)
-        self._wait(randint(90,270))
+        self.init()
 
     def last_order(self):
         return self.aircraft.orders.filter(confirmed=True).last()
@@ -414,7 +413,7 @@ class Circuit(FlightPlan):
            alias.STARTUP: "start up approved{qnh}",
            alias.TAXI_TO: "taxi to {rwy}{via}{hld}{short}{lineup}",
            alias.WAIT: "we wait", 
-           alias.SWITCHING_OFF: "switching off",
+           alias.SWITCHING_OFF: "Good day",
            alias.TAXI_PARK: "parking {park}",
         }
         msg = templates.get(order.get(Order.PARAM_ORDER))
@@ -454,8 +453,12 @@ class Circuit(FlightPlan):
         msg += ", %s" % short_callsign(self.aircraft.callsign)
         req = "req=roger;laor=%s" % order.get(Order.PARAM_ORDER)
         llogger.debug("readback: %s | %s" % (req,msg,))        
-        threading.Thread(target=self.aiplane.send_request,args=(req,msg,)).start()
-           
+        threading.Thread(target=self.send_delayed_request,args=(req,msg,10,)).start()
+    
+    def send_delayed_request(self,req,msg,delay=5):
+        time.sleep(delay)
+        self.aiplane.send_request(req,msg)
+        
 class Circuits(Cache):            
     
     @classmethod
