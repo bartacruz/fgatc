@@ -78,7 +78,7 @@ class Controller(object):
                 s.save()
                 self.debug('No one landing and no one departing, let %s take off. %s,%s' % (s,s.id,s.number))
                 '''No one landing and no one departing, let them take off'''
-                self.manage(s.aircraft.requests.all().last())
+                self.manage(s.aircraft.requests.filter(request__contains="holdingshort").last())
         
     def log(self,*argv):
         msg = "[%s]" % self.comm
@@ -289,7 +289,8 @@ class Tower(Controller):
             response.add_param(Order.PARAM_HOLD, 1)
             response.add_param(Order.PARAM_SHORT, 1)
             response.add_param(Order.PARAM_NUMBER, count+count_others+1)
-            self.set_status(request.sender, PlaneInfo.SHORT,count+count_others)
+            tag = self.set_status(request.sender, PlaneInfo.SHORT,count+count_others)
+            self.debug("Aircraft  %s must wait short. number=%s" % (response.receiver, tag.number))
         elif randint(0,3)==1:
             response.add_param(Order.PARAM_ORDER, alias.LINEUP)
             response.add_param(Order.PARAM_HOLD, 1)
