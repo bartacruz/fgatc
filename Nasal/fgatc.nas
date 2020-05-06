@@ -1,3 +1,4 @@
+# 
 var my_callsign = getprop("/sim/multiplay/callsign");
 var root="/sim/fgatc";
 var orders={};
@@ -17,6 +18,8 @@ var channel_oid = "sim/multiplay/generic/string[10]";
 
 var channel_freq ="sim/multiplay/transmission-freq-hz";
 var channel_atc_message="/sim/messages/atc";
+var channel_atcground_message="/sim/messages/ground";
+var channel_atcapproach_message="/sim/messages/approach";
 var channel_mp_message="/sim/messages/ai-plane";
 var channel_pilot_message="/sim/messages/pilot";
 
@@ -78,7 +81,13 @@ var check_models = func(){
 		    	var model = n.getNode("sim/model/path").getValue();
 		    	print(sprintf("[FGATC] New message from %s (%s): %s",callsign,model, message));
 		    	if ( find("ATC",model)+1 ) { 
-		    		setprop(channel_atc_message,message);
+					if (find("Ground",controller)+1) {
+			    			setprop(channel_atcground_message,message);
+					} else if (find("Approach",controller)+1) {
+			    			setprop(channel_atcapproach_message,message);
+					} else {
+				    		setprop(channel_atc_message,message);
+					}
 		    	} else {
 		    		
 		    		setprop(channel_mp_message,message);
@@ -117,6 +126,7 @@ var set_frequency = func(node) {
 	if (comm1 and f1 != frequency_1) {
 		print(sprintf("[FGATC] New frequency on COM1: %s (old: %s)",f1,frequency_1));
 		frequency_1 = f1;
+		setprop(channel_freq,frequency_1);
 		sendmessage('tunein',0);
 	}
 	if (comm2 and f2 != frequency_2) {
