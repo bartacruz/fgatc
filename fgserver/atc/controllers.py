@@ -15,6 +15,7 @@ import time
 import threading
 from fgserver.atc.functions import get_message
 import logging
+from datetime import timedelta
 
 llogger = logging.getLogger(__name__)
 
@@ -35,6 +36,10 @@ class Controller(object):
         pass
                     
     def check_waiting(self):
+        # expire tags:
+        expired = timezone.now() - timedelta(minutes=2)
+        self.comm.airport.tags.filter(status__gt=0,status_changed__lt=expired).update(status=0,number=0)
+        
         landing = self.comm.airport.tags.filter(status=PlaneInfo.LANDING)
         lined = self.comm.airport.tags.filter(status__in=(PlaneInfo.LINED_UP, PlaneInfo.DEPARTING))
         short = self.comm.airport.tags.filter(status=PlaneInfo.SHORT).order_by('number')
