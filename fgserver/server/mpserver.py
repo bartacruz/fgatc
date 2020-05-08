@@ -17,8 +17,11 @@ from fgserver.helper import move, cart2geod, Quaternion, Vector3D
 import time
 from threading import Thread
 from queue import Empty, Queue
+from fgserver.server.fgmpie import PacketData
 
 llogger = logging.getLogger(__name__)
+
+AIPLANES_ENABLED=False
 
 class FGServer():
     MSG_MAGIC = 0x46474653
@@ -46,9 +49,9 @@ class FGServer():
             try:
                 data,addr = self.incoming.get(True,1)
                 self.relay(data)
-                unp = Unpacker(data)
+                unp = PacketData(data)
                 pos = PosMsg()
-                pos.receive(unp)
+                pos.receive_pie(unp)
                 pos.header.reply_addr=addr[0]
                 pos.header.reply_port=addr[1]
                 #llogger.debug("processing %s" % pos)
@@ -56,6 +59,7 @@ class FGServer():
                 self.save_cache()
                 self.process_queues()
                 self.send_pos(pos.callsign())
+                
             except Empty:
                 pass
             except:
@@ -66,7 +70,7 @@ class FGServer():
     def start(self):
         # Reset all planes to 0
         Aircraft.objects.all().update(state=0)
-        Order.objects.all().update(confirmed=False)
+        Order.objects.all().update(expired=True)
         Tag.objects.all().delete()
         self.date_started=timezone.now()
         self.last_update=timezone.now()
@@ -108,11 +112,16 @@ class FGServer():
         return self.circuits.get(name)
     
     def check_circuits(self,controller):
+        if not AIPLANES_ENABLED:
+            return
         print(type(controller))
         llogger.info('checking circuits for %s' % controller)
         self.load_circuits(controller.comm.airport)
     
     def load_circuits(self,airport):
+        if not AIPLANES_ENABLED:
+            return
+        
         for circuit in airport.circuits.filter(enabled=True):
             if not self.get_circuit(circuit.name):
                 self.set_circuit(circuit)
@@ -288,7 +297,10 @@ class FGServer():
                 msg.properties.set_prop(messages.PROP_FREQ, request.receiver.get_FGfreq())
                 self.sendto(msg.send(), aircraft.get_addr())
     
-        ''' send mp and ai planes positions to player ''' 
+        ''' send mp and ai planes positions to player '''
+        if not AIPLANES_ENABLED:
+            return
+         
         for mp in self.get_mpplanes(aircraft):
             if msg and mp.plans.count():
                 for p in mp.plans.all():
@@ -317,7 +329,11 @@ class FGServer():
                     self.receive_order(mp, oid_p['value'])
                 
     def update_aiplanes(self):
+        if not AIPLANES_ENABLED:
+            return
+        
         cont=True
+        
         while cont: 
             time.sleep(settings.FGATC_AI_INTERVAL)
             for mp in self.aircrafts.values():
@@ -385,15 +401,15 @@ class FGServer():
         h10r = Quaternion.fromLatLon(aircraft.lat, aircraft.lon).conjugate().multiply(qor)
         eul = h10r.getEuler().scale(units.RAD)
         aircraft.heading= eul.z
-        
-        freq = pos.get_property(messages.PROP_FREQ)['value']
-        aircraft.freq = freq
+        if pos.has_property(messages.PROP_FREQ):
+            freq = pos.get_value(messages.PROP_FREQ)
+            aircraft.freq = freq
         
         #self.set_aircraft(aircraft)
         
-        request_p = pos.get_property(messages.PROP_REQUEST)
-        if request_p:
-            request = request_p['value']
+        request = pos.get_value(messages.PROP_REQUEST)
+        llogger.debug("process request %s. LAST=%s" % (request,aircraft.last_request))
+        if request:
             if request != aircraft.last_request:
                 llogger.info("aircraft %s requests %s at %s. last=%s" % (aircraft.callsign, request, freq,aircraft.last_request) )
                 aircraft.last_request = request
@@ -402,9 +418,9 @@ class FGServer():
                 req.receiver_id = self.find_comm(req)
                 llogger.info("receiver=%s" % req.receiver )
                 req.save()
-        oid_p = pos.get_property(messages.PROP_OID)
-        if oid_p:
-            self.receive_order(aircraft, oid_p['value'])
+        oid = pos.get_value(messages.PROP_OID)
+        if oid:
+            self.receive_order(aircraft, oid)
         return True
     
     def process_request(self,instance):

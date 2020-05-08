@@ -7,13 +7,12 @@ import socketserver
 import threading
 import django
 from queue import Queue, Empty
-from django.utils import timezone
 
 
 django.setup()
 
-from fgserver.models import Airport, Order, Aircrafts, AircraftStatus
-from fgserver.messages import PosMsg, sim_time
+from fgserver.models import Airport, Order
+from fgserver.messages import PosMsg
 from fgserver import llogger, settings, setInterval
 from fgserver.server.fgmpie import pie_msg, PacketData
 from fgserver.signals import message_received, signal_server_started
@@ -46,7 +45,7 @@ class FGHandler(socketserver.BaseRequestHandler):
             pos.receive_pie(unp)
             pos.header.reply_addr=self.client_address[0]
             pos.header.reply_port=self.client_address[1]
-            #print("Received",pos)
+            #print("R",pos)
             #process_msg(pos)
             self.server.incoming.put(pos)
         except:
@@ -64,17 +63,17 @@ def send_msg():
         #llogger.debug("Sending pos for AI ATC   %s" % msg)
         server.outgoing.put(msg)
     
-    from fgserver.ai.models import FlightPlan
-    for plan in FlightPlan.objects.filter(enabled=True):
-        try:
-            pos = plan.aircraft.status.get_position_message()
-            server.outgoing.put(pos)
-        except AircraftStatus.DoesNotExist:
-            AircraftStatus(aircraft=plan.aircraft, date=timezone.now()).save()
-            pos = plan.aircraft.status.get_position_message()
-            server.outgoing.put(pos)
-        except:
-            llogger.exception("In loop")
+#     from fgserver.ai.models import FlightPlan
+#     for plan in FlightPlan.objects.filter(enabled=True):
+#         try:
+#             pos = plan.aircraft.status.get_position_message()
+#             server.outgoing.put(pos)
+#         except AircraftStatus.DoesNotExist:
+#             AircraftStatus(aircraft=plan.aircraft, date=timezone.now()).save()
+#             pos = plan.aircraft.status.get_position_message()
+#             server.outgoing.put(pos)
+#         except:
+#             llogger.exception("In loop")
          
         
 #     else:
@@ -94,12 +93,13 @@ if __name__ == "__main__":
     
     try:
         server_thread.start()
-        signal_server_started.send_robust(None)
+        #signal_server_started.send_robust(None)
         print("Server started at {} port {}".format(HOST, PORT))
         send_msg()
         while True:
             try:
                 pos = server.incoming.get(True, .1)
+                #llogger.debug("Received %s" % pos )
                 message_received.send_robust(sender=server,msg=pos)
                 process_msg(pos)
                 

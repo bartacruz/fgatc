@@ -14,7 +14,7 @@ from fgserver.server.mpserver import FGServer
 
 @receiver(post_save, sender=Order)
 def process_order(sender, instance, **kwargs):
-    if not instance.confirmed:
+    if not instance.expired and not instance.received:
         server.queue_order(instance)
 
 @receiver(post_save, sender=Request)

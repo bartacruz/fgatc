@@ -19,8 +19,9 @@ llogger = logging.getLogger(__name__)
 class FGServer():
     port = 5020
     
-    def __init__(self, delay=0.2):
+    def __init__(self, delay=0.5):
         server_address = ("0.0.0.0", FGServer.port)
+        self.server_to = settings.FGATC_RELAY_SERVER
         self.delay=delay
         FGServer.port = FGServer.port +1
         llogger.debug("Client address %s:%s" % server_address)
@@ -48,7 +49,7 @@ class FGServer():
                 msg = self.get_position_message()
                 #llogger.debug("Sending message to %s:" % msg.get_property(messages.PROP_FREQ) )
                 buff = pie_msg(msg)
-                self.server.socket.sendto(buff,settings.FGATC_RELAY_SERVER)
+                self.server.socket.sendto(buff,self.server_to)
                 time.sleep(self.delay)
             except Empty:
                 pass
