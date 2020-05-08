@@ -4,6 +4,70 @@ Created on 28 abr. 2020
 @author: julio
 '''
 
+class PlaneRequest():
+    req = None
+    laor = None
+    freq = None
+    mid = None
+    apt = None
+    
+    def __init__(self,*args, **kwargs):
+        for dictionary in args:
+            for key in dictionary:
+                setattr(self, key, dictionary[key])
+        for key in kwargs:
+            setattr(self, key, kwargs[key])
+    
+    @classmethod
+    def from_string(cls, a_string):
+        if not a_string:
+            return None
+        
+        a_dict = {p.split('=')[0]:p.split('=')[1] for p in a_string.split(';')}
+        return cls(a_dict)
+    
+    def get_request(self):
+        return ';'.join('{}={}'.format(key,value) for key,value in self.__dict__.items())
+    
+    def __str__(self):
+        return str(self.__dict__)
+    
+class ReceivedOrder():
+    ord=None;
+    oid = None
+    freq = None
+    rwy = None
+    park = None
+    apt = None
+    cirw = None
+    cirt = None
+    lnup = None
+    number = None
+    hld = None
+    short = None
+    repeat = None
+    alt = None
+    qnh = None
+    leg = None
+    atis = None
+    to = None
+    atc = None
+    
+    def __init__(self,*args, **kwargs):
+        for dictionary in args:
+            for key in dictionary:
+                setattr(self, key, dictionary[key])
+        for key in kwargs:
+            setattr(self, key, kwargs[key])
+    
+    @classmethod
+    def from_string(cls, a_string):
+        order= cls(eval(a_string))
+        return order
+        
+    def __str__(self):
+        return str(self.__dict__)
+    
 class PlaneInfo():
     
 
@@ -30,6 +94,7 @@ class PlaneInfo():
     PARKING = 19
     LINING_UP=20
     HOLD = 21
+    
     CIRCUITS=[CIRCUIT_CROSSWIND,CIRCUIT_DOWNWIND,CIRCUIT_BASE,CIRCUIT_STRAIGHT,CIRCUIT_FINAL]
     CHOICES = (
         (0,'None'),               
@@ -49,11 +114,11 @@ class PlaneInfo():
         (CIRCUIT_STRAIGHT,'Straight'),
         (CIRCUIT_FINAL,'Final'),
         (SHORT,'Short of runway'),
-        (HOLD,'On Hold'),
         (LINED_UP,'Lined up'),
         (TUNNED,'Tunned'),
         (PARKING,'Parking'),
         (LINING_UP,'Lining up'),
+        (HOLD,'On Hold'),
     )
     CHOICES_STR = (
         ('0','None'),               
@@ -102,3 +167,4 @@ class StatePlane(object):
     TUNNED=18
     PARKING = 19
     LINING_UP=20
+    HOLD = 21

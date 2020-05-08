@@ -8,8 +8,7 @@ from fgserver.helper import Position, get_heading_to_360, short_callsign,\
     
 from fgserver.messages import PosMsg, PROP_CHAT, PROP_OID, alias, PROP_FREQ,\
     sim_time
-from fgserver.models import Request, Order, Comm, AircraftStatus
-from django.utils import timezone
+from fgserver.models import Order, Comm, AircraftStatus
 from random import randint
 import fgserver
 from fgserver.ai.common import PlaneInfo
@@ -18,6 +17,7 @@ from django.contrib.gis.geos.point import Point
 from fgserver import messages
 from fgserver.server.server import FGServer
 import logging
+from django.conf import settings
 
 llogger = logging.getLogger(__name__)
 
@@ -27,10 +27,12 @@ class CircuitClient(FGServer):
         self.circuit=circuit
         self.circuit.init()
         FGServer.__init__(self, delay=delay)
+        self.server_to = settings.FGATC_AI_SERVER
         
     def get_position_message(self):
         self.circuit.update(sim_time())
         pos = self.circuit.aircraft.status.get_position_message()
+        #print(pos)
         return pos
 
     def after_init(self):
@@ -58,11 +60,6 @@ class CircuitClient(FGServer):
                     continue
                 if order[Order.PARAM_RECEIVER]==self.circuit.aircraft.callsign:
                     self.circuit.process_order(order)
-#                     llogger.debug('Order received: %s' % order)
-#                 else:
-#                     llogger.debug('Ignoring order for other. %s != %s' % (order[Order.PARAM_RECEIVER],self.circuit.aircraft.callsign,))
-#                     continue
-                
             except:
                 pass
 
@@ -113,13 +110,17 @@ class AIPlane():
             old_state=self.state
         self.state=state
         laor = getattr(self.circuit,'_last_order',None)
+        if state == PlaneInfo.LINED_UP and laor.get(Order.PARAM_ORDER) == alias.CLEAR_TK:
+            # Special case: we are lined up, waypoint says HOLD,  but we're already clear for take off
+            llogger.debug("Lined up and cleartk. Setting state to DEPARTING")
+            self.set_state(PlaneInfo.DEPARTING)
         if state in [PlaneInfo.STOPPED, PlaneInfo.HOLD, PlaneInfo.PUSHBACK]\
                 or (state==PlaneInfo.SHORT and laor and laor.get(Order.PARAM_SHORT,False))\
                 or (state==PlaneInfo.LINED_UP and laor and laor.get(Order.PARAM_LINEUP,False)):
             self.speed=0
             self.vertical_speed=0
             self.turn_rate=1
-            self.target_vertical_speed=1    
+            self.target_vertical_speed=1 
         elif state == PlaneInfo.TAXIING or (state==PlaneInfo.SHORT and not laor.get(Order.PARAM_SHORT,False) ) or state == PlaneInfo.LINING_UP:
             self.turn_rate = 160
             self.speed = 20*units.KNOTS
@@ -177,13 +178,6 @@ class AIPlane():
         req = "%s;freq=%s;mid=%s" % (req,self.comm.get_FGfreq(),randint(1000,9999))
         self.log("Sending request",req,msg)
         self.aircraft().status.request = req
-#        date=timezone.now()
-        
-#         request = Request(sender=self.aircraft(),date=date,request=req)
-#         if self.comm:
-#             request.receiver=self.comm
-#         
-#         request.save()
         self.request = req
 
     def check_request(self,old_state=None):
@@ -196,7 +190,7 @@ class AIPlane():
         self.log("laor=%s" % laor)
         if self.state == PlaneInfo.CIRCUIT_CROSSWIND:
             req = "req=crosswind;apt=%s" % self.airport().icao
-            msg="%s Tower, %s, Crosswind for runway %s" % (self.comm.identifier, callsign,self.say_runway())
+            msg="%s, %s, Crosswind for runway %s" % (self.comm.identifier, callsign,self.say_runway())
             self.send_request(req,msg)
         elif self.state == PlaneInfo.APPROACHING:
             req = "req=inbound;apt=%s" % self.airport().icao
@@ -204,31 +198,31 @@ class AIPlane():
             self.send_request(req,msg)
         elif self.state == PlaneInfo.CIRCUIT_DOWNWIND:
             req = "req=downwind;apt=%s" % self.airport().icao
-            msg="%s Tower, %s, Downwind for runway %s" % (self.comm.identifier, callsign,self.say_runway())
+            msg="%s, %s, Downwind for runway %s" % (self.comm.identifier, callsign,self.say_runway())
             self.send_request(req,msg)
         elif self.state == PlaneInfo.CIRCUIT_BASE:
             req = "req=base;apt=%s" % self.airport().icao
-            msg="%s Tower, %s, Turning base for runway %s" % (self.comm.identifier, callsign,self.say_runway())
+            msg="%s, %s, Turning base for runway %s" % (self.comm.identifier, callsign,self.say_runway())
             self.send_request(req,msg)
         elif self.state == PlaneInfo.CIRCUIT_FINAL:
             req = "req=final;apt=%s" % self.airport().icao
-            msg="%s Tower, %s, Final for runway %s" % (self.comm.identifier, callsign,self.say_runway())
+            msg="%s, %s, Final for runway %s" % (self.comm.identifier, callsign,self.say_runway())
             self.send_request(req,msg)    
         elif self.state == PlaneInfo.HOLD and old_state == PlaneInfo.TOUCHDOWN:
             req = "req=clearrw;apt=%s" % self.airport().icao
-            msg="%s Tower, %s, landed on runway %s" % (self.comm.identifier, callsign,self.say_runway())
+            msg="%s, %s, landed on runway %s" % (self.comm.identifier, callsign,self.say_runway())
             self.send_request(req,msg)    
         elif self.state == PlaneInfo.PUSHBACK:
             req = "req=readytaxi;apt=%s" % self.airport().icao
-            msg="%s Tower, %s, ready to taxi" % (self.comm.identifier, callsign)
+            msg="%s, %s, ready to taxi" % (self.comm.identifier, callsign)
             self.send_request(req,msg)
         elif self.state == PlaneInfo.LINED_UP and laor.get(Order.PARAM_LINEUP,False):
             req = "req=readytko;apt=%s" % self.airport().icao
-            msg="%s Tower, %s, ready for takeoff" % (self.comm.identifier, callsign)
+            msg="%s, %s, ready for takeoff" % (self.comm.identifier, callsign)
             self.send_request(req,msg)
         elif self.state == PlaneInfo.SHORT and (laor.get(Order.PARAM_SHORT,False) or laor.get(Order.PARAM_ORDER,None)==alias.TUNE_OK):
             req = "req=holdingshort;apt=%s" % self.airport().icao
-            msg="%s Tower, %s, holding short of runway %s" % (self.comm.identifier, callsign,self.say_runway())
+            msg="%s, %s, holding short of runway %s" % (self.comm.identifier, callsign,self.say_runway())
             self.send_request(req,msg)
         elif self.state== PlaneInfo.STOPPED and self.waypoint.type == WayPoint.PARKING:
             ground = self.airport().comms.filter(type = Comm.GND).first()
@@ -238,7 +232,7 @@ class AIPlane():
             self.send_request(req,'',)
         elif self.state== PlaneInfo.CLIMBING:
             req = "req=leaving;apt=%s" % self.airport().icao
-            self.send_request(req,"%s Tower, %s, leaving airfield" % (self.comm.identifier, callsign))
+            self.send_request(req,"%s, %s, leaving airfield" % (self.comm.identifier, callsign))
         else:
             self.log("ignoring change of state:",self.state,laor.get(Order.PARAM_SHORT,False),laor.get(Order.PARAM_ORDER,None))
 
