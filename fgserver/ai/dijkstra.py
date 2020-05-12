@@ -11,6 +11,7 @@ from django.contrib.gis.geos.linestring import LineString
 from django.contrib.gis.ptr import CPointerBase
 import math
 from _functools import reduce
+from fgserver.helper import normdeg, normalize
 
 # Fix nasty bug in geodjango
 
@@ -184,15 +185,15 @@ def closest_node(icao,pos):
     return n
 
 #icao = "SADF"
-def dj_waypoints(icao, start, endp):
-    print('dj_waypoints from %s to %s' % (start,endp))
+def dj_waypoints(airport, start, endp, start_on_rwy=False,end_on_rwy=False):
+    print('dj_waypoints in %s from %s to %s' % (airport,start,endp))
+    icao = airport.icao
     root = ET.parse(os.path.join(settings.FGATC_FG_SCENERY,"Airports",icao[0],icao[1],icao[2],"%s.groundnet.xml" % icao))
     
-    vstart = None
-    vend = None
-    
     graph = Graph()
+    #nodes = list(root.findall('.//parkingList/Parking'))+list(root.findall('.//TaxiNodes/node'))
     nodes = list(root.findall('.//parkingList/Parking'))+list(root.findall('.//TaxiNodes/node'))
+    runway_points = []
     
     for node in nodes:
         p = Point(
@@ -201,18 +202,36 @@ def dj_waypoints(icao, start, endp):
             )
         ident=node.attrib.get('index')
         runw=node.attrib.get('isOnRunway') == "1"
+        
+        #runw=node.attrib.get('isOnRunway') == "1"
         v = graph.add_vertex(ident, p)
-        if not vstart or start.distance(vstart.point) > start.distance(p):
-            vstart = v
-        if runw and (not vend or endp.distance(vend.point) > endp.distance(p)):
-            vend = v
-            
+        if runw :
+            runway_points.append(ident)
+    print('on runway:', runway_points)
+    
+    # Store routed points to avoid orphaned in file.
+    routed = []
     for node in root.findall('.//TaxiWaySegments/arc'):
         ident=node.attrib.get('name')
         first=node.attrib.get('begin')
         last=node.attrib.get('end')
         graph.add_edge(first, last)
-
+        routed.append(first)
+        routed.append(last)
+    routed = list(set(routed))
+    vstart = None
+    vend = None
+    
+    # loop on routed points to find closest to start and end.
+    for ident in routed:
+        v = graph.get_vertex(ident)
+        p = v.point
+        if (not start_on_rwy or ident in runway_points) and (not vstart or start.distance(vstart.point) > start.distance(p)):
+            #print("vstart=",ident)
+            vstart = v
+        if (not end_on_rwy or ident in runway_points)  and (not vend or endp.distance(vend.point) > endp.distance(p)):
+            #print("vend=",ident)
+            vend = v
     print("Searching from %s to %s" % (vstart,vend))
     dijkstra(graph, vstart, vend) 
     
