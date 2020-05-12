@@ -309,6 +309,8 @@ var parse_message = func(tag) {
 				ack ~= " and hold";
 			}
 			msg = string.replace(msg,'{ack}',ack);
+		} else if(last_order['ord'] == 'lineup') {
+			msg = string.replace(msg,'{ack}',sprintf('Lining up on runway %s',last_order['rwy']));
 		} else if(last_order['ord'] == 'cleartk') {
 			msg = string.replace(msg,'{ack}','Cleared for takeoff');
 		} else if(last_order['ord'] == 'startup') {
@@ -341,9 +343,12 @@ var parse_message = func(tag) {
 		} else if(last_order['ord'] == 'straight') {
 			var ack = sprintf("straight-in runway %s, report on %s",last_order['rwy'],last_order['cirw']);
 			msg = string.replace(msg,'{ack}',ack);
+		} else if(last_order['ord'] == 'soff') {
+			msg = string.replace(msg,'{ack}','Good day');
 		} else {
 			msg = string.replace(msg,'{ack}','Roger');
 		}
+		
 		if(last_order['atc'] == nil) {
 			msg = string.replace(msg,'{tuneto}','');
 		} else {
