@@ -11,15 +11,61 @@ from fgserver.messages import PosMsg, PROP_CHAT, PROP_OID, alias, PROP_FREQ,\
 from fgserver.models import Order, Comm, AircraftStatus
 from random import randint
 import fgserver
-from fgserver.ai.common import PlaneInfo
+from fgserver.ai.common import PlaneInfo, ReceivedOrder
 from fgserver import units
 from django.contrib.gis.geos.point import Point
 from fgserver import messages
 from fgserver.server.server import FGServer
 import logging
 from django.conf import settings
+from django.utils import timezone
 
 llogger = logging.getLogger(__name__)
+
+class StatePlaneClient(FGServer):
+    
+    def __init__(self, plane, delay=0.2):
+        self.plane=plane
+        plane.clearances.start = True
+        self._last_save=timezone.now()
+        FGServer.__init__(self, delay=delay)
+        self.server_to = settings.FGATC_AI_SERVER
+        plane.start()
+        plane.update(sim_time())
+    
+    def get_position_message(self):
+        status = self.plane.update(sim_time())
+        pos = status.get_position_message()
+        status.save()
+        if (status.date - self._last_save).seconds > 2:
+            self.plane.aircraft.save()
+        return pos
+
+    def after_init(self):
+        llogger.debug('Starting client loop')
+        while True:
+            try:
+                pos = self.server.incoming.get(True,.1)
+                # TODO: Process requests also (for non controlled airports/UNICOM)
+                #llogger.debug('processing order %s' % pos.get_order())
+                if not pos or not pos.get_order():
+                    continue
+                
+                freq = pos.get_value(messages.PROP_FREQ) or ''
+                freq = int(freq.replace('.','')) 
+                if not freq or freq not in  [self.plane.copilot.freq, self.plane.copilot.next_freq]:
+                    llogger.debug("Ignoring %s [%s %s]: %s" % (freq,self.plane.copilot.freq, self.plane.copilot.next_freq, pos.get_order()))
+                    continue
+                try:
+                    order = ReceivedOrder.from_string(pos.get_order())
+                    #llogger.debug("Order received %s" % order)
+                except:
+                    llogger.exception('Evaluating order %s' % pos.get_order())
+                    continue
+                if order.to ==self.plane.aircraft.callsign:
+                    self.plane.process_order(order)
+            except:
+                pass
 
 class CircuitClient(FGServer):
     

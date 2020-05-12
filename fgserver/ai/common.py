@@ -144,27 +144,3 @@ class PlaneInfo():
         (str(PARKING),'Parking'),
         (str(LINING_UP),'Lining up'),
     )
-
-class StatePlane(object):
-    states = ['stopped','pushback','taxiing','departing','turn'] 
-    STOPPED = 1
-    PUSHBACK = 2
-    TAXIING = 3
-    DEPARTING = 4
-    TURNING = 5
-    CLIMBING = 6
-    CRUISING = 7
-    APPROACHING = 8
-    LANDING = 9
-    TOUCHDOWN = 10
-    CIRCUIT_CROSSWIND=11
-    CIRCUIT_DOWNWIND=12
-    CIRCUIT_BASE=13
-    CIRCUIT_STRAIGHT=14
-    CIRCUIT_FINAL=15
-    SHORT=16
-    LINED_UP=17
-    TUNNED=18
-    PARKING = 19
-    LINING_UP=20
-    HOLD = 21
