@@ -11,6 +11,7 @@ from random import randint
 from fgserver import units, llogger
 from fgserver.units import ERAD, RAD, EPSILON
 from pyproj.geod import Geod
+from django.contrib.gis.geos.point import Point
 
 
 LETTERS = [
@@ -242,6 +243,9 @@ class Position(Vector3D):
         c = self.get_array_cart()
         return Position(c[0], c[1], c[2])
     
+    def to_point(self):
+        return Point(self.y,self.x,self.z)
+    
     @staticmethod
     def fromV3D(v3d):
         return Position(v3d.x, v3d.y, v3d.z)
@@ -387,24 +391,39 @@ class Quaternion():
         nn = angle_axis.scale(sin(angle) / naxis)
         return Quaternion(cos(angle), nn.x, nn.y, nn.z)
         
+def _get_inv(fro,to):
+    ''' 
+    Position/Point discordance-aware inverse transformation.
+    Used to calculate headings and distances.
+    '''
+    if isinstance(fro, Point):
+        flat = fro.y
+        flon = fro.x
+    else:
+        flat = fro.x
+        flon = fro.y
+    if isinstance(to, Point):
+        tlat = to.y
+        tlon = to.x
+    else:
+        tlat = to.x
+        tlon = to.y
     
+    f,b,d = GEOID.inv(flon, flat, tlon, tlat)
+    return f,b,d
+
 def get_distance(fro, to, unit=units.M):
     #info = Geodesic.WGS84.Inverse(fro.x, fro.y, to.x, to.y)
     #return info['s12'] / unit
-    f,b,d = GEOID.inv(fro.x, fro.y, to.x, to.y)
+    f,b,d = _get_inv(fro, to)
     return d/unit
     
     
 def get_heading_to(fro, to):
-#     info = Geodesic.WGS84.Inverse(fro.x, fro.y, to.x, to.y)
-#     heading = info['azi2']
-    f,b,d = GEOID.inv(fro.x, fro.y, to.x, to.y)
-    return normalize(b)
+    f,b,d = _get_inv(fro, to)
+    return normalize(f)
 
 def get_heading_to_360(fro, to):
-#     info = Geodesic.WGS84.Inverse(fro.x, fro.y, to.x, to.y)
-#     heading = info['azi2']
-#     return normalize(heading)
     return get_heading_to(fro, to)
 
 def get_heading(position,orientation):
