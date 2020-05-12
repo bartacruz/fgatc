@@ -4,24 +4,49 @@ Created on 6 de may. de 2017
 @author: julio
 '''
 import django
+import threading
 django.setup()
+import logging
+from django.conf import settings
+from fgserver.models import Airport, Order
+from fgserver.server.utils import get_pos_msg, process_message
+from fgserver.server.server import FGServer
+
+llogger = logging.getLogger(__name__)
+
+
+
+class ATCClient(FGServer):
+    def __init__(self, airport, delay=0.2):
+        self.airport=airport
+        Order.objects.filter(sender__airport=airport).update(expired=True)
+        FGServer.port=5100
+        FGServer.__init__(self, delay=delay)
+        self.server_to = settings.FGATC_AI_SERVER
+        
     
-from django.db.models.signals import post_save
-from django.dispatch.dispatcher import receiver
-from fgserver.models import Order, Request
-from fgserver.server.mpserver import FGServer
+    def incomming_message(self,pos):
+        process_message(pos)
+    
+    def get_position_message(self):
+        pos = get_pos_msg(self.airport)
+        return pos
 
-
-@receiver(post_save, sender=Order)
-def process_order(sender, instance, **kwargs):
-    if not instance.expired and not instance.received:
-        server.queue_order(instance)
-
-@receiver(post_save, sender=Request)
-def process_request(sender, instance, **kwargs):
-    server.process_request(instance)
+    def after_init(self):
+        llogger.debug('Starting client loop')
+        while True:
+            try:
+                pos = self.server.incoming.get(True,.1)
+                self.incomming_message(pos)
+            except (KeyboardInterrupt, SystemExit):
+                self.server.shutdown()
+                self.server.server_close()
+                exit()
+            except:
+                pass
     
 if __name__ == '__main__':
-    django.setup()
-    server = FGServer()
-    server.start()
+    airport = Airport.objects.filter(active=True).first()
+    client = ATCClient(airport,.5)
+    client.thread = threading.Thread(target=client.init)
+    client.thread.start()

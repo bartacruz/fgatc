@@ -322,9 +322,11 @@ class alias():
     INBOUND_APPROACH='inbound'
     JOIN_CIRCUIT='join'
     GO_AROUND='around'
+    HOLDING_SHORT = 'holdingshort'
     LINEUP='lineup'
     WAIT='wait'
     REACH_CIRCUIT='cirreach'
+    READY_TAKEOFF='readytko'
     REPORT_CIRCUIT='cirrep'
     SWITCHING_OFF='soff'
     STARTUP='startup'
@@ -525,6 +527,12 @@ class PosMsg:
     def toJson(self):
         return json.dumps(self, default=lambda o: o.__dict__)
 
+    def get_frequency(self):
+        try:
+            return int(self.get_value(PROP_FREQ).replace(".",'').ljust(5,'0'))
+        except:
+            return None
+            
     def get_request(self):
         ''' gets the player's request '''
         r = self.get_property(PROP_REQUEST)
@@ -554,17 +562,14 @@ class PosMsg:
         return self.get_property(PROP_REQUEST)
     
     def get_order(self):
-        order = '%s%s' % (self.get_property(PROP_ORDER),self.get_property(PROP_ORDER2))
+        order = '%s%s' % (self.get_value(PROP_ORDER,''),self.get_value(PROP_ORDER2,''))
         return order
     
     def get_value(self,key,default=None):
         try:
             return self.get_property(key)["value"]
         except:
-            try:
-                return self.get_property(key)
-            except:
-                return default
+            return self.properties.get(key,default)
         
     def get_property(self, key):
         return self.properties.get(key,'')

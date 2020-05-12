@@ -128,6 +128,11 @@ class Airport(Model):
     def __str__(self):
         return str(self.icao)
     
+    def on_runway(self,pos):
+        for runway in self.runways.all():
+            if runway.on_runway(pos): return True
+        return False
+            
     def active_runway(self):
         metar = self.metar.last()
         if metar:
@@ -175,7 +180,6 @@ def airportsWithinRange(pos,max_range, unit=units.NM):
         within.insert(int(d),apt)
     within = [item for item in within if item] # sorting vodoo
     return within
-
 
 class Runway(Model):
     airport=ForeignKey(Airport,on_delete=models.CASCADE,related_name='runways')
@@ -236,6 +240,12 @@ class Runway(Model):
     
     def __unicode__(self):
         return self.name
+
+def get_runway(icao,name):
+    try:
+        return Runway.objects.get(name=name, airport__icao=icao)
+    except Runway.DoesNotExist:
+        return None
 
 class Runways(Cache):
     @classmethod
@@ -345,6 +355,12 @@ class Aircrafts(Cache):
     def load(cls, instance_id):
         try:
             instance = Aircraft.objects.get(callsign=instance_id)
+            try: 
+                status = instance.status
+            except:
+                llogger.info("Creating new AircraftStatus for %s" % instance)
+                status = AircraftStatus(aircraft=instance)
+                status.save()
             cls.set(instance_id,instance)
             return instance
         except Aircraft.DoesNotExist:
@@ -403,7 +419,7 @@ class AircraftStatus(Model):
         pos.header.callsign=self.aircraft.callsign
         pos.model = self.aircraft.model
         pos.time = sim_time()
-        pos.lag = 0.1
+        pos.lag = 0.5
         pos.position=self._p2a(self.position)
         pos.orientation=self._p2a(self.orientation)
         pos.angular_vel=self._p2a(self.angular_vel)
@@ -548,7 +564,8 @@ class StartupLocation(Model):
 
     def get_position(self):
         return Position(float(self.lat), float(self.lon), float(self.altitude))
-    
+    def __str__(self):
+        return self.__unicode__()
     def __unicode__(self):
         return "%s@%s" %( self.name,self.airport)
   

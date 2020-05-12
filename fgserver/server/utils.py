@@ -4,14 +4,13 @@ Created on 28 abr. 2020
 @author: julio
 '''
 from fgserver.models import Aircrafts, Aircraft, Order, airportsWithinRange,\
-    AircraftStatus, Cache
+    AircraftStatus, Cache, Request
 from fgserver.messages import PosMsg, alias, sim_time
 from fgserver import messages, units
 import logging
 from django.utils import timezone
 import random
 from fgserver.signals import signal_order_sent, signal_order_expired
-from django.core.exceptions import ObjectDoesNotExist
 
 llogger = logging.getLogger(__name__)
 
@@ -24,54 +23,71 @@ def get_aircraft(callsign):
         aircraft.posmsg = getattr(aircraft,"posmsg", PosMsg())
     return aircraft
 
-def process_msg(pos):
-    #request = None
+def process_message(pos):
     #llogger.debug("Processing message %s" % pos)
     try:
-        try:
-            aircraft = Aircraft.objects.get(callsign=pos.callsign())
-        except Aircraft.DoesNotExist:
-            llogger.info("Creating new Aircraft %s" % pos.callsign())
-            aircraft=Aircraft(callsign=pos.callsign())
+        aircraft = Aircrafts.get(pos.callsign())
+        aircraft.posmsg=pos
+        aircraft.update_position()
+        
+        aircraft.status.update_from_position(pos)
+        
+        if not aircraft.plans.filter(enabled=True).count() and not "ATC" in pos.model:
             aircraft.save()
-        try: 
-            status = aircraft.status
-        except:
-            llogger.info("Creating new AircraftStatus for %s" % aircraft)
-            status = AircraftStatus(aircraft=aircraft)
-            status.save()
-        #llogger.debug("Status %s from %s on %s,  order=%s,  updated=%s" % (status.id, aircraft, status.freq, status.order, status.date)) 
-        freq = pos.get_value(messages.PROP_FREQ)
+            aircraft.status.save()
+        
+        freq = pos.get_frequency()
         if not freq:
             #llogger.debug("Ignoring request without freq from %s" % aircraft)
             return
-        
-#         if not "ATC" in pos.model and status.get_fg_freq() != freq:
-#             llogger.info("Aircraft %s changed freqs from %s to %s" % (pos.callsign(),status.get_fg_freq(),freq))
-        
-        oid = pos.get_value(messages.PROP_OID)
-        if oid and not "ATC" in pos.model and not AckedOrders.has(oid):
-            try:
-                #llogger.debug("orden nueva %s -> %s" % (status.order,oid,))
-                order = Order.objects.get(pk=oid)
-                if not order.received:
-                    order.received = True
-                    order.save()
-                    llogger.debug("Order marked as received %s" % order)
-                AckedOrders.set(oid, order)   
-            except:
-                llogger.exception("al recibir orden %s" % oid)
-                
-        if not aircraft.plans.filter(enabled=True).count() and not "ATC" in pos.model:
-            status.update_from_position(pos)
-            status.save()
-            #llogger.debug("External aircraft updated")
+        # Handle aircraft
+        check_acked_order(pos)
+        process_request(aircraft, pos)
     except:
         llogger.exception("Processing msg")
 
-ORDER_DELAY=3
-ORDER_MIN_LIFESPAN=7
-ORDER_MAX_LIFESPAN=10
+def check_acked_order(pos):
+    oid = pos.get_value(messages.PROP_OID)
+    if oid and not "ATC" in pos.model and not AckedOrders.has(oid):
+        try:
+            order = Order.objects.get(pk=oid)
+            if not order.received:
+                order.received = True
+                order.save()
+                llogger.debug("Order marked as received %s" % order)
+            AckedOrders.set(oid, order)   
+        except:
+            llogger.exception("al recibir orden %s" % oid)
+
+def process_request(aircraft,pos):
+    request = pos.get_value(messages.PROP_REQUEST)
+    freq = pos.get_frequency()
+    if not request:
+        #llogger.debug("Avoiding null request")
+        return
+    last_r = aircraft.requests.filter(received=True).last()
+    if last_r and request == last_r.request:
+        #llogger.debug("Avoiding request already processed %s | %s" % (request, last_r,))
+        return
+    llogger.info("aircraft %s on %s requests %s" % (aircraft.callsign, freq, request) )
+    
+    req = Request(sender=aircraft,date=timezone.now(),request=request, received=True)
+    req.receiver_id = find_comm(req)
+    if not req.receiver:
+        llogger.debug("Receiver for %s on %s not found" % (aircraft,freq,))
+        req.processed=True
+    try:
+        req.save()
+        llogger.debug("Saved request %s" % req)
+    except:
+        llogger.exception("Al guardar req %s" % req)
+
+
+ORDER_DELAY=5
+ORDER_MIN_LIFESPAN=5
+ORDER_MAX_LIFESPAN=15
+
+
 def get_pos_msg(airport):
     msg = PosMsg()
     msg.send_from(airport)
@@ -97,7 +113,7 @@ def get_pos_msg(airport):
         
         signal_order_sent.send_robust(None,order=order)
         
-    lifespan = random.randrange(ORDER_MIN_LIFESPAN,ORDER_MAX_LIFESPAN)
+    lifespan = random.randrange(ORDER_MIN_LIFESPAN,ORDER_MAX_LIFESPAN) / orders.count()
     dif =(timezone.now() - order.sent_date).total_seconds()
     
     if dif > lifespan:
@@ -110,26 +126,16 @@ def get_pos_msg(airport):
         
         order.save();
         signal_order_expired.send_robust(None,order=order)
+    else:
+        msg.properties.set_prop(messages.PROP_FREQ, str(order.sender.get_FGfreq()))
+        msg.properties.set_prop(messages.PROP_OID, str(order.id))
+        ostring, ostring2 = get_order_strings(order.get_order())
+        msg.properties.set_prop(messages.PROP_ORDER, ostring)
+        msg.properties.set_prop(messages.PROP_ORDER2, ostring2)
     
-    msg.properties.set_prop(messages.PROP_FREQ, str(order.sender.get_FGfreq()))
-    msg.properties.set_prop(messages.PROP_OID, str(order.id))
-    ostring, ostring2 = get_order_strings(order.get_order())
-    msg.properties.set_prop(messages.PROP_ORDER, ostring)
-    msg.properties.set_prop(messages.PROP_ORDER2, ostring2)
-
-    chat, chat2 = get_order_strings(order.message)
-    msg.properties.set_prop(messages.PROP_CHAT,chat )
-    msg.properties.set_prop(messages.PROP_CHAT2,chat2 )
-    
-#     try:
-#         aircraft = Aircraft.objects.get_or_create(callsign=airport.icao)
-#         status,created = AircraftStatus.objects.get_or_create(aircraft__callsign=airport.icao)
-#         status.order = str(order.id)
-#         status.freq = order.sender.frequency
-#         status.date = timezone.now()
-#         status.save()
-#     except:
-#         llogger.exception("Updating status for %s" % airport)
+        chat, chat2 = get_order_strings(order.message)
+        msg.properties.set_prop(messages.PROP_CHAT,chat )
+        msg.properties.set_prop(messages.PROP_CHAT2,chat2 )
     return msg
 
 def find_comm(request):
