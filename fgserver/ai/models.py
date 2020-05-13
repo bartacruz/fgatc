@@ -83,6 +83,10 @@ class Circuit(FlightPlan):
         self.aircraft.state=2
         self.runway = None
         self.waypoints.all().delete()
+        #self._handler=None
+        if hasattr(self, '_handler'):
+            print("REMOVING HANDLER",self._handler)
+            delattr(self,'_handler')
         self.get_handler()
         #self.generate_waypoints()
         self.aiplane = AIPlane(self)

@@ -32,6 +32,7 @@ class Copilot():
         self.icao = None
         self.order = None
         self.message = None
+        self.request = None
         self.circuits_helper = {
                 PlaneInfo.CIRCUIT_CROSSWIND: alias.CIRCUIT_CROSSWIND,
                 PlaneInfo.CIRCUIT_DOWNWIND: alias.CIRCUIT_DOWNWIND,
@@ -152,6 +153,10 @@ class Copilot():
     def state_changed(self):
         self.check_clearances()
         self.check_request()
+        if self.plane.is_stopped():
+            llogger.debug("{%s-CP} Stopped! resetting flightplan" % self.aircraft)
+            self.plane.flightplan.reset()
+            
         if self.plane.is_rejoining():
             llogger.debug("{%s-CP} Plane is rejoining, finding waypoint" % self.aircraft)
             wp = self.plane.flightplan.waypoints().filter(status=PlaneInfo.APPROACHING).last()
@@ -187,6 +192,12 @@ class Copilot():
         elif self.plane.is_rolling():
             clearances.land=False
             clearances.parking=True # TODO: request parking
+        elif self.plane.is_stopped():
+            print("CLEARING CLEARANCES")
+            clearances.parking=False
+            clearances.runway=False
+#             for i in clearances.__dict__:
+#                 setattr(clearances,i,False)
             
     def check_request(self):
         print("{%s-CP} check_request. self.freq=%s, clearances=%s" %  (self.aircraft,self.freq, self.plane.clearances,))
@@ -330,9 +341,12 @@ class Copilot():
         req = self.new_request('roger')
         req.laor= order.ord
         llogger.debug("readback: %s | %s" % (req,msg,))        
-        threading.Thread(target=self.send_delayed_request,args=(req.get_request(),msg,10,)).start()
+        self.send_delayed_request(req.get_request(),msg,10)
     
     def send_delayed_request(self,req,msg,delay=5):
+        threading.Thread(target=self._send_delayed_request,args=(req,msg,delay,)).start()
+        
+    def _send_delayed_request(self,req,msg,delay=5):
         time.sleep(delay)
         self.request = PlaneRequest.from_string(req)
         self.message = msg
@@ -347,12 +361,16 @@ class FlightPlanManager():
         self.plane = plane
         self.flightplan = flightplan
         self.airport = flightplan.airport
+        self.reset()
+        
+    def reset(self):
         self._waypoint = 0
         # TODO: free handler from FlightPlan.
         self.flightplan.init()
         self.handler = self.flightplan.get_handler()
         self.landing_generated = False
         self.depart_generated = False
+        self.reached(self.waypoint())
         
     def reached(self,waypoint):
         self._waypoint += 1
@@ -371,7 +389,7 @@ class FlightPlanManager():
         clearances = self.plane.clearances
         position = self.plane.dynamics.position
         if self.plane.is_pushback():
-            print("{%s-FP} generating waypoints to runway" % self.plane.aircraft)
+            print("{%s-FP} generating waypoints to runway %s. wp=%s" % (self.plane.aircraft, clearances.runway, self._waypoint))
             runway = self.airport.runways.get(name=clearances.runway)
             self.handler.generate_taxi_waypoints(position,runway)
             self.plane.reached(self.waypoint())    
@@ -396,7 +414,7 @@ class FlightPlanManager():
             print("{%s-FP} generating parking waypoints" % self.plane.aircraft)
             parking = self.waypoints().all().order_by("id").first()
             self.handler.generate_taxi_waypoints(position,parking.get_position())
-            
+           
     def waypoint(self):
         if self.flightplan.waypoints.all().count() <= self._waypoint:
             self._waypoint=0
@@ -434,6 +452,7 @@ class CircuitHandler():
         start_l = self.get_startup_location()
         position= start_l.get_position()
         self.create_waypoint(position, start_l.name, WayPoint.PARKING, PlaneInfo.STOPPED)
+        self.create_waypoint(position, start_l.name, WayPoint.PUSHBACK, PlaneInfo.PUSHBACK)
         self.create_waypoint(position, start_l.name, WayPoint.PUSHBACK, PlaneInfo.TAXIING)
     
     def generate_taxi_waypoints(self, pos1, pos2, heading = None):
@@ -483,19 +502,19 @@ class CircuitHandler():
         straight=runway.bearing
         if linedup:
             print("{%s-CH} using startup waypoint %s" % (self.aircraft, linedup,) )
-            position = move(linedup.get_position(),straight,100,linedup.get_position().z)
+            position = move(linedup.get_position(),straight,60,linedup.get_position().z)
         else:
             position = move(rwystart,straight,100,apalt)
         self.create_waypoint(position, "Roll start %s" % runway.name, WayPoint.RWY, PlaneInfo.DEPARTING) # Set to start roll
         position = move(rwystart,straight,300,apalt)
         self.create_waypoint(position, "Rotate1 %s" % runway.name, WayPoint.RWY, PlaneInfo.DEPARTING)
-        position = move(position,straight,350,apalt+3)
+        position = move(position,straight,350,apalt+100*units.FT)
         self.create_waypoint(position, "Rotate2 %s" % runway.name, WayPoint.RWY, PlaneInfo.DEPARTING)
         # get to 20 meters altitude after exit the runway, then start climbing
 #         position = move(rwystart,straight,int(runway.length*0.9),apalt+20)
 #         self.create_waypoint(position, "Departure %s" % runway.name, WayPoint.RWY, PlaneInfo.DEPARTING)
         # get to 20 meters altitude after exit the runway, then start climbing
-        position = move(position,straight,750,apalt+10)
+        position = move(position,straight,500,apalt+200*units.FT)
         self.create_waypoint(position, "Climbing %s" % runway.name, WayPoint.RWY, PlaneInfo.CLIMBING)
         #self.create_waypoint(position, "Departure %s"%runway.name, WayPoint.RWY, PlaneInfo.CLIMBING)
         position = move(position,straight,radius,apalt+altitude)
@@ -523,7 +542,7 @@ class CircuitHandler():
         right = normdeg(straight+90)
         rwystart = move(runway.position(), reverse, runway.length/2,apalt)
         rwyend = move(runway.position(), straight, runway.length/2,apalt)
-        position = move(rwyend,right,radius/5,apalt+altitude+1000*units.FT)
+        position = move(rwyend,right,radius/5,apalt+altitude)
         self.create_waypoint(position, "Crosswind %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_CROSSWIND)
         position = move(rwyend,left,radius,apalt+altitude)
         self.create_waypoint(position, "Downwind %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_DOWNWIND)

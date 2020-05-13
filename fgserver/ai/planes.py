@@ -30,7 +30,7 @@ class StatePlaneClient(FGServer):
         self._last_save=timezone.now()
         FGServer.__init__(self, delay=delay)
         self.server_to = settings.FGATC_AI_SERVER
-        plane.start()
+        #plane.start()
         plane.update(sim_time())
     
     def get_position_message(self):
