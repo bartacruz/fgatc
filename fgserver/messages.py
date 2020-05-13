@@ -11,6 +11,8 @@ import simplejson as json
 import logging
 from django.conf import settings
 from django.utils import timezone
+from time import perf_counter
+import time
 
 llogger = logging.getLogger(__name__)
 
@@ -26,8 +28,31 @@ PROP_OID=10110
 
 date_started = timezone.now()
 
+
+class Clock:
+    ''' A high precision clock '''    
+    def __init__(self, fps):
+        self.start = perf_counter()
+        self.frame_length = 1/fps
+    @property
+    def time(self):
+        return (perf_counter() - self.start)/self.frame_length
+        
+    @property
+    def tick(self):
+        return int(self.time)
+
+    def sleep(self):
+        r = self.tick + 1
+        while self.tick < r:
+            time.sleep(1/1000)
+        return self.tick
+
+CLOCK = Clock(1)
+
 def sim_time():
-    return (timezone.now() - date_started).total_seconds()
+    return CLOCK.time
+#     return (timezone.now() - date_started).total_seconds()
 
 
 

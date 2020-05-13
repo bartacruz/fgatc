@@ -53,7 +53,7 @@ class Controller(object):
                 a = ll.aircraft
                 if not runway.on_runway(a.get_position()):
                     ''' nop, there isn't'''
-                    self.debug("acft not in runway. removing LINED_UP state",a)
+                    self.info("Aircraft not in runway. removing LINED_UP state",a)
                     self.set_status(a, 0, 0)
                     return self.check_waiting() #check again
             if landing.count():
@@ -65,7 +65,7 @@ class Controller(object):
             '''there's someone landing and no one departing'''
             for ll in landing.all():
                 l = landing.first().aircraft
-                print("Landing?",l.get_position(),runway.get_position(),runway.bearing)
+                #print("Landing?",l.get_position(),runway.get_position(),runway.bearing)
                 dist = get_distance(l.get_position(),runway.get_position())
                 head = get_heading_to_360(l.get_position(),runway.get_position())
                 adiff = angle_diff(head, float(runway.bearing))

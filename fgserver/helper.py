@@ -440,4 +440,3 @@ def get_heading(position,orientation):
 def random_callsign():
     return "%s%s-%s%s%s" % (chr(randint(65, 90)), chr(randint(65, 90)), chr(randint(65, 90)), chr(randint(65, 90)), chr(randint(65, 90)))
 
-

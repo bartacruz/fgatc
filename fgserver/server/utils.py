@@ -88,10 +88,10 @@ ORDER_MIN_LIFESPAN=5
 ORDER_MAX_LIFESPAN=15
 
 
-def get_pos_msg(airport):
+def get_pos_msg(airport, simtime=None):
     msg = PosMsg()
     msg.send_from(airport)
-    msg.time = sim_time()
+    msg.time = simtime or sim_time()
     msg.lag=1
     
     # HACK clean chat
