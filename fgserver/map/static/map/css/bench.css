@@ -1,0 +1,38 @@
+.drawer {
+	min-width:320px;
+	transition: width .15s ease;
+}
+
+.property div {
+	padding: 3px;
+	font-size: 0.8rem;
+	margin-top: 3px;
+	margin-bottom: 3px;
+	margin-left: 5px;
+	border: 1px solid #eee;
+	color: #eee;
+	border-radius: 5px;
+	flex-grow: 1;
+	text-align:center;
+	
+}
+.property i {
+	width: 30px;
+}
+.clearances div {
+	padding: 3px;
+	padding-top:5px;
+	margin-top: 3px;
+	margin-bottom: 3px;
+	margin-left: 5px;
+	border: 1px solid #6c757d;
+	color: #6c757d;
+	min-width:25px;
+	text-align: center;
+	border-radius: 5px;
+}
+
+.clearances div.active {
+	color: #eee;
+	border: 1px solid #eee;
+}

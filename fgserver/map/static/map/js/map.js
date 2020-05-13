@@ -3,6 +3,7 @@ var planes={};
 var _handler=null;
 var _follow=null;
 var _route=null;
+var _route_markers=null;
 var _spot=null;
 var callsigns=[];
 
@@ -53,7 +54,7 @@ function updatePlane(fields) {
 	marker.options.angle=fields.heading;
 	marker.setLatLng([fields.lat,fields.lon]);	
 }
-function addPlane(fields) {
+function addPlane(fields,airport) {
 	callsign=fields.callsign;
 	var planeicon = L.icon({
 	    iconUrl: static_url + 'images/plane-25.png',
@@ -86,9 +87,31 @@ function pan_callsign(a,b,c) {
 function update_aircrafts_XHR(data,textStatus,jqXHR) {
 	update_aircrafts(data.aircrafts)
 }
-function update_aircrafts(aircrafts) {
-	
+var _airports = {};
 
+function update_airports(airports) {
+	
+	for (i in airports) {
+		var airport= airports[i];
+		var fields = airport.fields;
+		if (!_airports[fields.icao]) {
+			console.debug("update airport",airport, airports);	
+			callsign=airport.fields.icao;
+			var planeicon = L.icon({
+		    	iconUrl: static_url + 'images/atc.png',
+		    	iconSize: [25,25],
+	    		className: callsign,
+			});
+			var marker = L.marker([fields.lat,fields.lon],{icon:planeicon,title:callsign}).addTo(map);
+			marker.on({
+				click:get_runway,
+			});
+			_airports[callsign]= marker;
+			//console.debug(callsign,marker.getLatLng(),marker);
+		}
+	}
+}
+function update_aircrafts(aircrafts) {
 	//console.debug("update aircraft",data);
 	var ceeses=[]
 	var cslist=$('#aircraft_list');
@@ -130,6 +153,19 @@ function fg_update(){
 		error: update_error
 	});
 }
+function show_runway(data,textStatus,jqXHR) {
+	console.debug("show_runway",data);
+	_runway = L.polyline(data.boundaries, {color: 'blue', weight:3, lineJoin:'round'}).addTo(map);
+	rstart = data.start;
+	var wpicon = L.icon({
+	    iconUrl: static_url + 'images/wp.png',
+	    className: "runway-start",
+	    iconSize:[25,25],
+	    iconAnchor:[13,25],
+	});
+	var pos = [rstart[0],rstart[1]];
+	var marker = L.marker(pos,{icon:wpicon,title:'Runway Start'}).addTo(map);
+}
 function update_plan(data,textStatus,jqXHR) {
 	//console.debug("update plan",data);
 	var path =[]
@@ -156,6 +192,21 @@ function update_plan(data,textStatus,jqXHR) {
 	}
 	map.fitBounds(_route.getBounds());
 	
+}
+function get_runway(ev) {
+	var icao = ev.target.options.title;
+	url = '/map/runway/';
+		data = {
+			icao: icao
+		};
+	//	console.debug("update. data=",data);
+		$.ajax({
+			dataType: "json",
+			url: url,
+			data: data,
+			success: show_runway,
+			error: update_error
+		});
 }
 function get_wps(callsign){
 	if (_follow == callsign){

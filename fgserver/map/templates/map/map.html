@@ -1,18 +1,26 @@
-{% extends "base.html" %}
+{% extends "base-bench.html" %}
 {% load staticfiles %}
 
 {% block page_title %}Map |{% endblock %} 
 {% block extra_style %}
 <link rel="stylesheet" href="{% static "map/css/map.css" %}" />
+<link rel="stylesheet" href="{% static "map/css/bench.css" %}" />
 {% endblock %}
 
 {% block extra_js %}
 <script src="{% static "map/js/jQueryRotateCompressed.js" %}"></script>
-<link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.css" %}" />
+<link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.css" />
+<link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
 <script src="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.js" %}"></script>
+<script type="text/javascript" src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js">
+<!--
+
+//-->
+</script>
 <script src="{% static "map/js/rotated-marker.js" %}"></script>
 <script src="{% static "map/js/map.js" %}"></script>
 <script src="{% static "map/js/map-ws.js" %}"></script>
+<script src="{% static "map/js/bench.js" %}"></script>
 	<script type="text/javascript">
 	var ll = [{{ airport.lat }}, {{airport.lon}}];
 	var static_url="/static/map/";
@@ -39,11 +47,12 @@
 {% endblock %}
 
 {% block content %}
-<div class="row">
-	<div class="col-lg-12" id="map"></div>
-</div>
-	
+<div id="map"></div>
 {% endblock %}
+{% block drawer %}
+{% include 'map/bench.html' %}
+{% endblock %}
+
 {% block extra_navbar_collapse %}
 		<ul class="navbar-nav mr-auto">
 				<li class="navitem dropdown">

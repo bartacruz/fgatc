@@ -9,4 +9,5 @@ from django.conf.urls import url
 
 websocket_urlpatterns = [
     url(r'^aircrafts$', consumers.AircraftConsumer),
+    url(r'^stateplanes$', consumers.StatePlaneConsumer),
 ]

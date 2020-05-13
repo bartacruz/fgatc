@@ -1,0 +1,54 @@
+<div id="bench" class="bench p-2">
+	<p class="p-1 text-center text-light">FGATC StatePlane workbench</p>
+	<div class="dropdown planes p-1">
+		<button
+			class="btn btn-outline-light btn-block dropdown-toggle plane-selected"
+			type="button" data-toggle="dropdown" aria-haspopup="true"
+			aria-expanded="false"><i class="fa fa-plane"></i><span class="selected-callsign pl-2 pr-2">Planes</span></button>
+		<div class="dropdown-menu planes-list">
+		</div>
+	</div>
+	<div class="d-flex flex-column">
+		<div class="properties p-2">
+			<div class="property d-flex flex-nowrap">
+				<i class="fas fa-globe-americas p-1" title="Position"></i>
+				<div class="lat" title="Lat"></div>
+				<div class="lon" title="Lon"></div>
+				<div class="altitude" title="Alt"></div>
+			</div>
+			<div class="property d-flex flex-nowrap">
+				<i class="fas fa-tachometer-alt p-1" title="speed and altitude"></i>
+				<div class="speed" title="Speed"></div>
+				<div class="vertical-speed" title="Vertical speed"></div>
+				<div class="turn-rate" title="Turn rate"></div>
+			</div>
+			<div class="property d-flex flex-nowrap">
+				<i class="far fa-compass p-1" title="Orientation"></i>
+				<div class="yaw" title="Yaw (course)"></div>
+				<div class="pitch" title="Pitch (attitude)"></div>
+				<div class="roll" title="Roll"></div>
+			</div>
+			<div class="property d-flex flex-nowrap">
+				<i class="fas fa-map-marker-alt p-1" title="Current waypoint"></i>
+				<div class="waypoint-heading" title="WP heading-to"></div>
+				<div class="waypoint-distance" title="WP distance"></div>
+				<div class="waypoint-name" title="WP name"></div>
+			</div>
+			<div class="property d-flex flex-nowrap">
+				<i class="far fa-check-circle p-1"></i>
+				<div class="state">cruising</div>
+			</div>
+		</div>
+		<div class="clearances p-2 d-flex">
+			<div class="fas fa-play c-start"></div>
+			<div class="fas fa-taxi c-taxi"></div>
+			<div class="far fa-pause-circle c-short"></div>
+			<div class="fas fa-chess-board c-lineup"></div>
+			<div class="fas fa-plane-departure c-take_off"></div>
+			<div class="c-runway"></div>
+			<div class="fas fa-directions c-join"></div>
+			<div class="fas fa-plane-arrival c-land"></div>
+			<div class="fas fa-parking c-parking"></div>
+		</div>
+	</div>
+</div>

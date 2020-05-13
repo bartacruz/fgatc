@@ -11,4 +11,5 @@ urlpatterns = [
     path('', views.map_view, name='map_view'),
     path('aircrafts/', views.aircrafts, name='aircrafts'),
     path('flightplan/', views.flightplan, name='flightplan'),
+    path('runway/', views.runway, name='runway'),
 ]

@@ -13,6 +13,7 @@ function map_start(){
     	var message=JSON.parse(event.data);
     	//console.debug("onmessage:",message);
     	update_aircrafts(message.data);
+    	update_airports(message.airports);
     }
 	map.on({moveend:ws_update_pos});
 	fgatcws.onclose = function(event) {
