@@ -473,15 +473,16 @@ class Approach(Controller):
 
 class Controllers(Cache):
     
-    def get_controller(self, comm):
-        controller =  self.get(comm.id)
+    @classmethod
+    def get_controller(cls, comm):
+        controller =  cls.get(comm.id)
         if not controller:
             try:
                 llogger.debug("Creating controller for %s" % comm)
                 clazz = import_string(settings.DEFAULT_CONTROLLERS.get(comm.type))
                 llogger.debug("class=%s" % clazz)
                 controller = clazz(comm)
-                self.set(comm.id,controller)
+                cls.set(comm.id,controller)
             except:
                 llogger.exception("Error al crerar un controller para %s" % comm)
         return controller
