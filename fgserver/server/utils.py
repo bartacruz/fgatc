@@ -31,15 +31,20 @@ def process_message(pos):
         aircraft.update_position()
         
         aircraft.status.update_from_position(pos)
-        
+        #llogger.debug("Processing message %s" % pos)
         if not aircraft.plans.filter(enabled=True).count() and not "ATC" in pos.model:
-            aircraft.save()
-            aircraft.status.save()
+            if not hasattr(aircraft, '_saved') or (timezone.now() - aircraft._saved).seconds > 1:
+                #llogger.debug("saving %s %s" % (aircraft, pos,))
+                aircraft.save()
+                aircraft.status.save()
+                aircraft._saved = timezone.now()
+        
         
         freq = pos.get_frequency()
         if not freq:
-            #llogger.debug("Ignoring request without freq from %s" % aircraft)
+            llogger.debug("Ignoring request without freq from %s: %s" % (aircraft, pos.properties.properties,))
             return
+        
         # Handle aircraft
         check_acked_order(pos)
         process_request(aircraft, pos)
@@ -60,6 +65,7 @@ def check_acked_order(pos):
             llogger.exception("al recibir orden %s" % oid)
 
 def process_request(aircraft,pos):
+    #llogger.debug("process request %s %s" % (aircraft, pos,))
     request = pos.get_value(messages.PROP_REQUEST)
     freq = pos.get_frequency()
     if not request:
@@ -69,7 +75,7 @@ def process_request(aircraft,pos):
     if last_r and request == last_r.request:
         #llogger.debug("Avoiding request already processed %s | %s" % (request, last_r,))
         return
-    llogger.info("aircraft %s on %s requests %s" % (aircraft.callsign, freq, request) )
+    llogger.info("aircraft %s on %s (%s) requests %s" % (aircraft.callsign, freq, pos.time, request) )
     
     req = Request(sender=aircraft,date=timezone.now(),request=request, received=True)
     req.receiver_id = find_comm(req)
@@ -128,6 +134,7 @@ def get_pos_msg(airport, simtime=None):
         signal_order_expired.send_robust(None,order=order)
     else:
         msg.properties.set_prop(messages.PROP_FREQ, str(order.sender.get_FGfreq()))
+#         msg.properties.set_prop(messages.PROP_FREQ_V2, order.sender.frequency)
         msg.properties.set_prop(messages.PROP_OID, str(order.id))
         ostring, ostring2 = get_order_strings(order.get_order())
         msg.properties.set_prop(messages.PROP_ORDER, ostring)
