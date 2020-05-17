@@ -1,4 +1,3 @@
-# 
 var my_callsign = getprop("/sim/multiplay/callsign");
 var root="/sim/fgatc";
 var orders={};
@@ -17,9 +16,8 @@ var channel_order2 ="sim/multiplay/generic/string[15]";
 var channel_oid = "sim/multiplay/generic/string[10]";
 
 var channel_freq ="sim/multiplay/transmission-freq-hz";
+var channel_freq_v2 ="sim/multiplay/comm-transmit-frequency-hz";
 var channel_atc_message="/sim/messages/atc";
-var channel_atcground_message="/sim/messages/ground";
-var channel_atcapproach_message="/sim/messages/approach";
 var channel_mp_message="/sim/messages/ai-plane";
 var channel_pilot_message="/sim/messages/pilot";
 
@@ -40,6 +38,9 @@ var check_models = func(){
 		}
 		
 		var freq = n.getNode(channel_freq).getValue();
+                if (!freq) {
+		    freq = n.getNode(channel_freq_v2).getValue();
+                }
 			
 		var callsign = n.getNode("callsign").getValue();
 		var order = n.getNode(channel_order).getValue() or "";
@@ -73,7 +74,7 @@ var check_models = func(){
 		var message = n.getNode(channel_message).getValue() or "";
 		var message2 = n.getNode(channel_message2).getValue() or "";
 		message = message ~ message2;
-		if (!contains(messages,callsign) or messages[callsign] != message or updated) {
+		if (!contains(messages,callsign) or messages[callsign] != message ) {
 		    messages[callsign]=message;
 		    if (message == nil or size(message) == 0) {
 		    	print(sprintf("[FGATC] Ignoring empty message from %s: %s", callsign, message));	
@@ -81,13 +82,7 @@ var check_models = func(){
 		    	var model = n.getNode("sim/model/path").getValue();
 		    	print(sprintf("[FGATC] New message from %s (%s): %s",callsign,model, message));
 		    	if ( find("ATC",model)+1 ) { 
-					if (find("Ground",controller)+1) {
-			    			setprop(channel_atcground_message,message);
-					} else if (find("Approach",controller)+1) {
-			    			setprop(channel_atcapproach_message,message);
-					} else {
-				    		setprop(channel_atc_message,message);
-					}
+		    		setprop(channel_atc_message,message);
 		    	} else {
 		    		
 		    		setprop(channel_mp_message,message);
@@ -126,7 +121,8 @@ var set_frequency = func(node) {
 	if (comm1 and f1 != frequency_1) {
 		print(sprintf("[FGATC] New frequency on COM1: %s (old: %s)",f1,frequency_1));
 		frequency_1 = f1;
-		setprop(channel_freq,frequency_1);
+		setprop(channel_freq, frequency_1);
+		setprop(channel_freq_v2, string.replace(sprintf("%s",f1),'.',''));
 		sendmessage('tunein',0);
 	}
 	if (comm2 and f2 != frequency_2) {
@@ -309,8 +305,6 @@ var parse_message = func(tag) {
 				ack ~= " and hold";
 			}
 			msg = string.replace(msg,'{ack}',ack);
-		} else if(last_order['ord'] == 'lineup') {
-			msg = string.replace(msg,'{ack}',sprintf('Lining up on runway %s',last_order['rwy']));
 		} else if(last_order['ord'] == 'cleartk') {
 			msg = string.replace(msg,'{ack}','Cleared for takeoff');
 		} else if(last_order['ord'] == 'startup') {
@@ -343,12 +337,9 @@ var parse_message = func(tag) {
 		} else if(last_order['ord'] == 'straight') {
 			var ack = sprintf("straight-in runway %s, report on %s",last_order['rwy'],last_order['cirw']);
 			msg = string.replace(msg,'{ack}',ack);
-		} else if(last_order['ord'] == 'soff') {
-			msg = string.replace(msg,'{ack}','Good day');
 		} else {
 			msg = string.replace(msg,'{ack}','Roger');
 		}
-		
 		if(last_order['atc'] == nil) {
 			msg = string.replace(msg,'{tuneto}','');
 		} else {
