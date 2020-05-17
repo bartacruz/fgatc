@@ -2,7 +2,11 @@
 Created on 7 may. 2020
 
 @author: julio
+
+StatePlane dynamics calculation
+
 '''
+
 from fgserver import units
 from fgserver.helper import move, Position, Quaternion, normdeg, normalize,\
     get_heading_to, get_distance, angle_diff
@@ -11,7 +15,6 @@ from fgserver.models import AircraftStatus
 from django.contrib.gis.geos.point import Point
 from fgserver.ai.common import PlaneInfo
 import logging
-from logging import Formatter
 
 llogger = logging.getLogger(__name__)
 
@@ -34,6 +37,8 @@ class DynamicProps():
             setattr(self, key, kwargs[key])
     
 class DynamicManager():
+    ''' Basic dynamic calculations '''
+    
     position=None
     orientation=None
     course=0
@@ -75,12 +80,17 @@ class DynamicManager():
         if self._waiting:
             # dont move
             self._waiting= max(0,self._waiting-dt)
-            llogger.debug("WAITING on %s: %s" % (self.plane.state,self._waiting,))
+            #llogger.debug("WAITING on %s: %s" % (self.plane.state,self._waiting,))
             return
         course = get_heading_to(self.position, self.waypoint.get_position())
         dist = self.props.speed * dt
         dist_to=get_distance(self.position, self.waypoint.get_position())
         self.waypoint_distance=dist_to
+        
+        if self.props.speed == 0:
+            # Don't move!
+            return
+        
         #self.log("course: %s, dist:%s, dist_to:%s" % (course,dist,dist_to))
         seconds_before=0
         nang=0
@@ -160,8 +170,6 @@ class DynamicManager():
         
         vs = multi * min(self.props.vertical_speed*dt,abs(diff))
         na= self.position.z+vs;
-        if self.plane.is_climbing() or self.plane.is_departing():
-            print("%f.4" % dt,self.plane.state,"%f.2" %  (na/units.FT), "%f.2" % na, "%f.4" % vs,self.props.target_vertical_speed, self.props.vertical_speed, self.props.vertical_speed/units.FPM,vsdiff)
         return na
 
     def next_course(self,dt):
@@ -209,8 +217,10 @@ class TurboPropDynamicManager(DynamicManager):
         plane = self.plane
         state = plane.state
         
-        if state in ['stopped', 'short','pushback','linedup']:
+        if state in ['stopped', 'short','linedup', 'starting']:
             self.props.update(name=state, speed=0, vertical_speed=0, turn_rate=1, target_vertical_speed=1)
+        elif plane.is_pushback():
+            self.props.update(name=state,turn_rate = 160, speed = 5*units.KNOTS, target_vertical_speed=1)
         elif plane.is_taxiing():
             self.props.update(name=state,turn_rate = 160, speed = 15*units.KNOTS, target_vertical_speed=1)
         elif plane.is_departing():

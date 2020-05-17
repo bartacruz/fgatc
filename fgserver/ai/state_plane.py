@@ -49,7 +49,7 @@ class Clearances():
     
 class StatePlane(object):
     
-    states = ['stopped','pushback','taxiing','short','linedup','departing','climbing','cruising','approaching','on_circuit','rejoining','landing', 'rolling']
+    states = ['stopped','starting','pushback','taxiing','short','linedup','departing','climbing','cruising','approaching','on_circuit','rejoining','landing', 'rolling']
     
     
     def __init__(self, aircraft, dynamic_manager):
@@ -62,12 +62,16 @@ class StatePlane(object):
         
         self.machine = Machine(model=self,states=StatePlane.states,initial='stopped',before_state_change=['entering_state_changed'], after_state_change=['state_changed'])
         self.machine.add_transition('stop', '*', 'stopped')
-        self.machine.add_transition('start', 'stopped', 'pushback', conditions=[lambda: self.clearances.start])
-        self.machine.add_transition('taxi', 'pushback', 'taxiing', conditions=[lambda: self.clearances.taxi], before=['generate_waypoints'])
+        self.machine.add_transition('start', 'stopped', 'starting', conditions=[lambda: self.clearances.start])
+        self.machine.add_transition('pushback', ['stopped','starting'], 'pushback', conditions=[lambda: self.clearances.start], before=['generate_waypoints'])
+        self.machine.add_transition('pushback', 'pushback', 'taxiing', conditions=[lambda: self.clearances.taxi])
+        self.machine.add_transition('taxi', 'pushback', 'taxiing', conditions=[lambda: self.clearances.taxi])
+        # TODO: add a hold state for waiting between pushback and taxiing
 
         self.machine.add_transition('taxi', 'short', 'taxiing', conditions=[lambda: self.clearances.cross], after=[]) # remove clearance
         self.machine.add_transition('taxi', 'short', 'taxiing', conditions=[lambda: self.clearances.lineup])
         self.machine.add_transition('taxi', 'short', 'taxiing', conditions=[lambda: self.clearances.take_off])
+        
         self.machine.add_transition('taxi', 'rolling', 'taxiing', conditions=[lambda: self.clearances.parking])
         
         self.machine.add_transition('hold', 'taxiing', 'short', conditions=[lambda: self.clearances.short])
@@ -123,6 +127,12 @@ class StatePlane(object):
         self.dynamics.check()
         self.copilot.state_changed()
         
+        # TODO: Make this configurable
+        if self.is_stopped():
+            print(self.aircraft,"Re-starting")
+            self.clearances.start = True
+            self.start()
+        
     def __str__(self):
         return self.aircraft.callsign
     
@@ -133,8 +143,10 @@ class StatePlane(object):
     def reached(self,waypoint):
         llogger.debug("{%s}(%s) reached waypoint %s | %s" % (self.aircraft, self.state, waypoint.status, waypoint))
         llogger.debug("{%s}(%s) clearances: %s " % (self.aircraft, self.state, self.clearances))
+        if waypoint.status == PlaneInfo.STOPPED:
+            self.stop()
         if waypoint.status == PlaneInfo.PUSHBACK:
-            self.start()
+            self.taxi()
         if waypoint.status == PlaneInfo.SHORT:
             self.hold()
         elif waypoint.status == PlaneInfo.LINED_UP:

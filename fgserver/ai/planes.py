@@ -19,30 +19,35 @@ from fgserver.server.server import FGServer
 import logging
 from django.conf import settings
 from django.utils import timezone
+from .consumers import StatePlaneConsumer
 
 llogger = logging.getLogger(__name__)
 
 class StatePlaneClient(FGServer):
     
-    def __init__(self, plane, delay=0.2):
+    def __init__(self, plane, delay=0.2, port=None):
         self.plane=plane
         plane.clearances.start = True
+        plane.dynamics.wait(randint(5,60))
         self._last_save=timezone.now()
-        FGServer.__init__(self, delay=delay)
+        FGServer.__init__(self, delay=delay, port=port)
         self.server_to = settings.FGATC_AI_SERVER
         #plane.start()
         plane.update(sim_time())
-    
+        
     def get_position_message(self):
         status = self.plane.update(sim_time())
         pos = status.get_position_message()
         status.save()
-        if (status.date - self._last_save).seconds > 2:
+        if (status.date - self._last_save).seconds > 1:
             self.plane.aircraft.save()
+            self._last_save = status.date
+            StatePlaneConsumer.publish_plane(self.plane) # publish to map!
         return pos
 
     def after_init(self):
         llogger.debug('Starting client loop')
+        self.plane.start()
         while True:
             try:
                 pos = self.server.incoming.get(True,.1)
@@ -54,7 +59,7 @@ class StatePlaneClient(FGServer):
                 freq = pos.get_value(messages.PROP_FREQ) or ''
                 freq = int(freq.replace('.','')) 
                 if not freq or freq not in  [self.plane.copilot.freq, self.plane.copilot.next_freq]:
-                    llogger.debug("Ignoring %s [%s %s]: %s" % (freq,self.plane.copilot.freq, self.plane.copilot.next_freq, pos.get_order()))
+                    #llogger.debug("Ignoring %s [%s %s]: %s" % (freq,self.plane.copilot.freq, self.plane.copilot.next_freq, pos.get_order()))
                     continue
                 try:
                     order = ReceivedOrder.from_string(pos.get_order())

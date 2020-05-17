@@ -11,7 +11,7 @@ import time
 from django.utils import timezone
 django.setup()
 from fgserver.server import utils
-from fgserver.map.consumers import StatePlaneConsumer
+from fgserver.ai.consumers import StatePlaneConsumer
 from fgserver.ai.dynamics import TurboPropDynamicManager
 from fgserver.ai.state_plane import StatePlane
 from fgserver.models import Airport, Order
@@ -37,21 +37,21 @@ def dummy_atc(icao):
     planes = []
     
     
-    time_factor = 10
+    time_factor = 2
     
     # Very accurate clock for sim-time determination
     clock = Clock(time_factor)
     
     ''' Updates ATC message timmings according to time factor '''
-    utils.ORDER_DELAY=utils.ORDER_DELAY/time_factor
-    utils.ORDER_MIN_LIFESPAN/time_factor
-    utils.ORDER_MAX_LIFESPAN/time_factor
+    utils.ORDER_DELAY=utils.ORDER_DELAY/(time_factor*2)
+    utils.ORDER_MIN_LIFESPAN/(time_factor*2)
+    utils.ORDER_MAX_LIFESPAN/(time_factor*2)
     
     ''' Loads all available circuits on the selected airport'''
     for plan in airport.circuits.filter(enabled=True):
         plane = init_plane(plan)
         planes.append(plane)
-        clock.sleep()
+        plane.start()
         
 
     while(True): # main loop

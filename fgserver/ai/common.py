@@ -10,6 +10,9 @@ class PlaneRequest():
     freq = None
     mid = None
     apt = None
+    rwy = None
+    alt = None
+    cirw = None
     
     def __init__(self,*args, **kwargs):
         for dictionary in args:
@@ -29,6 +32,8 @@ class PlaneRequest():
     def get_request(self):
         return ';'.join('{}={}'.format(key,value) for key,value in self.__dict__.items())
     
+    def __unicode__(self):
+        return self.__str__().encode()
     def __str__(self):
         return str(self.__dict__)
     

@@ -10,19 +10,23 @@ from fgserver.models import Runway, StartupLocation, Comm, get_runway
 from fgserver.ai.dijkstra import dj_waypoints
 from fgserver import units
 from fgserver.helper import move, normdeg, Position, say_number, short_callsign,\
-    normalize
-from random import randrange, randint
+    normalize, say_char
+from random import randint
 from fgserver.messages import alias
 import re
 import threading
 import time
 
 import logging
+from django.utils import timezone
 
 llogger = logging.getLogger(__name__)
 
 
 class Copilot():
+    
+    MAX_REQUEST_TIME = 2
+    
     def __init__(self,plane):
         self.plane = plane
         self.aircraft = plane.aircraft
@@ -31,31 +35,58 @@ class Copilot():
         self.controller = None
         self.icao = None
         self.order = None
-        self.message = None
+        
         self.request = None
+        self.requests = []
+        self.request_date = None
+
+        self.message = None
+        self.messages = []
+        self.messages_date = None
+        
         self.circuits_helper = {
                 PlaneInfo.CIRCUIT_CROSSWIND: alias.CIRCUIT_CROSSWIND,
                 PlaneInfo.CIRCUIT_DOWNWIND: alias.CIRCUIT_DOWNWIND,
                 PlaneInfo.CIRCUIT_BASE: alias.CIRCUIT_BASE,
                 PlaneInfo.CIRCUIT_FINAL: alias.CIRCUIT_FINAL,
                 PlaneInfo.CIRCUIT_STRAIGHT: alias.CIRCUIT_STRAIGHT,
-            }
+        }
     
+    
+    def get_atis(self):
+        cycle = self.airport().metar.last().cycle
+        return say_char(chr(ord('a')+cycle))
+         
     def update_aircraft(self,status):
+        if len(self.requests) and (not self.request or not self.request_date or (timezone.now()-self.request_date).seconds > self.MAX_REQUEST_TIME):
+            self.request =  self.requests.pop(0)
+            self.request_date = timezone.now()
+            llogger.debug("{%s-CP}(%s) Sending queued request: %s" % (self.aircraft, self.plane.state, self.request))
         if self.request:
             status.request = self.request.get_request()
+        
+        if len(self.messages) and (not self.message or not self.message_date or (timezone.now()-self.message_date).seconds > self.MAX_REQUEST_TIME):
+            self.message =  self.messages.pop(0)
+            self.message_date = timezone.now()
+            llogger.debug("{%s-CP}(%s) Sending queued message: %s" % (self.aircraft, self.plane.state, self.message))
+        if self.message:
+            status.message = self.message
+        
         if self.order:
             status.order = self.order.oid
         if self.freq:
             status.freq = int(str(self.freq).replace(".",""))
-        status.message = self.message
-        return status
         
+        return status
+    
+    def already_requested(self,req):
+        return (self.request and self.request.req == req) or len(list(filter(lambda x: x.req == req, self.requests))) > 0
+    
     def process_order(self,order):
         if order and self.order and order.oid == self.order.oid:
             return
         llogger.debug("{%s-CP}(%s) process_order: %s" % (self.aircraft, self.plane.state, order))
-        llogger.debug("{%s-CP}(%s) clearances in:%s" % (self.aircraft, self.plane.state, self.plane.clearances))
+        #llogger.debug("{%s-CP}(%s) clearances in:%s" % (self.aircraft, self.plane.state, self.plane.clearances))
         self.order = order
         clearances = self.plane.clearances
         if order.ord==alias.TUNE_OK:
@@ -84,7 +115,7 @@ class Copilot():
             if order.freq:
                 self.next_freq = order.freq.replace(".",'')
             llogger.debug("{%s-CP}(%s) starting taxi run" % (self.aircraft, self.plane.state))
-            self.plane.taxi()
+            self.plane.pushback()
         elif order.ord == alias.WAIT:
             self.readback(order)
             clearances.cross = False
@@ -136,7 +167,7 @@ class Copilot():
             clearances.land = False
             llogger.debug("{%s-CP}(%s) going around" % (self.aircraft, self.plane.state))
             self.plane.land()
-        llogger.debug("{%s-CP}(%s) clearances out:%s" % (self.aircraft, self.plane.state, self.plane.clearances))
+        #llogger.debug("{%s-CP}(%s) clearances out:%s" % (self.aircraft, self.plane.state, self.plane.clearances))
         
     def new_request(self,what):
         return PlaneRequest(req=what, freq=self.get_FGfreq(self.freq), mid = randint(1000,9999) )
@@ -208,7 +239,7 @@ class Copilot():
             req = self.new_request('tunein')
             if self.next_freq:
                 comm =self.get_comm_by_freq(self.airport(),self.next_freq)
-            elif self.plane.state in ['stopped','pushback','taxiing']:
+            elif self.plane.state in ['stopped','starting','pushback','taxiing']:
                 comm = self.get_comm_by_type(self.airport(),Comm.GND)
             elif self.plane.is_approaching():
                 comm = self.get_comm_by_type(self.airport(),Comm.APP)
@@ -218,23 +249,23 @@ class Copilot():
             req.freq=comm.frequency
             print("{%s-CP} check_request: requesting tunein %s" % (self.aircraft,req))
         
-        elif self.plane.is_pushback() and not clearances.taxi:
+        elif self.plane.is_starting() and not clearances.taxi:
             print("{%s-CP} check_request: requesting taxi clearance" % self.aircraft)
             req = self.new_request(alias.TAXI_READY)
-        elif self.plane.is_short() and not clearances.take_off and not self.request.req == 'holdingshort':
+        elif self.plane.is_short() and not clearances.take_off and not self.already_requested(alias.HOLDING_SHORT):
             print("{%s-CP} check_request: requesting holding short" % self.aircraft)
             req = self.new_request(alias.HOLDING_SHORT)
             req.rwy = clearances.runway
-        elif self.plane.is_linedup() and not clearances.take_off and not self.request.req == 'readytko':
+        elif self.plane.is_linedup() and not clearances.take_off and not self.already_requested(alias.READY_TAKEOFF):
             print("{%s-CP} check_request: requesting ready to take off" % self.aircraft)
             req = self.new_request(alias.READY_TAKEOFF)
             req.rwy = clearances.runway
         elif self.plane.is_climbing() and not self.request.req == alias.LEAVING:
             req = self.new_request(alias.LEAVING)
             req.rwy = clearances.runway
-            self.send_delayed_request(req.get_request(), "Leaving airfield", 5)
-            return
-        elif self.plane.is_approaching() and not (clearances.join or clearances.land) and not self.request.req == alias.INBOUND_APPROACH:
+#             self.send_delayed_request(req.get_request(), "Leaving airfield", 5)
+#             return
+        elif self.plane.is_approaching() and not (clearances.join or clearances.land) and not self.already_requested(alias.INBOUND_APPROACH):
             comm = self.get_comm_by_type(self.airport(),Comm.APP)
             if self.freq and self.freq == comm.frequency:
                 print("{%s-CP} check_request: requesting inbound approach" % self.aircraft)
@@ -256,14 +287,15 @@ class Copilot():
             req = self.new_request('park')
         if req:
             llogger.debug("{%s-CP} Sending request %s" % (self.aircraft,req))
-            self.request = req
+            self.requests.append(req)
+            self.make_message(req)
     
     def make_message(self,request):
         templates={
            alias.STARTUP:"{atis}request startup clearance",
            alias.TAXI_READY:"{atis}ready to taxi",
-           alias.HOLDING_SHORT : "{atis}holding short of runway {rwy}",
-           alias.READY_TAKEOFF : "{atis}ready for take-off, runway {rwy}",
+           alias.HOLDING_SHORT : "holding short of runway {rwy}",
+           alias.READY_TAKEOFF : "ready for take-off, runway {rwy}",
            alias.LEAVING : "leaving airfield",
            alias.INBOUND_APPROACH : "{atis}for inbound approach",
            alias.CIRCUIT_CROSSWIND: '{cirw} for runway {rwy}',
@@ -271,20 +303,21 @@ class Copilot():
            alias.CIRCUIT_BASE: '{cirw} for runway {rwy}',
            alias.CIRCUIT_FINAL: '{cirw} for runway {rwy}',
            alias.CIRCUIT_STRAIGHT: '{cirw} for runway {rwy}',
-           
-           alias.LINEUP : "line up on {rwy}{hld}",
-           alias.REPORT_CIRCUIT: 'report on {cirw}',
-           alias.STARTUP: "start up approved{qnh}",
-           alias.TAXI_TO: "taxi to {rwy}{via}{hld}{short}{lineup}",
-           alias.WAIT: "we wait", 
-           alias.SWITCHING_OFF: "Good day",
-           alias.TAXI_PARK: "parking {park}",
         }
         msg = templates.get(request.req,None)
         if not msg:
-            self.plane.info("No readback for %s" % request.req)
+            llogger.debug("{%s-CP} No message for %s" % (self.aircraft, request.req, ))
             return
-                   
+        msg = "%s,%s, %s" % (self.controller, short_callsign(self.aircraft.callsign), msg)
+        msg = re.sub(r'{atis}','with %s, ' % self.get_atis(),msg)
+        msg = re.sub(r'{cs}',short_callsign(self.aircraft.callsign),msg)
+        msg = re.sub(r'{comm}',self.controller,msg)
+        msg = re.sub(r'{rwy}',say_number(request.rwy),msg)
+        msg = re.sub(r'{alt}',str(request.alt or ''),msg)
+        msg = re.sub(r'{cirw}',request.cirw or '',msg)
+            
+        self.messages.append(msg)
+    
     def readback(self,order):
         if not self.controller:
             return
@@ -340,7 +373,9 @@ class Copilot():
         msg += ", %s" % short_callsign(self.aircraft.callsign)
         req = self.new_request('roger')
         req.laor= order.ord
-        llogger.debug("readback: %s | %s" % (req,msg,))        
+        llogger.debug("readback: %s | %s" % (req,msg))
+#         self.requests.append(req)
+#         self.messages.append(msg)
         self.send_delayed_request(req.get_request(),msg,10)
     
     def send_delayed_request(self,req,msg,delay=5):
@@ -348,8 +383,8 @@ class Copilot():
         
     def _send_delayed_request(self,req,msg,delay=5):
         time.sleep(delay)
-        self.request = PlaneRequest.from_string(req)
-        self.message = msg
+        self.requests.append(PlaneRequest.from_string(req))
+        self.messages.append(msg)
         llogger.debug("delayed request: %s | %s" % (req,msg,))
     
     
@@ -388,11 +423,11 @@ class FlightPlanManager():
         print("{%s-FP} generating wpts" % self.plane.aircraft)
         clearances = self.plane.clearances
         position = self.plane.dynamics.position
-        if self.plane.is_pushback():
+        if self.plane.is_starting():
             print("{%s-FP} generating waypoints to runway %s. wp=%s" % (self.plane.aircraft, clearances.runway, self._waypoint))
             runway = self.airport.runways.get(name=clearances.runway)
             self.handler.generate_taxi_waypoints(position,runway)
-            self.plane.reached(self.waypoint())    
+            #self.plane.reached(self.waypoint())    
         elif self.plane.is_linedup() and not self.depart_generated:
             print("{%s-FP} generating circuit waypoints" % self.plane.aircraft)
             self.depart_generated=True
@@ -453,8 +488,7 @@ class CircuitHandler():
         position= start_l.get_position()
         self.create_waypoint(position, start_l.name, WayPoint.PARKING, PlaneInfo.STOPPED)
         self.create_waypoint(position, start_l.name, WayPoint.PUSHBACK, PlaneInfo.PUSHBACK)
-        self.create_waypoint(position, start_l.name, WayPoint.PUSHBACK, PlaneInfo.TAXIING)
-    
+        
     def generate_taxi_waypoints(self, pos1, pos2, heading = None):
         # TODO: Change when geodjango is completly implemented
         apalt=float(self.airport.altitude*units.FT+2)
