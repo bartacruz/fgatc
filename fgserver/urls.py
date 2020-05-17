@@ -8,8 +8,8 @@ admin.autodiscover()
 
 urlpatterns = [
     path('',views.home, name='home' ),
-    path('login',auth_views.LoginView.as_view()),
-    path('logout',auth_views.LogoutView.as_view()),
+    path('login/',views.fgatc_login),
+    path('logout/',views.fgatc_logout),
     path('admin/', admin.site.urls),
     path('map/', include('fgserver.map.urls')),
     path('tracker/', include('fgserver.tracker.urls')),

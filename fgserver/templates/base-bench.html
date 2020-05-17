@@ -68,7 +68,30 @@ $(document).ready(function() {
              </li>
 				
 			{% else %}
-				<li class="nav-item"><a class="btn btn-success" href="/login"><span class="fas fa-user"></span>&nbsp;Login</a></li>
+				<li class="nav-item dropdown">
+					<a class="nav-link drowpdown-toggle btn btn-success" href="#" data-toggle="dropdown">
+						<span class="fas fa-user"></span>&nbsp;Login
+					</a>
+					<div class="dropdown-menu dropdown-menu-right">
+						<div class="login-wrapper p-3" style="min-width: 200px;">
+						<form action='/login/' method="POST">
+							<input type="hidden" name="next" value="{{ current_path }}" />
+            				{% csrf_token %}
+                			{% if form.errors %}{{ form.errors}}{% endif %}
+                			<div class="form-group">
+			                	<label for="id_email">Login:</label>
+			                	<input class="form-control" type="text" name="username" id="id_email">
+			                </div>
+			                <div class="form-group">
+			                <label for="id_password">Pass:</label>
+			                <input class="form-control" type="password" name="password" id="id_password">
+			                </div>
+			                
+			                <button class="btn btn-primary " type="submit">Submit</button>
+			            </form>
+			            </div>
+					</div>
+				</li>
 			{% endif %}
 			   
 			</ul>

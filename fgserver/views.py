@@ -4,10 +4,12 @@ Created on 14 mar. 2019
 @author: julio
 '''
 from fgserver import settings
-from django.shortcuts import render
+from django.shortcuts import render, redirect, render_to_response
 from django.http.response import HttpResponseServerError, HttpResponse
 from fgserver.models import Airport
 import logging
+from django.contrib.auth import authenticate, login, logout
+from django.urls.base import reverse
 
 llogger = logging.getLogger(__name__)
 
@@ -40,5 +42,23 @@ def clear(request):
     except:
         return HttpResponseServerError("Error deactivating airports")
 
-
+def fgatc_login(request):
+    username = ''
+    password = ''
+    if request.POST:
+        username = request.POST.get('username').strip().lower()
+        password = request.POST.get('password')
+        user = authenticate(username=username, password=password)
+        if user is not None:
+            if user.is_active:
+                
+                next_url = request.META['HTTP_REFERER'] or '/'
+                login(request, user)
+                return redirect(next_url)
+    
+    return redirect(reverse('home'))
+        
+def fgatc_logout(request):
+    logout(request)
+    return redirect('/')    
 
