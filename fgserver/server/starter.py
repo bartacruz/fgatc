@@ -5,6 +5,7 @@ Created on 6 de may. de 2017
 '''
 import django
 import threading
+from queue import Empty
 django.setup()
 import logging
 from django.conf import settings
@@ -42,8 +43,10 @@ class ATCClient(FGServer):
                 self.server.shutdown()
                 self.server.server_close()
                 exit()
-            except:
+            except Empty:
                 pass
+            except:
+                llogger.exception("On after_init")
     
 if __name__ == '__main__':
     airport = Airport.objects.filter(active=True).first()

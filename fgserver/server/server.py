@@ -19,8 +19,9 @@ llogger = logging.getLogger(__name__)
 class FGServer():
     port = 5020
     
-    def __init__(self, delay=0.5):
-        server_address = ("0.0.0.0", FGServer.port)
+    def __init__(self, delay=0.5, port=None):
+        port = port or FGServer.port
+        server_address = ("0.0.0.0", port)
         self.server_to = settings.FGATC_RELAY_SERVER
         self.delay=delay
         FGServer.port = FGServer.port +1
