@@ -6,8 +6,9 @@ Created on 14 mar. 2019
 
 from . import consumers
 from django.conf.urls import url
+from fgserver import ai
 
 websocket_urlpatterns = [
     url(r'^aircrafts$', consumers.AircraftConsumer),
-    url(r'^stateplanes$', consumers.StatePlaneConsumer),
+    url(r'^stateplanes$', ai.consumers.StatePlaneConsumer),
 ]

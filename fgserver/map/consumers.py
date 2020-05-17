@@ -4,7 +4,7 @@ Created on 14 mar. 2019
 @author: julio
 '''
 from channels.generic.websocket import WebsocketConsumer, JsonWebsocketConsumer
-from fgserver import llogger, setInterval, units
+from fgserver import llogger, setInterval
 from uuid import uuid4
 from channels.layers import get_channel_layer
 import json
@@ -55,44 +55,3 @@ class AircraftConsumer(JsonWebsocketConsumer):
     def receive_json(self, content):
         llogger.debug("Receive from %s. thread=%s, data=%s" % (self,Updater.thread,content))
         
-
-class StatePlaneConsumer(JsonWebsocketConsumer):
-    groups = ["stateplanes"]
-
-    def connect(self):
-        self.accept()
-        llogger.debug("Connect to %s" % self)
-    
-    def disconnect(self, code):
-        llogger.debug("Disconnect from %s: %s" % (self,code))
-        WebsocketConsumer.disconnect(self, code)
-        
-    def plane_update(self,event):
-        self.send_json(event,)
-
-    def receive_json(self, content):
-        llogger.debug("Receive from %s. data=%s" % (self, content))
-        
-    @staticmethod
-    def publish_plane(plane):
-        ser = {'callsign': plane.aircraft.callsign,
-               'state' : plane.state, 
-               'position': plane.aircraft.get_position().get_array(),
-               'altitude': plane.aircraft.altitude,
-               'speed': plane.dynamics.props.speed/units.KNOTS,
-               'vertical_speed': plane.dynamics.props.vertical_speed,
-               'turn_rate': plane.dynamics.actual_turn_rate,
-               'course': plane.dynamics.course,
-               'pitch': 0,
-               'roll': plane.dynamics.roll,
-               'waypoint_name': plane.dynamics.waypoint.name if plane.dynamics.waypoint else None,
-               'waypoint_heading': plane.dynamics.target_course if plane.dynamics.waypoint else None,
-               'waypoint_distance': plane.dynamics.waypoint_distance if plane.dynamics.waypoint else None,
-               'clearances': plane.clearances.__dict__,
-               }
-        message = {'type': 'plane_update', 'Model':'StatePlane','data':ser}
-    
-        channel_layer = get_channel_layer()
-        #llogger.debug("Updater: sending %s" % message)
-        async_to_sync(channel_layer.group_send)("stateplanes",message)
-
