@@ -5,7 +5,7 @@ Created on 11 mar. 2019
 '''
 from django.apps.config import AppConfig
 from django.db.models.signals import post_save
-from fgserver.atc.tasks import do_process_request
+from .controllers import process_request
 
 class ATCConfig(AppConfig):
     name = "fgserver.atc"
@@ -15,7 +15,7 @@ class ATCConfig(AppConfig):
         from fgserver.models import Request
         post_save.connect(
             sender=Request, 
-            receiver=do_process_request, 
+            receiver=process_request, 
             dispatch_uid="atc_process_request")
         print("ATC HOOKED")
         

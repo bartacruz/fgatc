@@ -4,7 +4,7 @@ Created on 31/07/2015
 @author: julio
 '''
 from fgserver.atc.models import Tag
-from fgserver.models import Order, Comm, Request
+from fgserver.models import Order, Comm, Request, Cache
 from django.utils import timezone
 from fgserver.messages import alias
 from fgserver.ai.planes import PlaneInfo
@@ -16,6 +16,8 @@ import threading
 from fgserver.atc.functions import get_message
 import logging
 from datetime import timedelta
+from django.utils.module_loading import import_string
+from django.conf import settings
 
 llogger = logging.getLogger(__name__)
 
@@ -53,7 +55,7 @@ class Controller(object):
                 a = ll.aircraft
                 if not runway.on_runway(a.get_position()):
                     ''' nop, there isn't'''
-                    self.info("Aircraft not in runway. removing LINED_UP state",a)
+                    llogger.info("Aircraft %s not in runway. removing LINED_UP state" % a)
                     self.set_status(a, 0, 0)
                     return self.check_waiting() #check again
             if landing.count():
@@ -70,7 +72,7 @@ class Controller(object):
                 head = get_heading_to_360(l.get_position(),runway.get_position())
                 adiff = angle_diff(head, float(runway.bearing))
                 # TODO: Make this values configurables.
-                if dist > 3*units.NM or adiff > 20 :
+                if dist > 5*units.NM or adiff > 20 :
                     ''' nop, he isn't'''
                     self.debug("acft is not on landing path. removing LANDING state",l,dist, head,l.heading, adiff)
                     self.set_status(l,0,0)
@@ -83,7 +85,8 @@ class Controller(object):
                 s.save()
                 self.debug('No one landing and no one departing, let %s take off. %s,%s' % (s,s.id,s.number))
                 '''No one landing and no one departing, let them take off'''
-                self.manage(s.aircraft.requests.filter(request__contains="holdingshort").last())
+                last_r=s.aircraft.requests.filter(request__contains="holdingshort").last()
+                self.manage(last_r)
         
     def log(self,*argv):
         msg = "[%s]" % self.comm
@@ -105,6 +108,7 @@ class Controller(object):
         
     def manages(self,req):
         # TODO: possible security leak?. A plane can issue a request with '__init__', or destroy. 
+        #print("MANAGES",req,hasattr(self,req),self)
         return req and hasattr(self,req)
     
     def find_controller(self,request):
@@ -145,7 +149,7 @@ class Controller(object):
             response = handler(request)
             threading.Thread(target=check_waiting,args=(self,)).start()    
         else:
-            self.debug("Rerouting request")
+            self.debug("Rerouting request %s" % request)
             response= self.reroute(request)
         
         if response:
@@ -360,6 +364,7 @@ class Tower(Controller):
         response=self._init_response(request)
         lined = self.comm.airport.tags.filter(status=PlaneInfo.LINED_UP).count()
         landing = self.comm.airport.tags.filter(status=PlaneInfo.LANDING).count()
+        self.debug("final lined=%s landing=%s" % (lined,landing,))
         if lined or landing:
             response.add_param(Order.PARAM_ORDER,alias.GO_AROUND)
             response.add_param(Order.PARAM_CIRCUIT_WP,alias.CIRCUIT_BASE)
@@ -465,11 +470,35 @@ class Approach(Controller):
     
     def withyou(self,request):
         return self.inbound(request)
-        
+
+class Controllers(Cache):
+    
+    def get_controller(self, comm):
+        controller =  self.get(comm.id)
+        if not controller:
+            try:
+                llogger.debug("Creating controller for %s" % comm)
+                clazz = import_string(settings.DEFAULT_CONTROLLERS.get(comm.type))
+                llogger.debug("class=%s" % clazz)
+                controller = clazz(comm)
+                self.set(comm.id,controller)
+            except:
+                llogger.exception("Error al crerar un controller para %s" % comm)
+        return controller
+                
 def check_waiting(tower):
     llogger.debug("CHECK_WAITING")
     time.sleep(3)
     llogger.debug("END CHECK_WAITING")
     tower.check_waiting()
+
+def process_request(sender, instance, **kwargs):
+    if instance.receiver and instance.received and not instance.processed:
+        llogger.debug("Processing request %s " % instance)
+        controller = Controllers.get_controller(instance.receiver)
+        controller.manage(instance)
+        instance.processed=True
+        instance.save()
+    
     
 
