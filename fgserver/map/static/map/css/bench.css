@@ -36,3 +36,22 @@
 	color: #eee;
 	border: 1px solid #eee;
 }
+.properties .altitude:after,
+.properties .waypoint-distance:after {
+	content: ' m';
+}
+
+.properties .speed:after {
+	content: ' kts';
+}
+
+.properties .vertical-speed:after {
+	content: ' m/s';
+}
+
+.properties .waypoint-heading:after,
+.properties .yaw:after,
+.properties .pitc:after,
+.properties .roll:after {
+	content: '°';
+}

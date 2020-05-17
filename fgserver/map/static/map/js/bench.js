@@ -48,6 +48,8 @@ $.widget("fgatc.bench", {
 	 	$("#bench .properties .waypoint-distance").html(round(plane.waypoint_distance,1));
 	 	$("#bench .properties .state").html(plane.state);
 	 	
+	 	$("#bench .comms .request").html(plane.request);
+	 	$("#bench .comms .message").html(plane.message);
 	 	for (c in plane.clearances) {
 	 		if (plane.clearances[c]) {
 	 			$("#bench .clearances .c-"+c).addClass("active");
