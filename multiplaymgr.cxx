@@ -665,6 +665,8 @@ static const IdPropertyList sIdPropertyList[] = {
     { EMESARYBRIDGETYPE_BASE + 29, "sim/multiplay/emesary/bridge-type[29]", simgear::props::INT, TT_SHORTINT,  V1_1_2_PROP_ID, NULL, NULL },
 
     { FALLBACK_MODEL_ID, "sim/model/fallback-model-index", simgear::props::INT, TT_SHORTINT,  V1_1_2_PROP_ID, NULL, NULL },
+    { 13001, "sim/multiplay/comm-transmit-frequency-hz", simgear::props::INT, TT_INT,  V1_1_2_PROP_ID, NULL, NULL },
+
 };
 /*
  * For the 2017.x version 2 protocol the properties are sent in two partitions,

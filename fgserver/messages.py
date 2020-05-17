@@ -17,6 +17,7 @@ import time
 llogger = logging.getLogger(__name__)
 
 PROP_FREQ = 10001
+PROP_FREQ_V2 = 13001
 
 PROP_ORDER2 = 10115
 PROP_CHAT = 10116

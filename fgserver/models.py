@@ -395,7 +395,8 @@ class AircraftStatus(Model):
     def set_fg_freq(self,value):
         if not value:
             self.freq = None
-        self.freq = value.replace(".","")
+        else:
+            self.freq = value.replace(".","")
         
     def update_from_position(self,pos):
         self.model = pos.model
