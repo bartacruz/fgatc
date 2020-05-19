@@ -15,16 +15,16 @@ Nasal script for AI ATC communication.
 
 ## Instalation
 
-Place the `atcng.nas` file into FlightGear's root directory or in your local .fgfs/ directory, under `Nasal/`.
+Place the `*.nas` files into FlightGear's root directory or in your local .fgfs/ directory, under `Nasal/`.
 
 
 ## Helper functions
 
 | Helper | Use |
 | ------- | ------ |
-| atcng.dialog.show() | Opens the messages dialog | 
-| atcng.readback()| Sends a readback of the last message received |
-| atcng.flow_next()|Sends a message with the next step of the communication flow |
+| fgatcdialog.dialog.show() | Opens the messages dialog | 
+| fgatc.readback()| Sends a readback of the last message received |
+| fgatcdiaglog.flow_next()|Sends a message with the next step of the communication flow |
 
 You can bind this helpers to a keystroke or joystick button for an easy communication flow.
 
@@ -47,7 +47,7 @@ Alternatively, you can edit the `keyboard.xml` file of the FG instalation and re
   <desc>Display a dialog for sending messages to the tuned-in ATC service (if any)</desc>
   <binding>
     <command>nasal</command>
-    <script>atcng.dialog.show()</script>
+    <script>fgatcdialog.dialog.show()</script>
   </binding>
 </key>
 ```
@@ -71,7 +71,7 @@ Having `readback()` and `flow_next()` assigned to joystic buttons, you can make 
   <desc>Sends a Readback of last ATC message</desc>
   <binding>
      <command>nasal</command>
-     <script>atcng.readback();</script>
+     <script>fgatc.readback();</script>
   </binding>
 </button>
 
@@ -79,7 +79,7 @@ Having `readback()` and `flow_next()` assigned to joystic buttons, you can make 
   <desc>Sends next message according to ATC Flow</desc>
   <binding>
     <command>nasal</command>
-    <script>atcng.flow_next();</script>
+    <script>fgatcdialog.flow_next();</script>
   </binding>
 </button>
 ```
