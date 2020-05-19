@@ -11,10 +11,9 @@ from django.contrib.gis.geos.linestring import LineString
 from django.contrib.gis.ptr import CPointerBase
 import math
 from _functools import reduce
-from fgserver.helper import normdeg, normalize
+from fgserver.helper import get_heading_to, angle_diff, Position
 
 # Fix nasty bug in geodjango
-
 original_del = CPointerBase.__del__
 
 def patched_del(self):
@@ -22,10 +21,12 @@ def patched_del(self):
         original_del(self)
     except ImportError:
         pass
-
+    
 CPointerBase.__del__ = patched_del
 
 class Vertex:
+    ''' Represents points in the graph '''
+    
     def __init__(self, node, point):
         self.id = node
         self.point = point
@@ -73,6 +74,8 @@ class Vertex:
         return self.distance >= other.distance
     
 class Graph:
+    '''  Dijkstra's matrix '''
+    
     def __init__(self):
         self.vert_dict = {}
         self.num_vertices = 0
@@ -121,7 +124,8 @@ def shortest(v, path):
 import heapq
 
 def dijkstra(aGraph, start, target):
-    #print '''Dijkstra's shortest path'''
+    '''Dijkstra's shortest path'''
+    
     # Set the distance for the start node to zero 
     start.set_distance(0)
 
@@ -145,12 +149,6 @@ def dijkstra(aGraph, start, target):
             if new_dist < nextn.get_distance():
                 nextn.set_distance(new_dist)
                 nextn.set_previous(current)
-#                 print('updated : current = %s nextn = %s new_dist = %s' \
-#                         %(current.get_id(), nextn.get_id(), nextn.get_distance()))
-#             else:
-#                 print('not updated : current = %s nextn = %s new_dist = %s' \
-#                         %(current.get_id(), nextn.get_id(), nextn.get_distance()))
-
         # Rebuild heap
         # 1. Pop every item
         while len(unvisited_queue):
@@ -160,14 +158,15 @@ def dijkstra(aGraph, start, target):
         heapq.heapify(unvisited_queue)
 
 
-
-
 class Way(LineString):
     def __init__(self, *args, **kwargs):
         LineString.__init__(self, *args, srid=4362,**kwargs)
         self.name = kwargs.get('name',None)
     
 def shit_to_deg(val):
+    ''' Converts shitty (?) degrees and fractional minutes (e.g. S58 15.21323) 
+        into fractional signed degrees (-58.26123123) 
+    '''
     mult = int('%s1' % val[:1].replace("S",'-').replace('W',"-").replace("N","").replace("E",""))
     v1 = val[1:3]
     v2 = val[4:]
@@ -175,18 +174,83 @@ def shit_to_deg(val):
     return res
 
 def closest_node(icao,pos):
-    ppos = Point(pos.y,pos.x)
+    ''' Finds the closest taxi node of a position 
+        pos is an instance of Point or Position
+    '''
+    if isinstance(pos, Position):
+        pos = pos.to_point()
+    
+    # get taxi nodes from ground net file. TODO: use the DB     
     root = ET.parse(os.path.join(settings.FGATC_FG_SCENERY,"Airports",icao[0],icao[1],icao[2],"%s.groundnet.xml" % icao))
     nodes = [Point(
             shit_to_deg(n.attrib.get('lon')),
             shit_to_deg(n.attrib.get('lat')),
             ) for n in list(root.findall('.//TaxiNodes/node')) if n.attrib.get('isOnRunway')=='1']
-    n = reduce(lambda x,y: x if x.distance(ppos) < y.distance(ppos) else y,nodes)
+    n = reduce(lambda x,y: x if x.distance(pos) < y.distance(pos) else y,nodes)
     return n
 
+def get_next_on_runway(icao,pos,heading):
+    ''' Finds closest taxi node ON RUNWAY for a position in a particular
+        heading. Useful to find the starting point of a runway exit path
+    '''
+    if isinstance(pos, Position):
+        pos = pos.to_point()
+    
+    points = []
+    for entry in get_nodes(icao,on_runway=True):
+        p = entry[1]
+        ident=entry[0].attrib.get('index')
+        dist = pos.distance(p)
+        diff = angle_diff(float(heading),get_heading_to(pos,p))
+        delta = dist*diff
+        print(ident, delta)
+        points.append((delta,p))
+    points.sort(key=lambda x: x[0])
+    print('on runway:', points)
+    return points[0][1]
+
+def get_runway_exit(runway, pos, heading):
+    if isinstance(pos, Position):
+        pos = pos.to_point()
+    first = get_next_on_runway(runway.airport.icao,pos,heading)
+    dest = runway.airport.startups.order_by('?').first()
+    route = dj_waypoints(runway.airport, first, dest.get_position().to_point(), start_on_rwy=False,end_on_rwy=False)
+    exit_route=[]
+    for i in route:
+        exit_route.append(i)
+        if not runway.on_runway(i.point):
+            print('Exit:',i)
+            return exit_route
+    return None
+    
+    
+
+def get_nodes(icao, on_runway=None):
+    icao = icao
+    root = ET.parse(os.path.join(settings.FGATC_FG_SCENERY,"Airports",icao[0],icao[1],icao[2],"%s.groundnet.xml" % icao))
+    nodes = list(root.findall('.//parkingList/Parking'))+list(root.findall('.//TaxiNodes/node'))
+    ret = []
+    for node in nodes:
+        p = Point(
+            shit_to_deg(node.attrib.get('lon')),
+            shit_to_deg(node.attrib.get('lat')),
+        )
+        if on_runway == None:
+            ret.append((node,p))
+        elif on_runway == False and node.attrib.get('isOnRunway') == "0":
+            ret.append((node,p))
+        elif on_runway == True and node.attrib.get('isOnRunway') == "1":
+            ret.append((node,p))
+    return ret
+    
 #icao = "SADF"
 def dj_waypoints(airport, start, endp, start_on_rwy=False,end_on_rwy=False):
     print('dj_waypoints in %s from %s to %s' % (airport,start,endp))
+    if isinstance(start,Position):
+        start = start.to_point()
+    if isinstance(endp,Position):
+        endp = endp.to_point()
+    
     icao = airport.icao
     root = ET.parse(os.path.join(settings.FGATC_FG_SCENERY,"Airports",icao[0],icao[1],icao[2],"%s.groundnet.xml" % icao))
     
