@@ -5,8 +5,7 @@ Created on 17 may. 2020
 '''
 
 from fgserver.models import Comm, StartupLocation
-from django.utils import timezone
-from fgserver.messages import alias
+from fgserver.messages import alias, sim_time
 import re
 from fgserver.helper import short_callsign, say_number
 import logging
@@ -18,7 +17,7 @@ class Action():
     
     def __init__(self,handler):
         self.handler = handler
-        self.issued = timezone.now()
+        self.issued = sim_time()
         self.done = False
         self._delay=2 # Default delay before executing
     
@@ -28,10 +27,14 @@ class Action():
     def send_request(self,request,with_message=False):
         self.handler.requests.append(request)
         if with_message:
-            send_message(request)
+            self.send_message(request)
     
+    @property
+    def waiting(self):
+        return self._delay and sim_time() - self.issued < self._delay
+        
     def is_ready(self):
-        return not self.done and (not self._delay or (timezone.now() - self.issued).seconds > self._delay)
+        return not self.done and not self.waiting
     
     def execute(self):
         pass
@@ -39,6 +42,40 @@ class Action():
     
     def is_done(self):
         return self.done
+
+    def send_message(self,request):
+        templates={
+           alias.STARTUP:"{atis}request startup clearance",
+           alias.TAXI_READY:"{atis}ready to taxi",
+           alias.HOLDING_SHORT : "holding short of runway {rwy}",
+           alias.READY_TAKEOFF : "ready for take-off, runway {rwy}",
+           alias.LEAVING : "leaving airfield",
+           alias.INBOUND_APPROACH : "{atis}for inbound approach",
+           alias.CIRCUIT_CROSSWIND: '{cirw} for runway {rwy}',
+           alias.CIRCUIT_DOWNWIND: '{cirw} for runway {rwy}',
+           alias.CIRCUIT_BASE: '{cirw} for runway {rwy}',
+           alias.CIRCUIT_FINAL: '{cirw} for runway {rwy}',
+           alias.CIRCUIT_STRAIGHT: '{cirw} for runway {rwy}',
+           alias.CLEAR_RUNWAY: 'clear of runway {rwy}',
+        }
+        msg = templates.get(request.req,None)
+        if not msg:
+            llogger.debug("{%s-CP} No message for %s" % (self.handler.aircraft, request.req, ))
+            return
+        msg = "%s,%s, %s" % (self.handler.controller, short_callsign(self.handler.aircraft.callsign), msg)
+        msg = re.sub(r'{atis}','with %s, ' % self.handler.get_atis(),msg)
+        msg = re.sub(r'{cs}',short_callsign(self.handler.aircraft.callsign),msg)
+        msg = re.sub(r'{comm}',self.handler.controller,msg)
+        msg = re.sub(r'{rwy}',say_number(request.rwy),msg)
+        msg = re.sub(r'{alt}',str(request.alt or ''),msg)
+        msg = re.sub(r'{cirw}',request.cirw or '',msg)
+            
+        self.handler.messages.append(msg)
+
+
+
+
+
 
 class ReadBackAction(Action):
     
@@ -50,7 +87,7 @@ class ReadBackAction(Action):
     
      
     def is_ready(self):
-        return self.handler.controller and (timezone.now() - self.issued).seconds > self._delay
+        return self.handler.controller and not self.waiting
 
     def execute(self):
         if not self.handler.controller:
@@ -68,7 +105,7 @@ class ReadBackAction(Action):
            alias.TAXI_TO: "taxi to {rwy}{via}{hld}{short}{lineup}",
            alias.WAIT: "we wait", 
            alias.SWITCHING_OFF: "Good day",
-           alias.TAXI_PARK: "parking {park}",
+           alias.TAXI_PARK: "taxi to {parkn}{way}{via}{hld}{short}",
         }
         msg = templates.get(self.order.ord)
         if not msg:
@@ -85,6 +122,7 @@ class ReadBackAction(Action):
         msg = re.sub(r'{freq}',str(self.order.freq or ''),msg)
         msg = re.sub(r'{conn}',str(self.order.atc or ''),msg)
         msg = re.sub(r'{park}',str(self.order.park or ''),msg)
+        msg = re.sub(r'{parkn}',str(self.order.parkn or ''),msg)
         if self.order.number:
             msg = re.sub(r'{onum}',', number %s' % self.order.number,msg)
         if self.order.lnup:
@@ -135,7 +173,7 @@ class TuneInAction(Action):
         req.freq=self.freq
         
         self.send_request(req)
-        self.sent=timezone.now()
+        self.sent=sim_time()
     
     def is_ready(self):
         return not hasattr(self, 'sent')
@@ -184,6 +222,11 @@ class LeavingAction(RunwayAction):
     def get_request_type(self):
         return alias.LEAVING
 
+class ClearedRunwayAction(RunwayAction):
+    
+    def get_request_type(self):
+        return alias.CLEAR_RUNWAY
+
 class RequestInboundAction(Action):
     
     def execute(self):
@@ -212,32 +255,3 @@ class RequestParkAction(Action):
         req = self.new_request('park')
         self.send_request(req, True)
         self.done = True
-
-
-def send_message(self,request):
-        templates={
-           alias.STARTUP:"{atis}request startup clearance",
-           alias.TAXI_READY:"{atis}ready to taxi",
-           alias.HOLDING_SHORT : "holding short of runway {rwy}",
-           alias.READY_TAKEOFF : "ready for take-off, runway {rwy}",
-           alias.LEAVING : "leaving airfield",
-           alias.INBOUND_APPROACH : "{atis}for inbound approach",
-           alias.CIRCUIT_CROSSWIND: '{cirw} for runway {rwy}',
-           alias.CIRCUIT_DOWNWIND: '{cirw} for runway {rwy}',
-           alias.CIRCUIT_BASE: '{cirw} for runway {rwy}',
-           alias.CIRCUIT_FINAL: '{cirw} for runway {rwy}',
-           alias.CIRCUIT_STRAIGHT: '{cirw} for runway {rwy}',
-        }
-        msg = templates.get(request.req,None)
-        if not msg:
-            llogger.debug("{%s-CP} No message for %s" % (self.aircraft, request.req, ))
-            return
-        msg = "%s,%s, %s" % (self.controller, short_callsign(self.aircraft.callsign), msg)
-        msg = re.sub(r'{atis}','with %s, ' % self.get_atis(),msg)
-        msg = re.sub(r'{cs}',short_callsign(self.aircraft.callsign),msg)
-        msg = re.sub(r'{comm}',self.controller,msg)
-        msg = re.sub(r'{rwy}',say_number(request.rwy),msg)
-        msg = re.sub(r'{alt}',str(request.alt or ''),msg)
-        msg = re.sub(r'{cirw}',request.cirw or '',msg)
-            
-        self.messages.append(msg)

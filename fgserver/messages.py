@@ -344,6 +344,7 @@ class alias():
     CLEAR_LAND='clearland'
     CLEAR_TOUCHNGO='cleartngo'
     CLEAR_TK='cleartk'
+    CLEAR_RUNWAY='clearrw'
     LEAVING='leaving'
     INBOUND_APPROACH='inbound'
     JOIN_CIRCUIT='join'
