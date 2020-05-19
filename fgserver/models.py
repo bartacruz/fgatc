@@ -497,6 +497,7 @@ class Order(Model):
     PARAM_FREQUENCY='freq'
     PARAM_RUNWAY='rwy'
     PARAM_PARKING='park'
+    PARAM_PARKING_NAME='parkn'
     PARAM_AIRPORT='apt'
     PARAM_CIRCUIT_WP='cirw'
     PARAM_CIRCUIT_TYPE='cirt'

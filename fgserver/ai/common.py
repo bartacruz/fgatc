@@ -57,6 +57,8 @@ class ReceivedOrder():
     atis = None
     to = None
     atc = None
+    parkn = None
+    
     
     def __init__(self,*args, **kwargs):
         for dictionary in args:
@@ -99,6 +101,7 @@ class PlaneInfo():
     PARKING = 19
     LINING_UP=20
     HOLD = 21
+    ROLLING =22
     
     CIRCUITS=[CIRCUIT_CROSSWIND,CIRCUIT_DOWNWIND,CIRCUIT_BASE,CIRCUIT_STRAIGHT,CIRCUIT_FINAL]
     CHOICES = (
@@ -124,6 +127,7 @@ class PlaneInfo():
         (PARKING,'Parking'),
         (LINING_UP,'Lining up'),
         (HOLD,'On Hold'),
+        (ROLLING,'Rolling'),
     )
     CHOICES_STR = (
         ('0','None'),               
@@ -148,4 +152,5 @@ class PlaneInfo():
         (str(TUNNED),'Tunned'),
         (str(PARKING),'Parking'),
         (str(LINING_UP),'Lining up'),
+        (str(ROLLING),'Rolling'),
     )

@@ -15,6 +15,7 @@ from fgserver.models import AircraftStatus
 from django.contrib.gis.geos.point import Point
 from fgserver.ai.common import PlaneInfo
 import logging
+from numpy import angle
 
 llogger = logging.getLogger(__name__)
 
@@ -80,7 +81,7 @@ class DynamicManager():
         if self._waiting:
             # dont move
             self._waiting= max(0,self._waiting-dt)
-            #llogger.debug("WAITING on %s: %s" % (self.plane.state,self._waiting,))
+            llogger.debug("WAITING on %s: %s" % (self.plane.state,self._waiting,))
             return
         course = get_heading_to(self.position, self.waypoint.get_position())
         dist = self.props.speed * dt
@@ -105,7 +106,7 @@ class DynamicManager():
         turn_dist = dist_to - dist*seconds_before/(dt*2)
         #self.debug("sec before",seconds_before,'turn_dist',turn_dist)
         step = False
-        if dist >= abs(turn_dist):
+        if dist >= abs(turn_dist) or dist_to < 0.1:
             llogger.debug("Reached waypoint %s" % self.waypoint)
             llogger.debug('nang=%s, seconds_before=%s ,dist=%s,dist_to=%s,turn_dist=%s' % (nang,seconds_before,dist,dist_to,turn_dist))
             
@@ -182,6 +183,8 @@ class DynamicManager():
         if diff > 0.01:
             self.bank_sense = -1.0
         nc =normalize(self.course + self.bank_sense*min(hdiff, self.props.turn_rate*dt))
+        if angle_diff(self.course, nc) > angle_diff(self.course, self.target_course):
+            return self.target_course
         return nc
     
     def on_ground(self):
@@ -220,7 +223,7 @@ class TurboPropDynamicManager(DynamicManager):
         if state in ['stopped', 'short','linedup', 'starting']:
             self.props.update(name=state, speed=0, vertical_speed=0, turn_rate=1, target_vertical_speed=1)
         elif plane.is_pushback():
-            self.props.update(name=state,turn_rate = 160, speed = 5*units.KNOTS, target_vertical_speed=1)
+            self.props.update(name=state,turn_rate = 160, speed = 0.1*units.KNOTS, target_vertical_speed=1)
         elif plane.is_taxiing():
             self.props.update(name=state,turn_rate = 160, speed = 15*units.KNOTS, target_vertical_speed=1)
         elif plane.is_departing():
@@ -236,7 +239,7 @@ class TurboPropDynamicManager(DynamicManager):
         elif plane.is_landing():
             self.props.update(name=state,turn_rate = 3, speed = 70*units.KNOTS, target_vertical_speed=500*units.FPM)
         elif plane.is_rolling():
-            self.props.update(name=state,turn_rate=1.5, speed=40*units.KNOTS)
+            self.props.update(name=state,turn_rate=160, speed=40*units.KNOTS)
         else:
             llogger.debug("no state known: %s" % state)
         llogger.debug("Props: %s" % self.props)

@@ -278,9 +278,12 @@ class Tower(Controller):
         response.add_param(Order.PARAM_ORDER, alias.TAXI_PARK)
         pk = self.comm.airport.startups.filter(aircraft=request.sender).first()
         if not pk:
-            pk=self.comm.airport.startups.filter(aircraft=None).first()
+            pk=self.comm.airport.startups.filter(aircraft=None).order_by('?').first()
+            pk.aircraft=request.sender
+            pk.save()
         if pk:
             response.add_param(Order.PARAM_PARKING, pk.id)
+            response.add_param(Order.PARAM_PARKING_NAME, pk.name)
         response.message=get_message(response)
         self.set_status(request.sender, PlaneInfo.PARKING)
         return response

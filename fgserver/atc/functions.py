@@ -26,7 +26,7 @@ templates={
            alias.WAIT: "{cs}, wait until advised",
            alias.TUNE_TO: "{cs}", 
            alias.SWITCHING_OFF: "{cs} {comm} switching off, good day!",
-           alias.TAXI_PARK: "{cs}, taxi to parking {park}"
+           alias.TAXI_PARK: "{cs}, taxi to parking {parkn}"
                 
     }
     
@@ -48,6 +48,8 @@ def get_message(order):
     msg = re.sub(r'{freq}',str(order.get_param(Order.PARAM_FREQUENCY,'')),msg)
     msg = re.sub(r'{conn}',str(order.get_param(Order.PARAM_CONTROLLER,'')),msg)
     msg = re.sub(r'{park}',str(order.get_param(Order.PARAM_PARKING,'')),msg)
+    msg = re.sub(r'{parkn}',str(order.get_param(Order.PARAM_PARKING_NAME,'')),msg)
+    
     if order.get_param(Order.PARAM_NUMBER):
         msg = re.sub(r'{onum}',', number %s' % order.get_param(Order.PARAM_NUMBER),msg)
     if order.get_param(Order.PARAM_LINEUP):

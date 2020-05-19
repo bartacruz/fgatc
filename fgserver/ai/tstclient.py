@@ -26,9 +26,8 @@ if __name__ == '__main__':
     else:
         port = None
     #for plan in Circuit.objects.filter(enabled=True):
-    plane = StatePlane(plan.aircraft, TurboPropDynamicManager)
-    plane.clearances.start = True
-    plane.dynamics.wait(randint(5,60))
+    plane = StatePlane(plan.aircraft, TurboPropDynamicManager, init_delay=randint(30,120))
+    
 
     client = StatePlaneClient(plane,.2, port)
     clients.append(client)

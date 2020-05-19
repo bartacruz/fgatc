@@ -47,7 +47,6 @@ class StatePlaneClient(FGServer):
 
     def after_init(self):
         llogger.debug('Starting client loop')
-        self.plane.start()
         while True:
             try:
                 pos = self.server.incoming.get(True,.1)

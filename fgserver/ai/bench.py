@@ -16,32 +16,29 @@ from fgserver.ai.dynamics import TurboPropDynamicManager
 from fgserver.ai.state_plane import StatePlane
 from fgserver.models import Airport, Order
 from random import randint
-from fgserver.messages import sim_time, Clock
+from fgserver.messages import sim_time, Clock, CLOCK
 from fgserver.server.utils import get_pos_msg, process_message
 from fgserver.ai.common import ReceivedOrder
 
 def init_plane(plan):
     ''' Inits a state plane, with a Start clearance and an initial push'''
-    plane = StatePlane(plan.aircraft, TurboPropDynamicManager)
+    plane = StatePlane(plan.aircraft, TurboPropDynamicManager, init_delay=30)
     plane.clearances.start = True
-    plane.dynamics.wait(randint(5,60))
+    #plane.dynamics.wait(randint(5,60))
     plane.update(sim_time())
     plane._saved = timezone.now()
     return plane
 
     
-def dummy_atc(icao):
+def dummy_atc(icao, time_factor=2):
     
     airport = Airport.objects.get(icao=icao)
     Order.objects.all().update(expired=True)
     planes = []
     
-    
-    time_factor = 2
-    
     # Very accurate clock for sim-time determination
-    clock = Clock(time_factor)
-    
+    #clock = Clock(time_factor)
+    CLOCK.frame_length = 1/time_factor
     ''' Updates ATC message timmings according to time factor '''
     utils.ORDER_DELAY=utils.ORDER_DELAY/(time_factor*2)
     utils.ORDER_MIN_LIFESPAN/(time_factor*2)
@@ -51,14 +48,14 @@ def dummy_atc(icao):
     for plan in airport.circuits.filter(enabled=True):
         plane = init_plane(plan)
         planes.append(plane)
-        plane.start()
+#         plane.start()
         
 
     while(True): # main loop
         
         time.sleep(.1/time_factor) # 100ms loop, time-factorized 
         
-        atcpos = get_pos_msg(airport,clock.time)
+        atcpos = get_pos_msg(airport)
         
         strorder = atcpos.get_order() # get last order from ATC
         if strorder:
@@ -68,7 +65,7 @@ def dummy_atc(icao):
         
         for plane in planes: # planes loop
             
-            status = plane.update(clock.time)
+            status = plane.update(sim_time())
             pos = status.get_position_message()
             
             if (timezone.now()-plane._saved).seconds > 1:
@@ -84,5 +81,5 @@ def dummy_atc(icao):
                 plane.process_order(order)
 
 if __name__ == '__main__':
-    dummy_atc("SADF")
+    dummy_atc("SADF", 10)
 
