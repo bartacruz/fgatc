@@ -340,7 +340,8 @@ if getattr(settings,"MESSAGES_FILE",False):
     PROPERTIES = props
     
 class alias():
-    CLEAR_CROSS='clearcross'
+    CLEAR_CROSS='clearcross' # Airspace
+    CLEAR_CROSS_RUNWAY='clearcrossrwy'
     CLEAR_LAND='clearland'
     CLEAR_TOUCHNGO='cleartngo'
     CLEAR_TK='cleartk'
@@ -352,6 +353,7 @@ class alias():
     HOLDING_SHORT = 'holdingshort'
     LINEUP='lineup'
     WAIT='wait'
+    CROSS_RUNWAY='crossrwy'
     REACH_CIRCUIT='cirreach'
     READY_TAKEOFF='readytko'
     REPORT_CIRCUIT='cirrep'

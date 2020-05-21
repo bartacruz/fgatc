@@ -81,5 +81,5 @@ def dummy_atc(icao, time_factor=2):
                 plane.process_order(order)
 
 if __name__ == '__main__':
-    dummy_atc("SADF", 10)
+    dummy_atc("SABE", 2)
 

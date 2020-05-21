@@ -7,7 +7,7 @@ from fgserver.helper import Position, get_distance, move, normdeg,\
     elevate, get_heading_to, angle_diff, short_callsign, say_number
 from fgserver import units
 from django.db.models.base import Model
-from django.db.models.fields.related import ForeignKey
+from django.db.models.fields.related import ForeignKey, ManyToManyField
 from django.db.models.fields import CharField, FloatField, IntegerField,\
     BooleanField
 from fgserver.models import Airport, Aircraft, Order, Cache, StartupLocation
@@ -24,6 +24,8 @@ import logging
 from .dijkstra import dj_waypoints
 from django.contrib.gis.geos.point import Point
 import time
+from django.contrib.gis.db.models.fields import PointField, LineStringField
+from django.db.models.deletion import CASCADE
 
 llogger = logging.getLogger(__name__)
 
@@ -393,3 +395,27 @@ class CircuitWaypoint(WayPoint):
 
     circuit_type = IntegerField(choices=CIRCUIT_CHOICES,blank=True, null=True )
 
+class TaxiNode(Model):
+    name = models.CharField(max_length=30) #OSM id
+    airport = ForeignKey(Airport, related_name='taxinodes', on_delete=CASCADE)
+    point = PointField()
+    short = BooleanField(default=False)
+    on_runway = BooleanField(default=False)
+    adjacents = ManyToManyField("self")
+    
+    def adjacent_to(self,node):
+        self.adjacents.add(node)
+        
+# class TaxiSegment(Model):
+#     begin = ForeignKey(TaxiNode, related_name="begins", on_delete=CASCADE)
+#     end = ForeignKey(TaxiNode, related_name="ends", on_delete=CASCADE)
+#     both = BooleanField(default=True)
+    
+class TaxiWay(Model):
+    name = models.CharField(max_length=30)
+    airport = ForeignKey(Airport, related_name='taxi_ways', on_delete=CASCADE)
+    nodes = ManyToManyField(TaxiNode)
+    parking = BooleanField(default=False)
+    
+    
+    

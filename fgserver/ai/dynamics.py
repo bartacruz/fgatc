@@ -81,7 +81,7 @@ class DynamicManager():
         if self._waiting:
             # dont move
             self._waiting= max(0,self._waiting-dt)
-            llogger.debug("WAITING on %s: %s" % (self.plane.state,self._waiting,))
+            #llogger.debug("WAITING on %s: %s" % (self.plane.state,self._waiting,))
             return
         course = get_heading_to(self.position, self.waypoint.get_position())
         dist = self.props.speed * dt
@@ -220,12 +220,14 @@ class TurboPropDynamicManager(DynamicManager):
         plane = self.plane
         state = plane.state
         
-        if state in ['stopped', 'short','linedup', 'starting']:
+        if state in ['stopped', 'short','linedup', 'starting', 'holding']:
             self.props.update(name=state, speed=0, vertical_speed=0, turn_rate=1, target_vertical_speed=1)
         elif plane.is_pushback():
-            self.props.update(name=state,turn_rate = 160, speed = 0.1*units.KNOTS, target_vertical_speed=1)
+            self.props.update(name=state,turn_rate = 160, speed = 1*units.KNOTS, target_vertical_speed=1)
         elif plane.is_taxiing():
             self.props.update(name=state,turn_rate = 160, speed = 15*units.KNOTS, target_vertical_speed=1)
+        elif plane.is_crossing():
+            self.props.update(name=state,turn_rate = 160, speed = 5*units.KNOTS, target_vertical_speed=1)
         elif plane.is_departing():
             self.props.update(name=state,turn_rate = 3,speed = 70*units.KNOTS,target_vertical_speed=200*units.FPM)
         elif plane.is_climbing():

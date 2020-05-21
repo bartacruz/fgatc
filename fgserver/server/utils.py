@@ -27,6 +27,8 @@ def process_message(pos):
     #llogger.debug("Processing message %s" % pos)
     try:
         aircraft = Aircrafts.get(pos.callsign())
+        if not aircraft:
+            return
         aircraft.posmsg=pos
         aircraft.update_position()
         
@@ -35,6 +37,8 @@ def process_message(pos):
         if not aircraft.plans.filter(enabled=True).count() and not "ATC" in pos.model:
             if not hasattr(aircraft, '_saved') or (timezone.now() - aircraft._saved).seconds > 1:
                 #llogger.debug("saving %s %s" % (aircraft, pos,))
+                aircraft.ip = pos.header.reply_addr
+                aircraft.port = pos.header.reply_port
                 aircraft.save()
                 aircraft.status.save()
                 aircraft._saved = timezone.now()
@@ -42,7 +46,7 @@ def process_message(pos):
         
         freq = pos.get_frequency()
         if not freq:
-            llogger.debug("Ignoring request without freq from %s: %s" % (aircraft, pos.properties.properties,))
+            #llogger.debug("Ignoring request without freq from %s: %s" % (aircraft, pos.properties.properties,))
             return
         
         # Handle aircraft
@@ -119,7 +123,7 @@ def get_pos_msg(airport, simtime=None):
         
         signal_order_sent.send_robust(None,order=order)
         
-    lifespan = random.randrange(ORDER_MIN_LIFESPAN,ORDER_MAX_LIFESPAN) / orders.count()
+    lifespan = random.randrange(ORDER_MIN_LIFESPAN,ORDER_MAX_LIFESPAN) / (orders.count() or 1) # avoid 0
     dif =(timezone.now() - order.sent_date).total_seconds()
     
     if dif > lifespan:
@@ -150,8 +154,11 @@ def find_comm(request):
     Find a Comm object with the request freq and inside a 50mi radius
     '''
     try:
+        
         # fgfs sends integer freqs in Mhz but apt.dat has freqs in 1/100 Mhz (integers) 
         freq = request.get_request().freq
+        if not freq:
+            return None
         freq = freq.replace('.','').ljust(5,'0') # replace the dot and add padding
         tag = "%s-%s" % (request.sender.callsign,freq)
         # TODO Clean the cache!!!  

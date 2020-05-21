@@ -36,6 +36,7 @@ class CircuitAdmin(AjaxSelectAdmin):
     list_display=('name','airport','description','radius','altitude','enabled')
     search_fields = ['name','airport__icao','airport__name']
     inlines = [WaypointInline]
+    actions = [activate, deactivate]
     
     form = make_ajax_form(Circuit, {
         'airport': 'airports'

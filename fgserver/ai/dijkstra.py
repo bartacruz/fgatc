@@ -12,6 +12,8 @@ from django.contrib.gis.ptr import CPointerBase
 import math
 from _functools import reduce
 from fgserver.helper import get_heading_to, angle_diff, Position
+from django.contrib.gis.db.models.functions import Distance
+from fgserver.messages import sim_time
 
 # Fix nasty bug in geodjango
 original_del = CPointerBase.__del__
@@ -88,7 +90,7 @@ class Graph:
         new_vertex = Vertex(node, point)
         self.vert_dict[node] = new_vertex
         return new_vertex
-
+    
     def get_vertex(self, n):
         if n in self.vert_dict:
             return self.vert_dict[n]
@@ -189,43 +191,54 @@ def closest_node(icao,pos):
     n = reduce(lambda x,y: x if x.distance(pos) < y.distance(pos) else y,nodes)
     return n
 
-def get_next_on_runway(icao,pos,heading):
+def get_next_on_runway(pos, runway, heading):
     ''' Finds closest taxi node ON RUNWAY for a position in a particular
         heading. Useful to find the starting point of a runway exit path
     '''
     if isinstance(pos, Position):
         pos = pos.to_point()
-    
-    points = []
-    for entry in get_nodes(icao,on_runway=True):
-        p = entry[1]
-        ident=entry[0].attrib.get('index')
+    def delta(node):
+        p = node.point
         dist = pos.distance(p)
         diff = angle_diff(float(heading),get_heading_to(pos,p))
-        delta = dist*diff
-        print(ident, delta)
-        points.append((delta,p))
-    points.sort(key=lambda x: x[0])
+        return dist*diff
+    
+    points = list(runway.airport.taxinodes.filter(on_runway=True))
+    points.sort(key = delta)
+    
+#         p = entry[1]
+#         ident=entry[0].attrib.get('index')
+#         dist = pos.distance(p)
+#         diff = angle_diff(float(heading),get_heading_to(pos,p))
+#         delta = dist*diff
+#         print(ident, delta)
+#         points.append((delta,p))
+#     points.sort(key=lambda x: x[0])
     print('on runway:', points)
-    return points[0][1]
+    return points[0]
 
 def get_runway_exit(runway, pos, heading):
     if isinstance(pos, Position):
         pos = pos.to_point()
-    first = get_next_on_runway(runway.airport.icao,pos,heading)
-    dest = runway.airport.startups.order_by('?').first()
-    route = dj_waypoints(runway.airport, first, dest.get_position().to_point(), start_on_rwy=False,end_on_rwy=False)
-    exit_route=[]
-    for i in route:
-        exit_route.append(i)
-        if not runway.on_runway(i.point):
-            print('Exit:',i)
-            return exit_route
-    return None
+    
+    first = get_next_on_runway(pos, runway, heading)
+    
+    # Get short nodes, sort by angle difference and distance
+    s = list(runway.airport.taxinodes.filter(short=True))    
+    def delta(node):
+        p = node.point
+        dist = pos.distance(p)
+        diff = angle_diff(runway.bearing,get_heading_to(first.point,p))
+        return (dist/100)*diff
+    s.sort(key=delta)
+    dest = s.pop(0)
+    
+    route = taxi_path(runway.airport, first.point, dest.point)
+    return route
     
     
 
-def get_nodes(icao, on_runway=None):
+def get_nodes_from_xml(icao, on_runway=None):
     icao = icao
     root = ET.parse(os.path.join(settings.FGATC_FG_SCENERY,"Airports",icao[0],icao[1],icao[2],"%s.groundnet.xml" % icao))
     nodes = list(root.findall('.//parkingList/Parking'))+list(root.findall('.//TaxiNodes/node'))
@@ -244,6 +257,38 @@ def get_nodes(icao, on_runway=None):
     return ret
     
 #icao = "SADF"
+def taxi_path(airport, start, endp, start_on_rwy=False,end_on_rwy=False):
+    if airport.taxi_ways.count() == 0:
+        return dj_waypoints(airport, start, endp, start_on_rwy=False,end_on_rwy=False)
+    
+    if isinstance(start,Position):
+        start = start.to_point()
+    if isinstance(endp,Position):
+        endp = endp.to_point()
+    
+    print('%s Taxipath! in %s from %s to %s' % (sim_time(),airport,start,endp))
+    graph = Graph()
+    for node in airport.taxinodes.all():
+        if not graph.get_vertex(node.name):
+            graph.add_vertex(node.name, node.point)
+        for adjacent in node.adjacents.all():
+            if not graph.get_vertex(adjacent.name):
+                graph.add_vertex(adjacent.name, adjacent.point)
+            graph.add_edge(node.name, adjacent.name)
+            graph.add_edge(adjacent.name, node.name)
+    print('%s Taxipath! ended' % sim_time())
+    # TODO: filter on runway and heading
+    vstart = graph.get_vertex(airport.taxinodes.annotate(distance=Distance('point', start)).order_by('distance').first().name)
+    vend = graph.get_vertex(airport.taxinodes.annotate(distance=Distance('point',endp)).order_by('distance').first().name)
+    print (vstart,vend)
+    dijkstra(graph, vstart, vend)
+    
+    path = [vend.get_id()]
+    shortest(vend, path)
+    print('The shortest path : %s' %(path[::-1]))
+    route = [graph.get_vertex(x) for x in path[::-1]]
+    return route
+    
 def dj_waypoints(airport, start, endp, start_on_rwy=False,end_on_rwy=False):
     print('dj_waypoints in %s from %s to %s' % (airport,start,endp))
     if isinstance(start,Position):
@@ -298,7 +343,6 @@ def dj_waypoints(airport, start, endp, start_on_rwy=False,end_on_rwy=False):
             vend = v
     print("Searching from %s to %s" % (vstart,vend))
     dijkstra(graph, vstart, vend) 
-    
     
     path = [vend.get_id()]
     shortest(vend, path)

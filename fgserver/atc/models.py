@@ -78,10 +78,11 @@ class ATC(Model):
                 dist = get_distance(l.get_position(),runway.get_position())
                 head = get_heading_to_360(l.get_position(),runway.get_position())
                 adiff = angle_diff(head, - l.heading)
-                if dist > 1*units.NM or adiff > 5 :
+                if dist > 5*units.NM or adiff > 5 :
                     ''' nop, he isn't'''
-                    self.log("acft not in landing path. removing LANDING state",l)
+                    print("acft not in landing path. removing LANDING state",l,dist,head,adiff)
                     self.set_status(l,0,0)
+                    
                     return self.check_waiting() #check again
         elif short.count() and not lining.count():
             s = short.first()
@@ -344,5 +345,8 @@ class Tag(StatusModel):
     number = IntegerField(default=1)
     ack_order=CharField(max_length=255,null=True,blank=True)
 
+    def __str__(self):
+        return self.__unicode__()
+    
     def __unicode__(self):
         return "%s - %s [%s]" % (self.airport,self.aircraft.callsign,self.status)

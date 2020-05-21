@@ -9,7 +9,7 @@ from django.utils import timezone
 from fgserver.messages import alias
 from fgserver.ai.planes import PlaneInfo
 from random import randint
-from fgserver import get_qnh, units, get_controllers
+from fgserver import get_qnh, units, get_controllers, setInterval
 from fgserver.helper import get_distance, get_heading_to, angle_diff, get_heading_to_360
 import time
 import threading
@@ -18,6 +18,9 @@ import logging
 from datetime import timedelta
 from django.utils.module_loading import import_string
 from django.conf import settings
+from fgserver.ai.common import PlaneInfo
+import uuid
+from requests.models import Response
 
 llogger = logging.getLogger(__name__)
 
@@ -30,6 +33,7 @@ class Controller(object):
     def __init__(self,comm):
         self.comm = comm
         self.configure()
+        check_waiting(self)
         llogger.debug("Controller type %s for %s created" % (type(self).__name__, comm))
     
     
@@ -46,6 +50,8 @@ class Controller(object):
         lined = self.comm.airport.tags.filter(status__in=(PlaneInfo.LINED_UP, PlaneInfo.DEPARTING))
         short = self.comm.airport.tags.filter(status=PlaneInfo.SHORT).order_by('number')
         lining = self.comm.airport.tags.filter(status=PlaneInfo.LINING_UP)
+        holding = self.comm.airport.tags.filter(status=PlaneInfo.HOLD)
+        crossing = self.comm.airport.tags.filter(status=PlaneInfo.CROSS)
         
         runway = self.active_runway()
         self.debug("check_waiting:",landing,lined,short,lining)
@@ -77,6 +83,15 @@ class Controller(object):
                     self.debug("acft is not on landing path. removing LANDING state",l,dist, head,l.heading, adiff)
                     self.set_status(l,0,0)
                     return self.check_waiting() #check again
+            
+        elif holding.count():
+            for s in holding.all():
+                s = holding.first()
+                self.debug("Cross number",s.number)
+                self.debug('No one landing and no one departing, let %s cross the runway. %s,%s' % (s,s.id,s.number))
+                '''No one landing and no one departing, let them cross the runway '''
+                last_r=s.aircraft.requests.filter(request__contains=alias.CROSS_RUNWAY).last()
+                self.manage(last_r)
         elif short.count() and not lining.count():
             s = short.first()
             self.debug("Short number",s.number)
@@ -88,6 +103,7 @@ class Controller(object):
                 last_r=s.aircraft.requests.filter(request__contains="holdingshort").last()
                 self.manage(last_r)
         
+            
     def log(self,*argv):
         msg = "[%s]" % self.comm
         for arg in argv:
@@ -127,6 +143,7 @@ class Controller(object):
     
     def set_status(self,aircraft,status,number=None):
         tag,created = Tag.objects.get_or_create(aircraft=aircraft,airport=self.comm.airport)
+        #print("%s changing status of %s from %s to %s" % (self.comm,aircraft, PlaneInfo.label(tag.status),PlaneInfo.label(status) ) )
         tag.status=str(status)
         if number != None:
             tag.number=number
@@ -147,16 +164,16 @@ class Controller(object):
         if self.manages(req):
             handler = getattr(self, req)
             response = handler(request)
-            threading.Thread(target=check_waiting,args=(self,)).start()    
+            check_waiting(self)    
         else:
             self.debug("Rerouting request %s" % request)
             response= self.reroute(request)
         
-        if response:
+        if isinstance(response, Order):
                 response.save()
                 self.debug("Order saved",response)
                 return True
-        return False
+        return response
     
     def reroute(self,request):
         c = self.find_controller(request)
@@ -275,19 +292,42 @@ class Tower(Controller):
 
     def clearrw(self,request):
         response=self._init_response(request)
-        response.add_param(Order.PARAM_ORDER, alias.TAXI_PARK)
-        pk = self.comm.airport.startups.filter(aircraft=request.sender).first()
-        if not pk:
-            pk=self.comm.airport.startups.filter(aircraft=None).order_by('?').first()
-            pk.aircraft=request.sender
-            pk.save()
-        if pk:
+        tag = self.get_tag(request.sender)
+        if int(tag.status) == PlaneInfo.CROSS:
+            self.set_status(request.sender, PlaneInfo.TAXIING)
+            last_r=request.sender.requests.filter(request__contains=alias.TAXI_READY).last()
+            controller = Controllers.get_controller(last_r.receiver)
+            return controller.manage(last_r)
+        else:
+            response.add_param(Order.PARAM_ORDER, alias.TAXI_PARK)
+            pk = self.comm.airport.startups.filter(aircraft=request.sender).first()
+            if not pk:
+                pk=self.comm.airport.startups.filter(aircraft=None).order_by('?').first()
+                pk.aircraft=request.sender
+                pk.save()
+                
             response.add_param(Order.PARAM_PARKING, pk.id)
             response.add_param(Order.PARAM_PARKING_NAME, pk.name)
-        response.message=get_message(response)
-        self.set_status(request.sender, PlaneInfo.PARKING)
-        return response
+            response.message=get_message(response)
+            self.set_status(request.sender, PlaneInfo.PARKING)
+            return response
     
+    def crossrwy(self,request):
+        response=self._init_response(request)
+        
+        rwy = request.get_param(Order.PARAM_RUNWAY)
+        response.add_param(Order.PARAM_RUNWAY,rwy)
+        count_others = self.comm.airport.tags.filter(status__in=[PlaneInfo.LINING_UP,PlaneInfo.LINED_UP, PlaneInfo.DEPARTING,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_FINAL,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_BASE]).exclude(aircraft=request.sender).count()
+        if count_others:
+            response.add_param(Order.PARAM_ORDER, alias.WAIT)
+            response.add_param(Order.PARAM_HOLD, alias.CROSS_RUNWAY)
+            self.set_status(request.sender, PlaneInfo.HOLD)
+        else:
+            response.add_param(Order.PARAM_ORDER, alias.CLEAR_CROSS_RUNWAY)
+            self.set_status(request.sender, PlaneInfo.CROSS,0)
+        response.message=get_message(response)
+        return response
+            
     def holdingshort(self,request):
         response=self._init_response(request)
         response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
@@ -365,7 +405,7 @@ class Tower(Controller):
 
     def final(self,request):
         response=self._init_response(request)
-        lined = self.comm.airport.tags.filter(status=PlaneInfo.LINED_UP).count()
+        lined = self.comm.airport.tags.filter(status__in=[PlaneInfo.LINED_UP, PlaneInfo.LINING_UP]).count()
         landing = self.comm.airport.tags.filter(status=PlaneInfo.LANDING).count()
         self.debug("final lined=%s landing=%s" % (lined,landing,))
         if lined or landing:
@@ -489,20 +529,20 @@ class Controllers(Cache):
             except:
                 llogger.exception("Error al crerar un controller para %s" % comm)
         return controller
-                
+
 def check_waiting(tower):
-    llogger.debug("CHECK_WAITING")
-    time.sleep(3)
-    llogger.debug("END CHECK_WAITING")
+    llogger.debug("CHECK_WAITING" )
     tower.check_waiting()
+    llogger.debug("END CHECK_WAITING")
 
 def process_request(sender, instance, **kwargs):
     if instance.receiver and instance.received and not instance.processed:
         llogger.debug("Processing request %s " % instance)
         controller = Controllers.get_controller(instance.receiver)
-        controller.manage(instance)
-        instance.processed=True
-        instance.save()
+        if controller:
+            controller.manage(instance)
+            instance.processed=True
+            instance.save()
     
     
 

@@ -49,7 +49,7 @@ class Clearances():
     
 class StatePlane(object):
     
-    states = ['stopped','starting','pushback','taxiing','short','linedup','departing','climbing','cruising','approaching','on_circuit','rejoining','landing', 'rolling']
+    states = ['stopped','starting','pushback','taxiing','holding','short','linedup','departing','climbing','cruising','approaching','on_circuit','rejoining','landing', 'rolling', 'crossing']
     
     
     def __init__(self, aircraft, dynamic_manager, init_delay=0):
@@ -67,9 +67,9 @@ class StatePlane(object):
         self.machine.add_transition('stop', '*', 'stopped')
         self.machine.add_transition('start', 'stopped', 'starting', conditions=[lambda: self.clearances.start])
         self.machine.add_transition('pushback', ['stopped','starting'], 'pushback', conditions=[lambda: self.clearances.start], before=['generate_waypoints'])
-        self.machine.add_transition('pushback', 'pushback', 'taxiing', conditions=[lambda: self.clearances.taxi])
+        self.machine.add_transition('pushback', 'pushback', 'pushback', conditions=[lambda: self.clearances.taxi])
         
-        self.machine.add_transition('taxi', 'pushback', 'taxiing', conditions=[lambda: self.clearances.taxi])
+        self.machine.add_transition('taxi', ['pushback', 'holding'], 'taxiing', conditions=[lambda: self.clearances.taxi])
         self.machine.add_transition('taxi', 'short', 'taxiing', conditions=[lambda: self.clearances.cross], after=[]) # remove clearance
         
         self.machine.add_transition('taxi', 'short', 'taxiing', conditions=[lambda: self.clearances.lineup])
@@ -79,6 +79,10 @@ class StatePlane(object):
         self.machine.add_transition('hold', 'taxiing', 'taxiing', conditions=[lambda: not self.clearances.short])
         self.machine.add_transition('hold', 'rolling', 'short', conditions=[lambda: not self.clearances.parking])
         self.machine.add_transition('hold', 'rolling', 'taxiing', conditions=[lambda: self.clearances.parking])
+        
+        self.machine.add_transition('cross', 'taxiing', 'holding', conditions=[lambda: not self.clearances.cross])
+        self.machine.add_transition('cross', 'holding', 'crossing', conditions=[lambda: self.clearances.cross])
+        self.machine.add_transition('cross', 'crossing', 'taxiing', conditions=[lambda: self.clearances.cross])
         
         
         self.machine.add_transition('depart', 'linedup', 'departing', conditions=[lambda: self.clearances.take_off ],after=['generate_waypoints','depart'])
@@ -166,10 +170,12 @@ class StatePlane(object):
             print("STOPPING")
             self.stopped_time = sim_time()
             self.stop()
-        elif waypoint.status == PlaneInfo.PUSHBACK:
+        elif waypoint.status == PlaneInfo.TAXIING and self.is_pushback():
             self.taxi()
         elif waypoint.status == PlaneInfo.SHORT:
             self.hold()
+        elif waypoint.status == PlaneInfo.CROSS:
+            self.cross()
         elif waypoint.status == PlaneInfo.LINED_UP:
             self.state = 'linedup'
             self.depart()

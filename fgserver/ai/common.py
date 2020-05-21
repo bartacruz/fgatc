@@ -102,6 +102,7 @@ class PlaneInfo():
     LINING_UP=20
     HOLD = 21
     ROLLING =22
+    CROSS = 23
     
     CIRCUITS=[CIRCUIT_CROSSWIND,CIRCUIT_DOWNWIND,CIRCUIT_BASE,CIRCUIT_STRAIGHT,CIRCUIT_FINAL]
     CHOICES = (
@@ -128,7 +129,9 @@ class PlaneInfo():
         (LINING_UP,'Lining up'),
         (HOLD,'On Hold'),
         (ROLLING,'Rolling'),
+        (CROSS,'Cross rwy'),
     )
+    LABELS  = {x[0]:x[1] for x in CHOICES}
     CHOICES_STR = (
         ('0','None'),               
         (str(STOPPED),'Stopped'),
@@ -153,4 +156,8 @@ class PlaneInfo():
         (str(PARKING),'Parking'),
         (str(LINING_UP),'Lining up'),
         (str(ROLLING),'Rolling'),
+        (str(CROSS),'Cross rwy'),
     )
+    @classmethod
+    def label(cls,code):
+        return cls.LABELS[int(code)]

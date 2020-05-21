@@ -48,6 +48,7 @@ class Action():
            alias.STARTUP:"{atis}request startup clearance",
            alias.TAXI_READY:"{atis}ready to taxi",
            alias.HOLDING_SHORT : "holding short of runway {rwy}",
+           alias.CROSS_RUNWAY : "requests cross runway {rwy}",
            alias.READY_TAKEOFF : "ready for take-off, runway {rwy}",
            alias.LEAVING : "leaving airfield",
            alias.INBOUND_APPROACH : "{atis}for inbound approach",
@@ -83,7 +84,7 @@ class ReadBackAction(Action):
     def __init__(self, handler, order):
         Action.__init__(self, handler)
         self.order = order
-        self._delay = 10
+        self._delay = 15
     
      
     def is_ready(self):
@@ -96,6 +97,7 @@ class ReadBackAction(Action):
            alias.CLEAR_LAND:"clear to land runway {rwy}{qnh}",
            alias.CLEAR_TOUCHNGO:"clear touch and go{onum} runway {rwy}{qnh}",
            alias.CLEAR_TK : "cleared for take off runway {rwy}",
+           alias.CLEAR_CROSS_RUNWAY : "crossing runway {rwy}",
            alias.GO_AROUND : "going around, report on {cirw}",
            alias.JOIN_CIRCUIT:"{cirw} for {rwy} at {alt}{qnh}",
            alias.CIRCUIT_STRAIGHT:"straight for {rwy}, report on {cirw}{qnh}",
@@ -207,11 +209,16 @@ class RunwayAction(Action):
         self.send_request(req, True)
         self.done = True
 
+class CrossRunwayAction(RunwayAction):
+    
+    def get_request_type(self):
+        return alias.CROSS_RUNWAY
+        
 class HoldingShortAction(RunwayAction):
     
     def get_request_type(self):
         return alias.HOLDING_SHORT
-        
+
 class ReadyTakeoffAction(RunwayAction):
     
     def get_request_type(self):

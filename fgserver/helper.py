@@ -244,7 +244,11 @@ class Position(Vector3D):
         return Position(c[0], c[1], c[2])
     
     def to_point(self):
-        return Point(self.y,self.x,self.z)
+        return Point(self.y,self.x,self.z, srid = 4326)
+    
+    @staticmethod
+    def from_point(point, altitude=None):
+        return Vector3D(point.y,point.x, altitude or point.z)
     
     @staticmethod
     def fromV3D(v3d):
@@ -391,6 +395,22 @@ class Quaternion():
         nn = angle_axis.scale(sin(angle) / naxis)
         return Quaternion(cos(angle), nn.x, nn.y, nn.z)
         
+def _get_fwd(position,heading,distance):
+    ''' 
+    Position/Point discordance-aware forward transformation.
+    Used to move points.
+    '''
+    if isinstance(position, Point):
+        flat = position.y
+        flon = position.x
+    else:
+        flat = position.x
+        flon = position.y
+    
+    
+    lon,lat,az = GEOID.fwd(flon,flat,heading,distance)
+    return Point(lon,lat,position.y)
+
 def _get_inv(fro,to):
     ''' 
     Position/Point discordance-aware inverse transformation.
@@ -412,6 +432,9 @@ def _get_inv(fro,to):
     f,b,d = GEOID.inv(flon, flat, tlon, tlat)
     return f,b,d
 
+def move2(position,heading,distance):
+    return _get_fwd(position, heading, distance)
+    
 def get_distance(fro, to, unit=units.M):
     #info = Geodesic.WGS84.Inverse(fro.x, fro.y, to.x, to.y)
     #return info['s12'] / unit

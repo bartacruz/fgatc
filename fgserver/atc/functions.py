@@ -13,6 +13,7 @@ from fgserver import get_qnh
 
 templates={
            alias.CLEAR_CROSS:"{cs}, clear to cross airspace above {alt}",
+           alias.CLEAR_CROSS_RUNWAY:"{cs}, cross runway {rwy}[inters], report vacated",
            alias.CLEAR_LAND:"{cs}, runway {rwy}, clear to land{onum}{qnh}",
            alias.CLEAR_TOUCHNGO:"{cs}, runway {rwy}, clear touch and go{onum}{qnh}",
            alias.CLEAR_TK : "{cs}, runway {rwy}, cleared for take off",

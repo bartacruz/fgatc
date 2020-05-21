@@ -15,8 +15,6 @@ from fgserver.server.server import FGServer
 
 llogger = logging.getLogger(__name__)
 
-
-
 class ATCClient(FGServer):
     def __init__(self, airport, delay=0.2):
         self.airport=airport
@@ -53,3 +51,4 @@ if __name__ == '__main__':
     client = ATCClient(airport,.5)
     client.thread = threading.Thread(target=client.init)
     client.thread.start()
+

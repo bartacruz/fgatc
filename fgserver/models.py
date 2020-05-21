@@ -27,8 +27,8 @@ from fgserver.messages import PosMsg, PROP_FREQ, PROP_OID, PROP_CHAT,\
     PROP_REQUEST, sim_time
 from fgserver.ai.common import PlaneInfo
 from django.contrib.gis.geos.point import Point
-from django.contrib.gis.geos.linestring import LinearRing
 from django.contrib.gis.geos.polygon import Polygon
+
 
 
 
@@ -119,8 +119,12 @@ class Airport(Model):
     altitude=IntegerField(default=0)
     active = BooleanField(default=False)
     
+    
     def get_position(self):
         return Position(float(self.lat),float(self.lon),float(self.altitude))
+    
+    def get_point(self):
+        return Point(float(self.lon),float(self.lat),float(self.altitude), srid=4326)
     
     def __unicode__(self):
         return self.icao
@@ -237,6 +241,9 @@ class Runway(Model):
         
     def get_position(self):
         return Position(float(self.lat),float(self.lon),self.altitude)
+
+    def get_point(self):
+        return Point(float(self.lon),float(self.lat),float(self.altitude), srid=4326)
     
     def __unicode__(self):
         return self.name
@@ -365,6 +372,14 @@ class Aircrafts(Cache):
             return instance
         except Aircraft.DoesNotExist:
             return None
+    @classmethod
+    def get_near(cls,aircraft,distance=None):
+        distance = distance or 50*units.NM
+        for other in cls.values():
+            if other == aircraft:
+                continue
+            if get_distance(aircraft.get_position(),other.get_position()) < distance:
+                yield other
 
 class AircraftStatus(Model):
     aircraft = OneToOneField(to=Aircraft, related_name='status', verbose_name='Aircraft status', on_delete=models.CASCADE)
