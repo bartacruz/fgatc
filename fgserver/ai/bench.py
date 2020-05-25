@@ -16,7 +16,7 @@ from fgserver.ai.dynamics import TurboPropDynamicManager
 from fgserver.ai.state_plane import StatePlane
 from fgserver.models import Airport, Order
 from random import randint
-from fgserver.messages import sim_time, Clock, CLOCK
+from fgserver.messages import sim_time, Clock, CLOCK, PositionMessages
 from fgserver.server.utils import get_pos_msg, process_message
 from fgserver.ai.common import ReceivedOrder
 
@@ -67,7 +67,7 @@ def dummy_atc(icao, time_factor=2):
             
             status = plane.update(sim_time())
             pos = status.get_position_message()
-            
+            PositionMessages.set(pos)
             if (timezone.now()-plane._saved).seconds > 1:
                 # Save every second so we dont kill the DB
                 plane.aircraft.save()
@@ -81,5 +81,5 @@ def dummy_atc(icao, time_factor=2):
                 plane.process_order(order)
 
 if __name__ == '__main__':
-    dummy_atc("SABE", 2)
+    dummy_atc("SABE", 3)
 

@@ -13,6 +13,11 @@ from django.conf import settings
 from django.utils import timezone
 from time import perf_counter
 import time
+import redis
+import pickle
+import threading
+from fgserver.helper import get_distance, get_heading_to, normalize, angle_diff,\
+    Position, cart2geod, get_heading
 
 llogger = logging.getLogger(__name__)
 
@@ -561,7 +566,13 @@ class PosMsg:
             return int(self.get_value(PROP_FREQ).replace(".",'').ljust(5,'0'))
         except:
             return None
-            
+    
+    def get_heading(self):
+        return get_heading(self.position,self.orientation)
+    
+    def get_position(self):
+        return Position.fromV3D(Position.from_array(cart2geod(self.position)))
+    
     def get_request(self):
         ''' gets the player's request '''
         r = self.get_property(PROP_REQUEST)
@@ -668,3 +679,54 @@ class PosMsg:
         
     def __str__(self):
         return "time=%s, position=%s, model=%s" % (self.time, self.position, self.model)
+
+class PositionMessages():
+    
+    CHANNEL = 'posmsgs'
+    
+    @classmethod
+    def check(cls):
+        if not hasattr(cls, 'thread'):
+            cls.messages = {}
+            cls.server = redis.Redis()
+            cls.thread = threading.Thread(target=cls.loop)
+            cls.thread.start()
+    
+    @classmethod
+    def get_near(cls,callsign,distance, heading=None):
+        cls.check()
+        msg = cls.get(callsign)
+        if not msg:
+            return []
+        pos = msg.get_position()
+        messages = list(filter(lambda x: x.callsign() != callsign,list(cls.messages.values())))
+        messages = list(filter(lambda x: get_distance(x.get_position(),pos) < distance,messages))
+        if len(messages) and heading:
+            #print('%s:' % callsign,[(x.callsign(),angle_diff(get_heading_to(pos,x.get_position()),msg.get_heading())) for x in messages])
+            messages = list(filter(lambda x: angle_diff(get_heading_to(pos,x.get_position()),msg.get_heading()) < 30 ,messages))
+        return messages
+                    
+    @classmethod
+    def set(cls,posmsg):
+        cls.check()
+        cls.messages[posmsg.callsign()]=posmsg
+        pickled = pickle.dumps(posmsg)
+        cls.server.publish(cls.CHANNEL, pickled)
+    
+    @classmethod
+    def get(cls,callsign):
+        cls.check()
+        return cls.messages.get(callsign,None)
+    
+    @classmethod
+    def loop(cls):
+        p = cls.server.pubsub()
+        p.subscribe(cls.CHANNEL)
+        for new_message in p.listen():
+            if new_message.get('type',None) == 'message':
+                pos = pickle.loads(new_message.get('data'))
+                #print("new posmsg",str(pos))
+                cls.messages[pos.callsign()]=pos
+
+
+

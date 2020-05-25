@@ -154,12 +154,12 @@ class Airport(Model):
                     vmax = v
                     rwy = curr
             rwy.altitude = self.altitude
-            debug(self.icao,"selected runway: ",rwy)
+            #debug(self.icao,"selected runway: ",rwy)
             return rwy
         else:
             rwy = self.runways.all().first()
             rwy.altitude = self.altitude
-            debug(self.icao,"default runway: ",rwy)
+            #debug(self.icao,"default runway: ",rwy)
             return rwy
 
 class Airports(Cache):
@@ -350,7 +350,7 @@ class Aircraft(Model):
         self.lat=geod[0]
         self.lon=geod[1]
         self.altitude=geod[2]
-        
+        self.model = self.posmsg.model or self.model
         qor = Quaternion.fromAngleAxis(Vector3D.from_array(self.posmsg.orientation))
         h10r = Quaternion.fromLatLon(self.lat, self.lon).conjugate().multiply(qor)
         eul = h10r.getEuler().scale(units.RAD)

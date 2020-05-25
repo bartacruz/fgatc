@@ -21,6 +21,8 @@ from django.conf import settings
 from fgserver.ai.common import PlaneInfo
 import uuid
 from requests.models import Response
+import redis
+import pickle
 
 llogger = logging.getLogger(__name__)
 
@@ -33,7 +35,6 @@ class Controller(object):
     def __init__(self,comm):
         self.comm = comm
         self.configure()
-        check_waiting(self)
         llogger.debug("Controller type %s for %s created" % (type(self).__name__, comm))
     
     
@@ -43,8 +44,8 @@ class Controller(object):
                     
     def check_waiting(self):
         # expire tags:
-        expired = timezone.now() - timedelta(minutes=2)
-        self.comm.airport.tags.filter(status__gt=0,status_changed__lt=expired).update(status=0,number=0)
+#         expired = timezone.now() - timedelta(minutes=10)
+#         self.comm.airport.tags.filter(status__gt=0,status_changed__lt=expired).update(status=0,number=0)
         
         landing = self.comm.airport.tags.filter(status=PlaneInfo.LANDING)
         lined = self.comm.airport.tags.filter(status__in=(PlaneInfo.LINED_UP, PlaneInfo.DEPARTING))
@@ -63,7 +64,7 @@ class Controller(object):
                     ''' nop, there isn't'''
                     llogger.info("Aircraft %s not in runway. removing LINED_UP state" % a)
                     self.set_status(a, 0, 0)
-                    return self.check_waiting() #check again
+#                     return self.check_waiting() #check again
             if landing.count():
                 l = landing.first().aircraft
                 request = Request(sender=l,date=timezone.now(),request="req=go_around;apt=%s"%self.airport.icao)
@@ -82,7 +83,7 @@ class Controller(object):
                     ''' nop, he isn't'''
                     self.debug("acft is not on landing path. removing LANDING state",l,dist, head,l.heading, adiff)
                     self.set_status(l,0,0)
-                    return self.check_waiting() #check again
+                    #return self.check_waiting() #check again
             
         elif holding.count():
             for s in holding.all():
@@ -161,10 +162,11 @@ class Controller(object):
     
     def manage(self,request):
         req = request.get_request().req
+        response = None
         if self.manages(req):
             handler = getattr(self, req)
             response = handler(request)
-            check_waiting(self)    
+            #check_waiting(self) 
         else:
             self.debug("Rerouting request %s" % request)
             response= self.reroute(request)
@@ -172,7 +174,6 @@ class Controller(object):
         if isinstance(response, Order):
                 response.save()
                 self.debug("Order saved",response)
-                return True
         return response
     
     def reroute(self,request):
@@ -238,7 +239,7 @@ class Ground(Controller):
         twr = get_controllers(self.comm.airport, Comm.TWR)[0]
         self.pass_control(response, twr)
         count = self.comm.airport.tags.filter(status__in=(PlaneInfo.SHORT,PlaneInfo.TAXIING,)).count()
-        count_others = self.comm.airport.tags.filter(status__in=[PlaneInfo.LINED_UP,PlaneInfo.LINING_UP, PlaneInfo.DEPARTING,PlaneInfo.LANDING]).count()
+        count_others = self.comm.airport.tags.filter(status__in=[PlaneInfo.LINED_UP,PlaneInfo.LINING_UP, PlaneInfo.DEPARTING,PlaneInfo.LANDING, PlaneInfo.CIRCUIT_FINAL, PlaneInfo.CIRCUIT_BASE,PlaneInfo.CIRCUIT_DOWNWIND]).count()
         self.debug("readytaxi",count,count_others)
         if not self.master or count or count_others:
             response.add_param(Order.PARAM_HOLD, 1)
@@ -332,10 +333,11 @@ class Tower(Controller):
         response=self._init_response(request)
         response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
         count = self.comm.airport.tags.filter(status=PlaneInfo.SHORT).exclude(aircraft=request.sender).count()
-        count_others = self.comm.airport.tags.filter(status__in=[PlaneInfo.LINING_UP,PlaneInfo.LINED_UP, PlaneInfo.DEPARTING,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_FINAL,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_BASE]).exclude(aircraft=request.sender).count()
+        others = self.comm.airport.tags.filter(status__in=[PlaneInfo.LINING_UP,PlaneInfo.LINED_UP, PlaneInfo.DEPARTING,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_FINAL,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_BASE]).exclude(aircraft=request.sender)
+        count_others = others.count()
         tag = self.get_tag(request.sender)
         self.set_status(request.sender, PlaneInfo.SHORT,count)
-        self.debug("holdingshort %s %s  %s %s %s" % (count_others,count,tag, tag.id,tag.number))
+        self.debug("holdingshort %s %s  %s %s %s: %s" % (count_others,count,tag, tag.id,tag.number, [x for x in others]) )
         if count_others or (tag.number and count) :
             response.add_param(Order.PARAM_ORDER, alias.WAIT)
             response.add_param(Order.PARAM_HOLD, 1)
@@ -517,6 +519,14 @@ class Approach(Controller):
 class Controllers(Cache):
     
     @classmethod
+    def check(cls):
+        super(Controllers, cls).check()
+        if not hasattr(cls, 'started'):
+            llogger.debug("Starting check_waiting")
+            cls.started = True
+            check_waiting()
+    
+    @classmethod
     def get_controller(cls, comm):
         controller =  cls.get(comm.id)
         if not controller:
@@ -530,19 +540,67 @@ class Controllers(Cache):
                 llogger.exception("Error al crerar un controller para %s" % comm)
         return controller
 
-def check_waiting(tower):
-    llogger.debug("CHECK_WAITING" )
-    tower.check_waiting()
-    llogger.debug("END CHECK_WAITING")
+@setInterval(30)
+def check_waiting():
+    #llogger.debug("CHECK_WAITING" )
+    for controller in Controllers.values():
+        if isinstance(controller, Tower):
+            controller.check_waiting()
+    #llogger.debug("END CHECK_WAITING")
 
 def process_request(sender, instance, **kwargs):
     if instance.receiver and instance.received and not instance.processed:
         llogger.debug("Processing request %s " % instance)
+#         Requests.set(instance)
         controller = Controllers.get_controller(instance.receiver)
         if controller:
+            llogger.debug("Controllers: %s" % [str(x) for x in Controllers.values()])
             controller.manage(instance)
             instance.processed=True
             instance.save()
+
+def publish_request(sender, instance, **kwargs):
+    print("PUBLISHING REQUEST",instance)
+    Requests.set(instance)
+
+class Requests():
     
+    CHANNEL = 'requests'
+    
+    @classmethod
+    def check(cls):
+        if not hasattr(cls, 'thread'):
+            cls.listeners = []
+            cls.server = redis.Redis()
+            cls.thread = threading.Thread(target=cls.loop)
+            cls.thread.start()
+        
+    @classmethod
+    def set(cls,instance):
+        cls.check()
+        pickled = pickle.dumps(instance)
+        cls.server.publish(cls.CHANNEL, pickled)
+    
+    @classmethod
+    def listen(cls,callback):
+        cls.check()
+        cls.listeners.append(callback)
+    
+    @classmethod
+    def loop(cls):
+        p = cls.server.pubsub()
+        p.subscribe(cls.CHANNEL)
+        for new_message in p.listen():
+            if new_message.get('type',None) == 'message':
+                request = pickle.loads(new_message.get('data'))
+                #print("new posmsg",str(pos))
+                for c in cls.listeners:
+                    try:
+                        c(request)
+                    except:
+                        llogger.exception("Calling callback %s with %s" % (c,request,))
+
+
+
     
 

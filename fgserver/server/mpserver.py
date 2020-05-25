@@ -11,6 +11,7 @@ from fgserver.server.fgmpie import pie_msg
 import time
 from django.utils import timezone
 from datetime import timedelta
+from fgserver.messages import PositionMessages
 django.setup()
 import logging
 from django.conf import settings
@@ -39,10 +40,14 @@ def aircraft_updater():
     
 def find_comm(aircraft):
         # TODO: Use a cache?
-        freq = aircraft.posmsg.get_frequency() 
-        #llogger.debug("Finding COMM for %s" % tag)
+        pos = PositionMessages.get(aircraft.callsign)
+        #print("Pos for %s: %s" % (aircraft.callsign,pos,))
+        freq = pos.get_frequency() 
+        if freq:
+            freq = str(freq)[:5]
+        #print("Finding COMM for %s (%s)" % (freq, str(freq)[:5]))
         apts = airportsWithinRange(aircraft.get_position(), 50, units.NM)
-        #llogger.debug("Airports in range=%s " % apts)
+        llogger.debug("Airports in range=%s " % apts)
         for apt in apts:
             c = apt.comms.filter(frequency=freq)
             if c.count():
@@ -58,6 +63,7 @@ class MPServer(FGServer):
 
     def incomming_message(self,pos):
         #print("incomming %s" % pos)
+        PositionMessages.set(pos)
         process_message(pos)
         
     def after_init(self):
@@ -80,12 +86,17 @@ class MPServer(FGServer):
         if comm:
         #print("relaying %s to %s@%s but %s" % (comm, aircraft,aircraft.get_addr(), aircraft.posmsg.header.reply_addr))
             pos = get_pos_msg(comm.airport)
+            #print('airport',pos)
             yield pos
         for other in Aircrafts.get_near(aircraft):
             if other.plans.count():
                 #print("sending %s to %s" % (pos.callsign(), aircraft,))
-                status = AircraftStatus.objects.get(aircraft=other)
-                yield status.get_position_message()
+                pos = PositionMessages.get(other.callsign)
+                if pos:
+                    yield pos
+                else:
+                    status = AircraftStatus.objects.get(aircraft=other)
+                    yield status.get_position_message()
         
         
     def sender_task(self):
@@ -98,9 +109,11 @@ class MPServer(FGServer):
                         # Probably AI aircraft 
                         continue
                     for pos in self.get_posmsg_for_plane(aircraft):
-                        buff = pie_msg(pos)
-                        
-                        self.server.socket.sendto(buff,aircraft.get_addr())
+                        try:
+                            buff = pie_msg(pos)
+                            self.server.socket.sendto(buff,aircraft.get_addr())
+                        except:
+                            llogger.exception("Sending to %s:  %s" % (callsign,str(pos),))
                 time.sleep(self.delay)
             except (KeyboardInterrupt, SystemExit):
                 self.server.shutdown()

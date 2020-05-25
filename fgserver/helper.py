@@ -239,6 +239,7 @@ class Vector3D():
 class Position(Vector3D):
     def get_array_cart(self):
         return geod2cart(self.get_array())
+    
     def to_cart(self):
         c = self.get_array_cart()
         return Position(c[0], c[1], c[2])
