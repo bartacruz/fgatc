@@ -5,7 +5,7 @@ Created on 7 may. 2020
 '''
 
 from transitions import Machine
-from fgserver.messages import alias, sim_time
+from fgserver.messages import alias, sim_time, PositionMessages
 import time
 from fgserver.ai.handlers import Copilot, FlightPlanManager
 from fgserver.ai.common import PlaneInfo
@@ -59,9 +59,10 @@ class StatePlane(object):
         self.started = False
         self.init_delay = init_delay
         self.stopped_time=sim_time()
-        
         self.clearances = Clearances()  
-    
+        
+        self._bkp_speed = None
+        
         
         self.machine = Machine(model=self,states=StatePlane.states,initial='stopped',before_state_change=['entering_state_changed'], after_state_change=['state_changed'])
         self.machine.add_transition('stop', '*', 'stopped')
@@ -128,17 +129,27 @@ class StatePlane(object):
     
             
     def update(self,time):
+        ahead = PositionMessages.get_near(self.aircraft.callsign, 40, True)
+        if len(ahead):
+            if self.dynamics.props.speed:
+                llogger.debug("[%s] Traffic ahead while at %s. Waiting..." % (self.aircraft.callsign,self.dynamics.props.speed,))
+                self._bkp_speed = self.dynamics.props.speed
+                self.dynamics.props.speed = 0
+        elif self._bkp_speed:
+            llogger.debug("[%s] No traffic ahead. Resuming at %s" % (self.aircraft.callsign,self._bkp_speed,))
+            self.dynamics.props.speed = self._bkp_speed
+            self._bkp_speed = None
+        
         self.dynamics.update(time)
         status = self.dynamics.update_aircraft()
+        
         
         if self.is_stopped() and self.init_delay != None:
             if sim_time() - self.stopped_time > self.init_delay:
                 llogger.debug("{%s}(%s) starting! %s > %s " % (self.aircraft, self.state, sim_time() - self.stopped_time, self.init_delay))
                 self.flightplan._waypoint = 0
                 self.clearances.start = True
-                print("START BEFORE WP",self.flightplan._waypoint)
                 self.start()
-                print("START AFTER  WP",self.flightplan._waypoint)
             else:
                 #llogger.debug("{%s}(%s) WAITING on stopped %s > %s " % (self.aircraft, self.state, sim_time() - self.stopped_time, self.init_delay))
                 return status
