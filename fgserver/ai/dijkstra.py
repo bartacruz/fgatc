@@ -197,24 +197,19 @@ def get_next_on_runway(pos, runway, heading):
     '''
     if isinstance(pos, Position):
         pos = pos.to_point()
+    
     def delta(node):
         p = node.point
-        dist = pos.distance(p)
+        dist = pos.distance(p)*10000
         diff = angle_diff(float(heading),get_heading_to(pos,p))
-        return dist*diff
+        if diff > 90:
+            # relegate nodes that requires big turns in runway
+            dist = dist **3
+        return dist
     
     points = list(runway.airport.taxinodes.filter(on_runway=True))
     points.sort(key = delta)
-    
-#         p = entry[1]
-#         ident=entry[0].attrib.get('index')
-#         dist = pos.distance(p)
-#         diff = angle_diff(float(heading),get_heading_to(pos,p))
-#         delta = dist*diff
-#         print(ident, delta)
-#         points.append((delta,p))
-#     points.sort(key=lambda x: x[0])
-    print('on runway:', points)
+    print('on runway:', [x.name for x in points])
     return points[0]
 
 def get_runway_exit(runway, pos, heading):
@@ -227,9 +222,14 @@ def get_runway_exit(runway, pos, heading):
     s = list(runway.airport.taxinodes.filter(short=True))    
     def delta(node):
         p = node.point
-        dist = pos.distance(p)
-        diff = angle_diff(runway.bearing,get_heading_to(first.point,p))
-        return (dist/100)*diff
+        dist = first.point.distance(p)*10000
+        diff = angle_diff(float(heading),get_heading_to(first.point,p))
+        # avoid steep turns on runway
+        if diff > 90:
+            dist = dist **3
+        return dist
+        
+        
     s.sort(key=delta)
     dest = s.pop(0)
     
