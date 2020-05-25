@@ -83,41 +83,42 @@ class DynamicManager():
             self._waiting= max(0,self._waiting-dt)
             #llogger.debug("WAITING on %s: %s" % (self.plane.state,self._waiting,))
             return
-        course = get_heading_to(self.position, self.waypoint.get_position())
-        dist = self.props.speed * dt
-        dist_to=get_distance(self.position, self.waypoint.get_position())
-        self.waypoint_distance=dist_to
+        course_to_wp = get_heading_to(self.position, self.waypoint.get_position())
+        move_distance = self.props.speed * dt
+        distance_to_wp=get_distance(self.position, self.waypoint.get_position())
+        self.waypoint_distance=distance_to_wp
         
         if self.props.speed == 0:
             # Don't move!
             return
         
-        #self.log("course: %s, dist:%s, dist_to:%s" % (course,dist,dist_to))
+        #self.log("course_to_wp: %s, move_distance:%s, distance_to_wp:%s" % (course_to_wp,move_distance,distance_to_wp))
         seconds_before=0
         nang=0
         
-        #if self.waypoints.count()-1 > self._waypoint and not plane.on_ground():
         '''Calculate turn time to next waypoint to see if we reached actual'''
         if self.waypoint_next and not self.on_ground():
             #llogger.debug("%s => %s" % (self.waypoint,self.waypoint_next,))
             ncourse = get_heading_to(self.waypoint.get_position(), self.waypoint_next.get_position())
-            nang = angle_diff(course, ncourse) 
+            nang = angle_diff(course_to_wp, ncourse) 
             seconds_before = nang/self.props.turn_rate+2
-        turn_dist = dist_to - dist*seconds_before/(dt*2)
-        #self.debug("sec before",seconds_before,'turn_dist',turn_dist)
+        turn_dist = distance_to_wp - move_distance*seconds_before/(dt*2)
+        
         step = False
-        if dist >= abs(turn_dist) or dist_to < 0.1:
+        if move_distance >= abs(turn_dist) or distance_to_wp < move_distance:
             llogger.debug("Reached waypoint %s" % self.waypoint)
-            llogger.debug('nang=%s, seconds_before=%s ,dist=%s,dist_to=%s,turn_dist=%s' % (nang,seconds_before,dist,dist_to,turn_dist))
+            llogger.debug('nang=%s, seconds_before=%s ,move_distance=%s,distance_to_wp=%s,turn_move_distance=%s' % (nang,seconds_before,move_distance,distance_to_wp,turn_dist))
             
-            dist = min(dist,dist_to)
+            move_distance = min(move_distance,distance_to_wp)
             #plane.course = course
             step = True
             
             
-        self.move(course,dist,dt)
+        self.move(course_to_wp,move_distance,dt)
         
         if step:
+            # Hack to align plane to the runway when lined up.
+            # TODO: Make sure we reach every waypoint heading to the next, and remove this hack
             if self.waypoint.status == PlaneInfo.LINED_UP:
                 llogger.debug("calculating course heading from %s to %s" % (self.position,self.waypoint_next))
                 depart_course = get_heading_to(self.position, self.waypoint_next.get_position())
@@ -157,12 +158,13 @@ class DynamicManager():
             return self.waypoint.altitude
         if self.props.speed == 0 or abs(self.position.z - self.target_altitude) <= 0.1:
             return self.target_altitude
-        multi=1
+        
+        # Pitch up or down?
         diff = self.target_altitude - self.position.z
-        if diff < 0:
-            multi = -1
+        multi  = round(diff / abs(diff))
         vsdiff = self.props.target_vertical_speed -self.props.vertical_speed
         vsdiffa = abs(vsdiff)
+        
         if vsdiff !=0:
             if self.props.vertical_speed==0:
                 self.props.vertical_speed=0.5
@@ -191,6 +193,7 @@ class DynamicManager():
         return self.plane.state in ['stopped','taxiing','linedup','short', 'rolling']
     
     def update_aircraft(self):
+        ''' Update aircraft and status with current data '''
         a = self.plane.aircraft
         a.lat = self.position.x
         a.lon = self.position.y
@@ -225,7 +228,7 @@ class TurboPropDynamicManager(DynamicManager):
         elif plane.is_pushback():
             self.props.update(name=state,turn_rate = 160, speed = 1*units.KNOTS, target_vertical_speed=1)
         elif plane.is_taxiing():
-            self.props.update(name=state,turn_rate = 160, speed = 15*units.KNOTS, target_vertical_speed=1)
+            self.props.update(name=state,turn_rate = 160, speed = 10*units.KNOTS, target_vertical_speed=1)
         elif plane.is_crossing():
             self.props.update(name=state,turn_rate = 160, speed = 5*units.KNOTS, target_vertical_speed=1)
         elif plane.is_departing():
