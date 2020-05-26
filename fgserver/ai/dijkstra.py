@@ -255,8 +255,79 @@ def get_nodes_from_xml(icao, on_runway=None):
         elif on_runway == True and node.attrib.get('isOnRunway') == "1":
             ret.append((node,p))
     return ret
+
+def _get_graph(airport):
+    graph = Graph()
+    #s1 = sim_time()
+    for node in airport.taxinodes.prefetch_related('adjacents').all():
+        if not graph.get_vertex(node.name):
+            graph.add_vertex(node.name, node.point)
+        for adjacent in node.adjacents.all():
+            if not graph.get_vertex(adjacent.name):
+                graph.add_vertex(adjacent.name, adjacent.point)
+            graph.add_edge(node.name, adjacent.name)
+            graph.add_edge(adjacent.name, node.name)
+    #print("%s graph created in %s " % (sim_time(), sim_time()-s1))
+    return graph
+
+def _get_path(graph,p1,p2):
+    #s1 = sim_time()
+    vstart = graph.get_vertex(p1)
+    vend = graph.get_vertex(p2)
+    dijkstra(graph, vstart, vend)
+    path = [vend.get_id()]
+    shortest(vend, path)
+    route = [graph.get_vertex(x) for x in path[::-1]]
+    #print("%s route finished in %s " % (sim_time(), sim_time()-s1))
+    return route
+
+def taxi_path2(airport,start,endp, end_on_rwy=False):
+    #s1=sim_time()
+    if airport.taxi_ways.count() == 0:
+        return dj_waypoints(airport, start, endp, start_on_rwy=False,end_on_rwy=False)
     
-#icao = "SADF"
+    if isinstance(start,Position):
+        start = start.to_point()
+    if isinstance(endp,Position):
+        endp = endp.to_point()
+    if start.hasz:
+        start=Point(start.x,start.y,srid=4326)
+        
+    
+    graph = _get_graph(airport)
+    
+    vstart = airport.taxinodes.annotate(distance=Distance('point', start)).order_by('distance').first().name
+
+    if end_on_rwy:
+        #print("%s calculating alternate routes to endp" % sim_time())
+        vends = airport.taxinodes.filter(on_runway=True).annotate(distance=Distance('point',endp)).order_by('distance')
+        segments =[]
+        points = [] 
+        for v in vends:
+            if v.taxiway_set.count() and not v.taxiway_set.first().name in segments:
+                if len(points) and v.distance.m > 300:
+                    continue
+                segments.append(v.taxiway_set.first().name)
+                points.append(v)
+                if len(segments) >= 3:
+                    break
+        routes =[]
+        
+        for p in points:
+            route = _get_path(graph, vstart, p.name)
+            line = [start]+[x.point for x in route]+[p.point]
+            print([str(x) for x in line])
+            routes.append( (p.name,LineString(line).length,route) )
+        routes.sort(key=lambda x: x[1])
+#         print("Routes calculated in %s" % (sim_time()-s1))
+#         for r in routes:
+#             print(r)
+        route = routes[0][2]
+    else:
+        vend = airport.taxinodes.annotate(distance=Distance('point', endp)).order_by('distance').first().name
+        route = _get_path(graph, vstart, vend)
+    return route
+    
 def taxi_path(airport, start, endp, start_on_rwy=False,end_on_rwy=False):
     if airport.taxi_ways.count() == 0:
         return dj_waypoints(airport, start, endp, start_on_rwy=False,end_on_rwy=False)
@@ -268,7 +339,7 @@ def taxi_path(airport, start, endp, start_on_rwy=False,end_on_rwy=False):
     
     print('%s Taxipath! in %s from %s to %s' % (sim_time(),airport,start,endp))
     graph = Graph()
-    for node in airport.taxinodes.all():
+    for node in airport.taxinodes.prefetch_related('adjacents').all():
         if not graph.get_vertex(node.name):
             graph.add_vertex(node.name, node.point)
         for adjacent in node.adjacents.all():
@@ -280,9 +351,8 @@ def taxi_path(airport, start, endp, start_on_rwy=False,end_on_rwy=False):
     # TODO: filter on runway and heading
     vstart = graph.get_vertex(airport.taxinodes.annotate(distance=Distance('point', start)).order_by('distance').first().name)
     vend = graph.get_vertex(airport.taxinodes.annotate(distance=Distance('point',endp)).order_by('distance').first().name)
-    print (vstart,vend)
     dijkstra(graph, vstart, vend)
-    
+     
     path = [vend.get_id()]
     shortest(vend, path)
     print('The shortest path : %s' %(path[::-1]))

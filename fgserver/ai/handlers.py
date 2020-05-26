@@ -8,7 +8,7 @@ from fgserver.ai.common import PlaneInfo, PlaneRequest
 from django.contrib.gis.geos.point import Point
 from fgserver.models import Runway, Comm, get_runway
 from fgserver.ai.dijkstra import dj_waypoints, get_next_on_runway,\
-    get_runway_exit, taxi_path
+    get_runway_exit, taxi_path, taxi_path2
 from fgserver import units
 from fgserver.helper import move, normdeg, Position, normalize, say_char,\
     get_heading_to, get_distance
@@ -472,13 +472,13 @@ class CircuitHandler():
             pass
         if isinstance(pos2, Runway):
             rwystart = move(pos2.position(), normalize(pos2.bearing-180), pos2.length/2,pos2.position().z)
-            lineup = move(rwystart, pos2.bearing, 90,self.apalt)
+            lineup = move(rwystart, pos2.bearing, 50,self.apalt)
             p2 = rwystart.to_point()
             p2r=True
         else:
             p2 = pos2.to_point()
             p2r = False
-        taxi = taxi_path(self.airport,p1, p2, end_on_rwy=p2r)
+        taxi = taxi_path2(self.airport,p1, p2, end_on_rwy=p2r)
         
         last_short = None
         last_taxi = None
