@@ -196,7 +196,7 @@ var messages = {
 	startup: '{apt}, {cs},{parkn} request startup{atis}',
 	readytaxi: '{apt}, {cs},{atis} ready to taxi',
 	holdingshort: '{apt}, {cs},{atis} holding short {rwyof}',
-	readytko: '{apt}, {cs}, ready for takeoff',
+	readytko: '{apt}, {cs}, ready for departure',
 	leaving: '{apt}, {cs}, leaving airfield',
 	transition: '{apt}, {cs} to transition your airspace{atis}',
 	inbound: '{apt}, {cs}{atis} for inbound approach',
