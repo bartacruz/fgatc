@@ -348,7 +348,7 @@ class FlightPlanManager():
         llogger.info("{%s-FP} Rerouting to %s: %s" % (self.plane.aircraft, wp_index,self.waypoint()))
     
     def generate_waypoints(self):
-        print("{%s-FP} generating wpts" % self.plane.aircraft)
+        llogger.debug("{%s-FP} generating wpts" % self.plane.aircraft)
         clearances = self.plane.clearances
         position = self.plane.dynamics.position
         if self.plane.is_starting():

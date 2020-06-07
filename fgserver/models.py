@@ -579,6 +579,9 @@ class StartupLocation(Model):
     aircraft=ForeignKey(Aircraft,on_delete=models.CASCADE, blank=True,null=True, related_name='startup_location')
     active = BooleanField(default=True)
 
+    class Meta:
+        ordering = ['airport','name']
+
     def get_position(self):
         return Position(float(self.lat), float(self.lon), float(self.altitude))
     def __str__(self):
