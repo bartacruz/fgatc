@@ -232,7 +232,7 @@ class Controller(object):
             cycle = get_metar_cycle(self.comm.airport)
             self.debug("ATIS: plane:%s, airport: %s" % (atis,cycle,))
             if cycle != atis:
-                response.add_param(Order.PARAM_ATIS, atis)
+                response.add_param(Order.PARAM_ATIS, cycle)
         else:
             response.add_param(Order.PARAM_QNH, str(get_qnh(self.comm.airport)))
 

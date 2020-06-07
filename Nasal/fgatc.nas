@@ -259,14 +259,15 @@ var readback = func() {
 
 var short_callsign=func(callsign){
 	var cs = string.lc(callsign);
-	return sprintf("%s %s %s", say_char(cs[0]), say_char(cs[1]), say_char(cs[2]) );
+	return sprintf("%s %s %s", say_char(chr(cs[0])), say_char(chr(cs[1])), say_char(chr(cs[2])) );
 };
 
 var say_char = func(c) {
     if (c==nil) {
 		return c;
 	}
-	return LETTERS[string.lc(c)[0] - 'a'[0]];
+	
+	return LETTERS[string.lc(sprintf("%s",c))[0] - 'a'[0]];
 }
 var say_number=func(number) {
 	if (number==nil) {
@@ -307,10 +308,15 @@ var parse_message = func(tag) {
 		msg = string.replace(msg,'{tngo}', "");
 	}		
 	if (get_option('atis')) {
-		msg = string.replace(msg,'{atis}', sprintf(" information %s ", string.uc(say_char(get_option('atis'))) ) );
+		msg = string.replace(msg,'{atis}', sprintf(", information %s, ", string.uc(say_char(get_option('atis'))) ) );
 	} else {
 		msg = string.replace(msg,'{atis}', "");
-	}		
+	}
+	if ( getprop("/sim/presets/parkpos") != nil) {
+		msg = string.replace(msg,'{parkn}', sprintf(" base %s,", getprop("/sim/presets/parkpos")));
+	} else {
+		msg = string.replace(msg,'{parkn}', "");
+	}
 	if (tag == "roger") {
 		if(last_order['ord'] == 'taxito') {
 			var ack = sprintf("taxi to %s",last_order['rwy']);
@@ -367,6 +373,8 @@ var parse_message = func(tag) {
 		} else {
 			msg = string.replace(msg,'{qnh}', '');
 		}
+		msg = string.replace(msg, ",,", ",");
+		msg = string.trim(msg,1, func(c) c==",");
 	}
 	return msg;
 };
