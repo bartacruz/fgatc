@@ -9,7 +9,8 @@ from django.utils import timezone
 from fgserver.messages import alias
 from fgserver.ai.planes import PlaneInfo
 from random import randint
-from fgserver import get_qnh, units, get_controllers, setInterval
+from fgserver import get_qnh, units, get_controllers, setInterval,\
+    get_metar_cycle
 from fgserver.helper import get_distance, get_heading_to, angle_diff, get_heading_to_360
 import time
 import threading
@@ -225,6 +226,16 @@ class Controller(object):
             response.message = order.message.replace(',', ', I say again,',1)
         return response
 
+    def check_atis(self,request, response):
+        if request.get_param(Order.PARAM_ATIS) :
+            atis = request.get_param(Order.PARAM_ATIS)
+            cycle = get_metar_cycle(self.comm.airport)
+            self.debug("ATIS: plane:%s, airport: %s" % (atis,cycle,))
+            if cycle != atis:
+                response.add_param(Order.PARAM_ATIS, atis)
+        else:
+            response.add_param(Order.PARAM_QNH, str(get_qnh(self.comm.airport)))
+
     def __unicode__(self):
         return '%s for %s' % (type(self).__name__, self.comm)
     
@@ -255,11 +266,11 @@ class Ground(Controller):
         response.message=get_message(response)
         
         return response
-
+        
     def startup(self,request):
         response=self._init_response(request)
         response.add_param(Order.PARAM_ORDER, alias.STARTUP)
-        response.add_param(Order.PARAM_QNH, str(get_qnh(self.comm.airport)))
+        self.check_atis(request, response)
         response.message=get_message(response)
         self.set_status(request.sender, PlaneInfo.STOPPED)
         return response
@@ -422,7 +433,7 @@ class Tower(Controller):
                 response.add_param(Order.PARAM_ORDER,alias.CLEAR_LAND)
             #response.add_param(Order.PARAM_NUMBER,landing+1)
             response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
-            response.add_param(Order.PARAM_QNH, str(get_qnh(self.comm.airport)))
+            self.check_atis(request, response)
             self.set_status(request.sender, PlaneInfo.LANDING)
         response.message=get_message(response)
         return response
@@ -470,7 +481,7 @@ class Departure(Controller):
     def startup(self,request):
         response=self._init_response(request)
         response.add_param(Order.PARAM_ORDER, alias.STARTUP)
-        response.add_param(Order.PARAM_QNH, str(get_qnh(self.comm.airport)))
+        self.check_atis(request, response)
         response.message=get_message(response)
         self.set_status(request.sender, PlaneInfo.STOPPED)
         return response
@@ -506,7 +517,7 @@ class Approach(Controller):
             response.add_param(Order.PARAM_CIRCUIT_WP,alias.CIRCUIT_FINAL)
         response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
         response.add_param(Order.PARAM_ALTITUDE,str(self.circuit_alt) )
-        response.add_param(Order.PARAM_QNH, str(get_qnh(self.comm.airport)))
+        self.check_atis(request, response)
         twr = get_controllers(self.comm.airport, Comm.TWR)[0]
         self.pass_control(response, twr)
         response.message=get_message(response)        

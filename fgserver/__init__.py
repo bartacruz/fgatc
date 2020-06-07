@@ -80,6 +80,12 @@ def fetch_metar(icao):
     llogger.debug("No METAR station for %s - %s" % (icao,url))
     return None
 
+def get_metar_cycle(apt):
+    metar = apt.metar.last()
+    if metar:
+        return chr(ord('a')+metar.cycle)
+    return None
+
 def get_qnh(apt):
     metar = apt.metar.last()
     if metar:

@@ -175,6 +175,8 @@ var compute_flow = func() {
 		}
 	} else if (lao == 'clearland') {
 		next = "clearrw";
+	} else if (lao == 'soff') {
+		next = "goodbye";
 	} else if (lao == 'cleartk' or lao == "cleartngo") {
 		next = "leaving";
 	} else if (lao == 'join' or lao == 'cirrep') {
@@ -191,21 +193,22 @@ var compute_flow = func() {
 var messages = {
 	roger:'{ack}{qnh}{tuneto}, {cs}',
 	repeat:'{apt}, {cs}, say again',
-	startup: '{apt}, {cs}, request startup clearance',
-	readytaxi: '{apt}, {cs}, ready to taxi',
-	holdingshort: '{apt}, {cs}, holding short {rwyof}',
+	startup: '{apt}, {cs},{parkn} request startup{atis}',
+	readytaxi: '{apt}, {cs},{atis} ready to taxi',
+	holdingshort: '{apt}, {cs},{atis} holding short {rwyof}',
 	readytko: '{apt}, {cs}, ready for takeoff',
 	leaving: '{apt}, {cs}, leaving airfield',
-	transition: '{apt}, {cs} to transition your airspace',
-	inbound: '{apt}, {cs} for inbound approach',
+	transition: '{apt}, {cs} to transition your airspace{atis}',
+	inbound: '{apt}, {cs}{atis} for inbound approach',
 	crosswind: '{apt}, {cs}, crosswind for runway {rwy}',
 	downwind: '{apt}, {cs}, downwind for runway {rwy}',
 	base: '{apt}, {cs}, turning base for runway {rwy}',
-	final: '{apt}, {cs}, final for runway {rwy}{tngo}',
-	straight: '{apt}, {cs}, straight for runway {rwy}',
+	final: '{apt}, {cs},{atis} final for runway {rwy}{tngo}',
+	straight: '{apt}, {cs},{atis} straight for runway {rwy}',
 	clearrw: '{apt}, {cs}, clear {rwyof}',
 	around: '{apt}, {cs}, going around',
-	withyou: '{apt}, {cs}, with you at {alt} feet, heading {heading}',
+	goodbye: 'Goodbye',
+	withyou: '{apt}, {cs}, with you at {alt} feet, heading {heading}{atis}',
 	tunein: '',
 	
 };
@@ -228,6 +231,9 @@ var sendmessage = func(message="",dlg=1){
 	}
 	if (get_option('tngo')) {
 		request = sprintf("%s;tngo=1",request);
+	}
+	if (get_option('atis')) {
+		request = sprintf("%s;atis=%s",request, get_option('atis'));
 	}
 	if (get_option('remain')) {
 		request = sprintf("%s;remain=1",request);
@@ -252,14 +258,16 @@ var readback = func() {
 };
 
 var short_callsign=func(callsign){
-	var base='a';
 	var cs = string.lc(callsign);
-	return sprintf("%s %s %s", LETTERS[cs[0] - base[0]],
-                             LETTERS[cs[1] - base[0]],
-                             LETTERS[cs[2] - base[0]]
-                             );
+	return sprintf("%s %s %s", say_char(cs[0]), say_char(cs[1]), say_char(cs[2]) );
 };
 
+var say_char = func(c) {
+    if (c==nil) {
+		return c;
+	}
+	return LETTERS[string.lc(c)[0] - 'a'[0]];
+}
 var say_number=func(number) {
 	if (number==nil) {
 		return number;
@@ -298,12 +306,20 @@ var parse_message = func(tag) {
 	} else {
 		msg = string.replace(msg,'{tngo}', "");
 	}		
+	if (get_option('atis')) {
+		msg = string.replace(msg,'{atis}', sprintf(" information %s ", string.uc(say_char(get_option('atis'))) ) );
+	} else {
+		msg = string.replace(msg,'{atis}', "");
+	}		
 	if (tag == "roger") {
 		if(last_order['ord'] == 'taxito') {
 			var ack = sprintf("taxi to %s",last_order['rwy']);
 			if (last_order['short']) {
 				ack ~= " and hold";
 			}
+			msg = string.replace(msg,'{ack}',ack);
+		} else if(last_order['ord'] == 'taxipark') {
+			var ack = sprintf("taxi to parking %s",last_order['parkn']);
 			msg = string.replace(msg,'{ack}',ack);
 		} else if(last_order['ord'] == 'cleartk') {
 			msg = string.replace(msg,'{ack}','Cleared for takeoff');

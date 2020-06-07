@@ -51,7 +51,9 @@ var dialog_columns=func(){
     	append(cols,get_dialog_column('withyou'));
     } else if (viewnode == 'options') {
 		append(cols,{ type: "checkbox", label: "Remain in the pattern", code: "remain", halign: "left", callback: "fgatcdialog.set_option", property: fgatc.root ~ "/options/remain" });
-		append(cols,{ type: "checkbox", label: "Touch and go", code: "tngo", halign: "left", callback: "fgatcdialog.set_option", property: fgatc.root ~ "/options/tngo" });
+		append(cols,{ type: "checkbox", label: "Touch & go", code: "tngo", halign: "left", callback: "fgatcdialog.set_option", property: fgatc.root ~ "/options/tngo" });
+		append(cols,{ type: "input", label: "ATIS report", format: "%s", code: "atis", halign: "left", property: fgatc.root ~ "/options/atis", callback:nil });
+		append(cols,{ type: "checkbox", label: "test", code: "test", halign: "left", callback: "fgatcdialog.set_option", property: fgatc.root ~ "/options/test" });
 		
     }
      return cols;
@@ -149,7 +151,12 @@ var dialog = {
 		foreach (var column; me.columns) {
 			w = content.addChild(column.type);
 			w.node.setValues(column);
-            w.setBinding("nasal", column.callback ~ "(\"" ~ column.code ~ "\");");
+			if (column.callback != nil) {
+            	w.setBinding("nasal", column.callback ~ "(\"" ~ column.code ~ "\");");
+            } else {
+            	#w.setBinding('property-assign',column.property);
+            	w.setBinding('dialog-apply');
+            }
 		}
 		fgcommand("dialog-new", me.dialog.prop());
         fgcommand("dialog-show", me.namenode);
