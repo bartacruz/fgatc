@@ -600,7 +600,7 @@ class MetarUpdater(Thread):
         obs = get_closest_metar(self.apt)
         if obs:
             try:
-                metar= MetarObservation.objects.get(airport=self.apt)
+                metar= MetarObservation.objects.filter(airport=self.apt).last()
                 llogger.debug("Updating METAR for %s with %s" % (self.apt,obs))
             except:
                 metar = MetarObservation(airport=self.apt)
@@ -614,7 +614,7 @@ class MetarUpdater(Thread):
 @receiver(post_save,sender=Order)
 def check_metar(sender, instance, **kwargs):
     try:
-        metar = MetarObservation.objects.get(airport = instance.sender.airport)
+        metar = MetarObservation.objects.filter(airport = instance.sender.airport).last()
         diff = timezone.now() - metar.date
         if diff.total_seconds() <= METAR_UPDATE:
             return

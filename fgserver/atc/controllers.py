@@ -228,7 +228,7 @@ class Controller(object):
 
     def check_atis(self,request, response):
         if request.get_param(Order.PARAM_ATIS) :
-            atis = request.get_param(Order.PARAM_ATIS)
+            atis = request.get_param(Order.PARAM_ATIS).lower()
             cycle = get_metar_cycle(self.comm.airport)
             self.debug("ATIS: plane:%s, airport: %s" % (atis,cycle,))
             if cycle != atis:
