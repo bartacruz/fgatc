@@ -28,7 +28,12 @@ def process_message(pos):
     try:
         aircraft = Aircrafts.get(pos.callsign())
         if not aircraft:
-            return
+            aircraft = Aircraft()
+            aircraft.posmsg=pos
+            aircraft.update_position()
+            aircraft.save()
+            llogger.info("Created aircraft %s" % aircraft)
+            aircraft = Aircrafts.get(pos.callsign()) # re read from DB
         aircraft.posmsg=pos
         aircraft.update_position()
         
