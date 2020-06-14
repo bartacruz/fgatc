@@ -28,7 +28,7 @@ def process_message(pos):
     try:
         aircraft = Aircrafts.get(pos.callsign())
         if not aircraft:
-            aircraft = Aircraft()
+            aircraft = Aircraft(callsign=pos.callsign())
             aircraft.posmsg=pos
             aircraft.update_position()
             aircraft.save()
