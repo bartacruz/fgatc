@@ -266,8 +266,13 @@ var say_char = func(c) {
     if (c==nil) {
 		return c;
 	}
-	
-	return LETTERS[string.lc(sprintf("%s",c))[0] - 'a'[0]];
+	var ord1 = string.lc( sprintf("%s",c) )[0];
+	var base = 'a'[0];
+	if (ord1 >= base) {
+		return LETTERS[ord1 - base];
+	} else {
+		return say_number(c);
+	}
 }
 var say_number=func(number) {
 	if (number==nil) {
