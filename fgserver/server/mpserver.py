@@ -88,15 +88,15 @@ class MPServer(FGServer):
             pos = get_pos_msg(comm.airport)
             #print('airport',pos)
             yield pos
+        #print(aircraft,list(Aircrafts.get_near(aircraft)))
         for other in Aircrafts.get_near(aircraft):
-            if other.plans.count():
-                #print("sending %s to %s" % (pos.callsign(), aircraft,))
-                pos = PositionMessages.get(other.callsign)
-                if pos:
-                    yield pos
-                else:
-                    status = AircraftStatus.objects.get(aircraft=other)
-                    yield status.get_position_message()
+            pos = PositionMessages.get(other.callsign)
+            #print("sending %s to %s" % (pos.callsign(), aircraft,))
+            if pos:
+                yield pos
+            else:
+                status = AircraftStatus.objects.get(aircraft=other)
+                yield status.get_position_message()
         
         
     def sender_task(self):
@@ -110,9 +110,9 @@ class MPServer(FGServer):
                         continue
                     for pos in self.get_posmsg_for_plane(aircraft):
                         try:
-                            buff = pie_msg(pos)
+                            buff = pie_msg(pos,True)
                             self.server.socket.sendto(buff,aircraft.get_addr())
-                        except:
+                        except Exception:
                             llogger.exception("Sending to %s:  %s" % (callsign,str(pos),))
                 time.sleep(self.delay)
             except (KeyboardInterrupt, SystemExit):

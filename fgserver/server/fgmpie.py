@@ -167,7 +167,7 @@ class PacketData:
             elif prop_type == FgmsType.V1_String:
                 right_value = len(prop_value or "")
             else: # ATC-pie should not need: V2_ShortFloat3, V2_ShortFloat4
-                raise ValueError('Unhandled tight packing of prop %d' % prop_code)
+                raise ValueError('Unhandled tight packing of prop %d (%s)' % (prop_code, prop_type))
             pint = prop_code << 16 | right_value
             #print("packing prop v2",prop_code, right_value,pint, prop_value)
             buf.pack_int(pint)
@@ -295,8 +295,9 @@ def pie_msg(msg, legacy=False):
         buf.pack_property(FGMS_v2_virtual_prop, v2_version_prop_value, False)
     for prop_code, prop_value in msg.properties.properties.items():
         try:
-            buf.pack_property(prop_code, prop_value.get('value'), legacy)
-            
+            value = prop_value.get('value') if isinstance(prop_value,dict) else prop_value
+            buf.pack_property(prop_code, value, legacy)
+         
         except ValueError as err:
             print('Error packing property: %s' % err)
     return make_fgms_packet(str(msg.callsign()), position_message_type_code, buf).allData()
