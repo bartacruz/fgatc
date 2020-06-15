@@ -28,7 +28,7 @@ var frequency_2 = nil;
 var last_order = nil;
 
 var check_freq = func(freq) {
-	return (radio_on and (freq == frequency_1 or freq == frequency_2));
+	return (radio_on and ((freq == frequency_1) or (freq == frequency_2)));
 }
 
 var check_models = func(){
@@ -112,11 +112,11 @@ var set_frequency = func(node) {
 		return;
 	}
 	radio_on=1;
-	var f1 = getprop("/instrumentation/comm/frequencies/selected-mhz");
+	var f1 = sprintf("%f", getprop("/instrumentation/comm/frequencies/selected-mhz") );
 	var comm1 = getprop("/instrumentation/comm/power-btn");
-	var f2 = getprop("/instrumentation/comm[1]/frequencies/selected-mhz");
+	var f2 = sprintf("%f",getprop("/instrumentation/comm[1]/frequencies/selected-mhz"));
 	var comm2 = getprop("/instrumentation/comm[1]/power-btn");
-	print(sprintf("[FGATC] Set frequency %s,%s,&s,%s", comm1,f1,comm2,f2));
+	print(sprintf("[FGATC] Set frequency %s,%s,%s,%s", comm1,f1,comm2,f2));
 	
 	if (comm1 and f1 != frequency_1) {
 		print(sprintf("[FGATC] New frequency on COM1: %s (old: %s)",f1,frequency_1));
@@ -258,7 +258,7 @@ var readback = func() {
 };
 
 var short_callsign=func(callsign){
-	var cs = string.lc(callsign);
+	var cs = string.replace(string.lc(callsign), '-','');
 	return sprintf("%s %s %s", say_char(chr(cs[0])), say_char(chr(cs[1])), say_char(chr(cs[2])) );
 };
 
@@ -270,7 +270,7 @@ var say_char = func(c) {
 	var base = 'a'[0];
 	if (ord1 >= base) {
 		return LETTERS[ord1 - base];
-	} else {
+	} else if (isnum(c)){
 		return say_number(c);
 	}
 }
