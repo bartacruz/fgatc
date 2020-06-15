@@ -37,7 +37,7 @@ def say_char(c):
         
 def short_callsign(callsign,length=3):
     try:
-        callsign=callsign.replace("LV-","")
+        callsign=callsign.replace("LV-","").replace("CX-","")
         short = [x for x in [say_char(c) for c in callsign] if x ]
         return " ".join(short[:length])
 #         return "%s %s %s" % (LETTERS[ord(cs[0].lower()) - ord('a')],

@@ -258,7 +258,9 @@ var readback = func() {
 };
 
 var short_callsign=func(callsign){
-	var cs = string.replace(string.lc(callsign), '-','');
+	var cs = string.lc(callsign);
+	cs = string.replace(cs,"lv-","");
+	cs = string.replace(cs,"cx-","");
 	return sprintf("%s %s %s", say_char(chr(cs[0])), say_char(chr(cs[1])), say_char(chr(cs[2])) );
 };
 
