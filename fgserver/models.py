@@ -599,10 +599,10 @@ class MetarUpdater(Thread):
     def run(self):
         obs = get_closest_metar(self.apt)
         if obs:
-            try:
-                metar= MetarObservation.objects.filter(airport=self.apt).last()
+            metar= MetarObservation.objects.filter(airport=self.apt).last()
+            if metar:
                 llogger.debug("Updating METAR for %s with %s" % (self.apt,obs))
-            except:
+            else:
                 metar = MetarObservation(airport=self.apt)
                 llogger.debug("Creating METAR for %s with %s" % (self.apt,obs))
             metar.observation = obs.code
