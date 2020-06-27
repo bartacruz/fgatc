@@ -220,6 +220,7 @@ def get_runway_exit(runway, pos, heading):
     
     # Get short nodes, sort by angle difference and distance
     s = list(runway.airport.taxinodes.filter(short=True))    
+    print("shorts",s)
     def delta(node):
         p = node.point
         dist = first.point.distance(p)*10000
@@ -231,6 +232,7 @@ def get_runway_exit(runway, pos, heading):
         
         
     s.sort(key=delta)
+    print("sorted",s)
     dest = s.pop(0)
     
     route = taxi_path(runway.airport, first.point, dest.point)

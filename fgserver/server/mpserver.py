@@ -63,9 +63,12 @@ class MPServer(FGServer):
 
     def incomming_message(self,pos):
         #print("incomming %s" % pos)
-        PositionMessages.set(pos)
-        process_message(pos)
-        
+        try:
+            PositionMessages.set(pos)
+            process_message(pos)
+        except:
+            llogger.exception("Processing incomming message %s" % pos)
+
     def after_init(self):
         llogger.debug('Starting server loop')
         while True:
@@ -110,7 +113,13 @@ class MPServer(FGServer):
                         continue
                     for pos in self.get_posmsg_for_plane(aircraft):
                         try:
-                            buff = pie_msg(pos,True)
+                            if hasattr(pos,'buff'):
+                                buff = pos.buff
+                            else:
+                                buff = pie_msg(pos)
+                            
+                            if len(buff) > 2000:
+                                print("super long message",pos)
                             self.server.socket.sendto(buff,aircraft.get_addr())
                         except Exception:
                             llogger.exception("Sending to %s:  %s" % (callsign,str(pos),))

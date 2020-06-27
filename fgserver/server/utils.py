@@ -145,9 +145,12 @@ def get_pos_msg(airport, simtime=None):
         msg.properties.set_prop(messages.PROP_FREQ, str(order.sender.get_FGfreq()))
 #         msg.properties.set_prop(messages.PROP_FREQ_V2, order.sender.frequency)
         msg.properties.set_prop(messages.PROP_OID, str(order.id))
-        ostring, ostring2 = get_order_strings(order.get_order())
-        msg.properties.set_prop(messages.PROP_ORDER, ostring)
-        msg.properties.set_prop(messages.PROP_ORDER2, ostring2)
+        try:
+            ostring, ostring2 = get_order_strings(order.get_order().replace(', ',',').replace(': ',':'))
+            msg.properties.set_prop(messages.PROP_ORDER, ostring)
+            msg.properties.set_prop(messages.PROP_ORDER2, ostring2)
+        except:
+            llogger.exception("splitting order")
     
         chat, chat2 = get_order_strings(order.message)
         msg.properties.set_prop(messages.PROP_CHAT,chat )
@@ -192,7 +195,7 @@ def get_order_strings(string):
     if len(ostring) >=128:
         ostring2 = ostring[127:]
         ostring=ostring[:127]
-    #print("ORDER STRINGS",[ostring,ostring2])
+    #llogger.debug("ORDER STRINGS %s" % [ostring,ostring2])
     return ostring,ostring2    
 
 

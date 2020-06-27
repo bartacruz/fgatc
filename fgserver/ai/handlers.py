@@ -478,7 +478,7 @@ class CircuitHandler():
         else:
             p2 = pos2.to_point()
             p2r = False
-        taxi = taxi_path2(self.airport,p1, p2, end_on_rwy=p2r)
+        taxi = taxi_path(self.airport,p1, p2, end_on_rwy=p2r)
         
         last_short = None
         last_taxi = None

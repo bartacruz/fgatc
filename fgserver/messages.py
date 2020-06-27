@@ -563,7 +563,8 @@ class PosMsg:
 
     def get_frequency(self):
         try:
-            return int(self.get_value(PROP_FREQ).replace(".",'').ljust(5,'0'))
+            freq =  self.get_value(PROP_FREQ,None) or  self.get_value(PROP_FREQ_V2,None)
+            return int(freq.replace(".",'').ljust(5,'0'))
         except:
             return None
     
