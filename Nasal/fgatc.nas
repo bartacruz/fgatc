@@ -8,11 +8,11 @@ var controller = nil;
 var airport = nil;
 var selected_runway = "";
 
-var channel_message ="sim/multiplay/generic/string[16]";
-var channel_message2 ="sim/multiplay/generic/string[14]";
-var channel_request ="sim/multiplay/generic/string[17]";
-var channel_order ="sim/multiplay/generic/string[18]";
+var channel_order ="sim/multiplay/generic/string[14]";
 var channel_order2 ="sim/multiplay/generic/string[15]";
+var channel_request ="sim/multiplay/generic/string[16]";
+var channel_message ="sim/multiplay/generic/string[17]";
+var channel_message2 ="sim/multiplay/generic/string[18]";
 var channel_oid = "sim/multiplay/generic/string[10]";
 
 var channel_freq ="sim/multiplay/transmission-freq-hz";
@@ -106,11 +106,11 @@ var set_radio = func(apt=nil,contr=nil) {
 
 var set_frequency = func(node) {
 	print("[FGATC] Set frequency");
-	if ( ! getprop("/systems/electrical/outputs/comm")) {
-		radio_on=0;
-		set_radio();
-		return;
-	}
+#	if ( ! getprop("/systems/electrical/outputs/comm")) {
+#		radio_on=0;
+#		set_radio();
+#		return;
+#	}
 	radio_on=1;
 	var f1 = sprintf("%f", getprop("/instrumentation/comm/frequencies/selected-mhz") );
 	var comm1 = getprop("/instrumentation/comm/power-btn");
@@ -221,7 +221,7 @@ var LETTERS = [
 	"uniform", "victor", "whiskey", "xray", "yankee", "zulu"
 ];
 
-var NUMBERS=['zero','one','two','three','four','five','six','seven','eight','niner'];
+var NUMBERS=['zeero','one','too','tree','fower','fife','six','seven','eight','niner'];
 
 var sendmessage = func(message="",dlg=1){
 	var msg = parse_message(message);
@@ -392,6 +392,9 @@ setlistener("/instrumentation/comm/power-btn",fgatc.set_frequency,1,0);
 setlistener("/instrumentation/comm[1]/frequencies/selected-mhz",fgatc.set_frequency,1,0);
 setlistener("/instrumentation/comm[1]/power-btn",fgatc.set_frequency,1,0);
 setlistener("/control/switches/master-avionics",fgatc.set_frequency,1,0);
+setprop("/sim/fgatc/request","Test");
+setprop("/sim/fgatc/message",my_callsign);
+setprop("/sim/fgatc/oid",17);
 
 var models_timer = maketimer(1,check_models);
 models_timer.start();

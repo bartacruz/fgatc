@@ -4,31 +4,33 @@ Created on Apr 16, 2015
 
 @author: bartacruz
 '''
-from xdrlib import Packer
-
-import re
-import simplejson as json
-import logging
-from django.conf import settings
-from django.utils import timezone
 from time import perf_counter
 import time
+
+from django.conf import settings
+from django.utils import timezone
 import redis
-import pickle
-import threading
-from fgserver.helper import get_distance, get_heading_to, normalize, angle_diff,\
+
+from fgserver.helper import get_distance, get_heading_to, normalize, angle_diff, \
     Position, cart2geod, get_heading
+import logging
+import pickle
+import re
+import simplejson as json
+import threading
+from xdrlib import Packer
+
 
 llogger = logging.getLogger(__name__)
 
 PROP_FREQ = 10001
 PROP_FREQ_V2 = 13001
 
+PROP_ORDER = 10114
 PROP_ORDER2 = 10115
-PROP_CHAT = 10116
-PROP_REQUEST = 10117
-PROP_ORDER = 10118
-PROP_CHAT2 = 10114
+PROP_REQUEST = 10116
+PROP_CHAT = 10117
+PROP_CHAT2 = 10118
 
 PROP_OID=10110
 
