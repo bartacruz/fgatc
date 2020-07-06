@@ -1,6 +1,9 @@
 # FlightGear AI ATC and Aircraft multiplayer server
 
+
 A complete FlightGear multiplayer server with AI ATC, AI Planes, interactive map. Messages are sent and received only in the tunned frequency. 
+
+Licensed under the GNU GPLv2 License (see [the COPYING file](COPYING) )
 
 **In beta stage**. Fully functional, but with many bugs.
 
@@ -102,7 +105,3 @@ There is a neat script in `fgserver/tools/airport_importer.py` that imports ALL 
 
 [ ] Use [OpenRadar] (http://wiki.flightgear.org/OpenRadar) aliases for ATC responses
 
-
-
-## NOTE
-As you *may* have noticed, English is not my mother's tongue. If your eyes are bleeding for my spelling and/or grammar mistakes, feel free to edit this file (or any other) and make any corrections you like! 
