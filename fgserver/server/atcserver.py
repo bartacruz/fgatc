@@ -16,7 +16,7 @@ from fgserver.messages import PosMsg
 from fgserver import llogger, settings, setInterval
 from fgserver.server.fgmpie import pie_msg, PacketData
 from fgserver.signals import message_received, signal_server_started
-from fgserver.server.utils import get_pos_msg, process_msg
+from fgserver.server.utils import get_pos_msg, process_message
     
 class FGServer(socketserver.ThreadingMixIn, socketserver.UDPServer):
     incoming = Queue()
@@ -99,19 +99,19 @@ if __name__ == "__main__":
         while True:
             try:
                 pos = server.incoming.get(True, .1)
-                #llogger.debug("Received %s" % pos )
                 message_received.send_robust(sender=server,msg=pos)
-                process_msg(pos)
+                process_message(pos)
                 
             except Empty:
                 pass
-            try:
-                msg = server.outgoing.get(False)
-                #llogger.debug("Sending message %s" % msg )
-                buff = pie_msg(msg)
-                server.socket.sendto(buff,settings.FGATC_RELAY_SERVER)
-            except Empty:
-                pass
+            if settings.FGATC_RELAY_ENABLED:
+                try:
+                    msg = server.outgoing.get(False)
+                    #llogger.debug("Sending message %s" % msg )
+                    buff = pie_msg(msg)
+                    server.socket.sendto(buff,settings.FGATC_RELAY_SERVER)
+                except Empty:
+                    pass
         
     except (KeyboardInterrupt, SystemExit):
         server.shutdown()

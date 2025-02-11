@@ -6,9 +6,9 @@ Created on Apr 16, 2015
 '''
 from django.contrib import admin
 from django.contrib.admin.options import ModelAdmin, TabularInline
-from fgserver.ai.models import Circuit, WayPoint, FlightPlan
-from ajax_select.helpers import make_ajax_form
-from ajax_select.admin import AjaxSelectAdmin
+from .models import Circuit, WayPoint, FlightPlan
+# from ajax_select.helpers import make_ajax_form
+# from ajax_select.admin import AjaxSelectAdmin
 
 admin.autodiscover()
 
@@ -32,15 +32,15 @@ class FlightPlanAdmin(ModelAdmin):
     inlines = [WaypointInline]
     actions = [activate, deactivate]
     
-class CircuitAdmin(AjaxSelectAdmin):
+class CircuitAdmin(ModelAdmin):
     list_display=('name','airport','description','radius','altitude','enabled')
     search_fields = ['name','airport__icao','airport__name']
     inlines = [WaypointInline]
     actions = [activate, deactivate]
     
-    form = make_ajax_form(Circuit, {
-        'airport': 'airports'
-        })
+    # form = make_ajax_form(Circuit, {
+    #     'airport': 'airports'
+    #     })
 
 admin.site.register(FlightPlan, FlightPlanAdmin)
 admin.site.register(Circuit, CircuitAdmin)

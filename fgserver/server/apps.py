@@ -10,12 +10,13 @@ from fgserver.signals import message_received
 class ServerConfig(AppConfig):
     name = 'fgserver.server'
     
-#     def ready(self):
-#         AppConfig.ready(self)
-#         
-#         from .tasks import do_message_received        
-#         
-#         message_received.connect( 
-#             receiver=do_message_received, 
-#             dispatch_uid="server_message_received")
-#         print("SERVER HOOKED")
+    def ready(self):
+        # print(("A1"))
+        AppConfig.ready(self)
+        
+        # from fgserver.server.tasks import do_message_received        
+        
+        # message_received.connect( 
+        #     receiver=do_message_received, 
+        #     dispatch_uid="server_message_received")
+        # print("SERVER HOOKED")

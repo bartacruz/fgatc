@@ -10,8 +10,9 @@ from fgserver.atc.controllers import Requests, process_request
 
 
 def process_queued_request(instance):
-    print("request received",instance)
+    print("Atctasks: request received",instance)
     process_request(instance,instance)
     
 
 Requests.listen(process_queued_request)
+print("ATC TASKS HOOKED")

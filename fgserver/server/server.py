@@ -11,8 +11,8 @@ from queue import Queue, Empty
 
 from django.conf import settings
 
-from fgserver.messages import PosMsg
-from .fgmpie import pie_msg, PacketData
+from fgserver.messages import PosMsg, PROP_FREQ, PROP_FREQ_V2
+from fgserver.server.fgmpie import pie_msg, PacketData
 
 llogger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ class FGServer():
         while True:
             try:
                 msg = self.get_position_message()
-                #llogger.debug("Sending message to %s:" % msg.get_property(messages.PROP_FREQ) )
+                # llogger.debug("Sending message %s to %s:" % (msg. msg.get_property(PROP_FREQ) ))
                 buff = pie_msg(msg)
                 self.server.socket.sendto(buff,self.server_to)
                 time.sleep(self.delay)

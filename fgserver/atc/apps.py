@@ -18,7 +18,7 @@ class ATCConfig(AppConfig):
             sender=Request, 
             receiver=publish_request, 
             dispatch_uid="atc_process_request")
-        print("ATC HOOKED")
+        print("ATC HOOKED", __name__ )
         
 
 

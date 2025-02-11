@@ -21,7 +21,7 @@ class ATCClient(FGServer):
         Order.objects.filter(sender__airport=airport).update(expired=True)
         FGServer.port=5100
         FGServer.__init__(self, delay=delay)
-        self.server_to = settings.FGATC_AI_SERVER
+        # self.server_to = settings.FGATC_AI_SERVER
         
     
     def incomming_message(self,pos):

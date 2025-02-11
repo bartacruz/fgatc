@@ -585,12 +585,14 @@ class Requests():
             cls.server = redis.Redis()
             cls.thread = threading.Thread(target=cls.loop)
             cls.thread.start()
+            print("REQUESTS THREAD STARTED")
         
     @classmethod
     def set(cls,instance):
         cls.check()
         pickled = pickle.dumps(instance)
         cls.server.publish(cls.CHANNEL, pickled)
+        print("Requests: msg published")
     
     @classmethod
     def listen(cls,callback):
@@ -604,7 +606,7 @@ class Requests():
         for new_message in p.listen():
             if new_message.get('type',None) == 'message':
                 request = pickle.loads(new_message.get('data'))
-                #print("new posmsg",str(pos))
+                print("new posmsg",cls.listeners,str(request))
                 for c in cls.listeners:
                     try:
                         c(request)

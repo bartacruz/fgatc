@@ -4,3 +4,4 @@ syntax: glob
 *.md.html
 /runserver.sh
 /nohup.out
+.venv

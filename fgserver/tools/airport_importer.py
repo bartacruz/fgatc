@@ -5,6 +5,7 @@ Created on Apr 24, 2015
 @author: bartacruz
 '''
 import django
+import sys
 
 django.setup()
 from fgserver.models import Airport, Runway, Comm, StartupLocation
@@ -108,8 +109,11 @@ def rwys_from_aptdat1000(airport,line):
 
 
 def import_apts(file):
-    import gzip
-    f=gzip.open(file,'rt',encoding='iso-8859-1')
+    if file.endswith("gz"):
+        import gzip
+        f=gzip.open(file,'rt',encoding='iso-8859-1')
+    else:
+        f=open(file,'rt',encoding='iso-8859-1')
     cont = True
     while cont:
         line=f.readline()
@@ -202,7 +206,12 @@ def groundnet(wedfile):
         
 
 #groundnet('/home/julio/WED/Custom Scenery/SADF/earth.wed.xml')
-
-
-import_apts("../data/apt.dat.gz")
+if __name__ == "__main__":
+    print(sys.argv)
+    if len(sys.argv) != 2:
+        print("Usage:")
+        print("\tpython", sys.argv[0],"<apt file>")
+        sys.exit(1)
+    import_apts(sys.argv[1])
+    #import_apts("../data/apt.dat.gz")
 

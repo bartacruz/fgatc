@@ -4,7 +4,7 @@ Created on 14 mar. 2019
 @author: julio
 '''
 from fgserver import settings
-from django.shortcuts import render, redirect, render_to_response
+from django.shortcuts import render, redirect
 from django.http.response import HttpResponseServerError, HttpResponse
 from fgserver.models import Airport
 import logging

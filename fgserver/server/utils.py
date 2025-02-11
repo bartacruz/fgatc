@@ -51,7 +51,7 @@ def process_message(pos):
         
         freq = pos.get_frequency()
         if not freq:
-            #llogger.debug("Ignoring request without freq from %s: %s" % (aircraft, pos.properties.properties,))
+            #llogger.debug("Ignoring request without freq %s from %s: %s" % (freq, aircraft, pos.properties.properties,))
             return
         
         # Handle aircraft
