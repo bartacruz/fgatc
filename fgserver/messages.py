@@ -566,7 +566,7 @@ class PosMsg:
     def get_frequency(self):
         try:
             freq =  self.get_value(PROP_FREQ,None) or  self.get_value(PROP_FREQ_V2,None)
-            return int("%s".replace(".",'').ljust(5,'0') % freq)
+            return int(freq.replace(".",'').ljust(5,'0') )
         except:
             llogger.exception("getfreq")
             return None
