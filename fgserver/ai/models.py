@@ -404,7 +404,14 @@ class TaxiNode(Model):
     adjacents = ManyToManyField("self")
     
     def adjacent_to(self,node):
-        self.adjacents.add(node)
+        if node:
+            self.adjacents.add(node)
+    
+    def __unicode__(self):
+        return self.name
+    
+    def __str__(self):
+        return str(self.__unicode__())
         
 # class TaxiSegment(Model):
 #     begin = ForeignKey(TaxiNode, related_name="begins", on_delete=CASCADE)
@@ -416,6 +423,12 @@ class TaxiWay(Model):
     airport = ForeignKey(Airport, related_name='taxi_ways', on_delete=CASCADE)
     nodes = ManyToManyField(TaxiNode)
     parking = BooleanField(default=False)
+    
+    def __unicode__(self):
+        return self.name
+    
+    def __str__(self):
+        return str(self.__unicode__())
     
     
     
