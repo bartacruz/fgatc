@@ -12,4 +12,5 @@ urlpatterns = [
     path('aircrafts/', views.aircrafts, name='aircrafts'),
     path('flightplan/', views.flightplan, name='flightplan'),
     path('runway/', views.runway, name='runway'),
+    path('airport/', views.airport, name='airport'),
 ]

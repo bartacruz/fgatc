@@ -41,6 +41,19 @@ def runway(request):
     rwystart = move(runway.position(), normalize(runway.bearing-180), runway.length/2,runway.position().z)
     print("on runway",runway.on_runway(rwystart))
     return JsonResponse({'boundaries': bounds_p, 'start': rwystart.get_array()})
+
+def airport(request):
+    icao = request.GET.get("icao")
+    airport = Airport.objects.get(icao=icao)
+    airport_j=json.loads(serialize('json',[airport]))[0]
+    ways = []
+    for way in airport.taxi_ways.all():
+        nodes=[]
+        for node in way.nodes.all():
+            nodes.append({'name':node.name, 'lat':node.point.x, 'lon': node.point.y})
+        ways.append({'name':way.name, 'nodes':nodes})
+
+    return JsonResponse({'airport': airport_j, 'taxiways':ways})
     
         
 

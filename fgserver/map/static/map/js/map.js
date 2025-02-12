@@ -6,6 +6,7 @@ var _route=null;
 var _route_markers=null;
 var _spot=null;
 var callsigns=[];
+var taxiways = {};
 
 function showcords(a,b,c){
 	$('#lat').html(a.latlng.lat);
@@ -104,7 +105,7 @@ function update_airports(airports) {
 			});
 			var marker = L.marker([fields.lat,fields.lon],{icon:planeicon,title:callsign}).addTo(map);
 			marker.on({
-				click:get_runway,
+				click: get_airport,
 			});
 			_airports[callsign]= marker;
 			//console.debug(callsign,marker.getLatLng(),marker);
@@ -192,6 +193,36 @@ function update_plan(data,textStatus,jqXHR) {
 	}
 	map.fitBounds(_route.getBounds());
 	
+}
+var _taxiways={};
+function show_airport(data,textStatus,jqXHR) {
+	console.debug("airport",data);
+	for (var i in data.taxiways) {
+		var way = data.taxiways[i];
+		var path =[];
+		for (var j in way.nodes) {
+			node = way.nodes[j];
+			path.push([node.lat,node.lon]);
+		}
+		console.debug(way.name, path);
+		var line = L.polyline(path, {color: 'yellow', weight:4, lineJoin:'round'}).addTo(map)
+		_taxiways[way.name] = line;
+	}
+}
+function get_airport(ev) {
+	var icao = ev.target.options.title;
+	url = '/map/airport/';
+	data = {
+		icao: icao
+	};
+	$.ajax({
+		dataType: "json",
+		url: url,
+		data: data,
+		success: show_airport,
+		error: update_error
+	});
+	get_runway(ev);
 }
 function get_runway(ev) {
 	var icao = ev.target.options.title;
