@@ -14,9 +14,11 @@ class ATCConfig(AppConfig):
         AppConfig.ready(self)
         from fgserver.models import Request
         from .controllers import publish_request
+        from .tasks import process_request_async
         post_save.connect(
             sender=Request, 
-            receiver=publish_request, 
+            #receiver=publish_request, 
+            receiver=process_request_async,
             dispatch_uid="atc_process_request")
         print("ATC HOOKED", __name__ )
         

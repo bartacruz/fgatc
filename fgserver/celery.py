@@ -15,7 +15,10 @@ app.conf.update(
     accept_content=['pickle']
 )
 app.config_from_object('django.conf:settings', namespace='CELERY')
-app.conf.task_routes = {}
+app.conf.task_routes = {
+    'fgatc.ai.tasks.*':{'queue':'ai'},
+    'fgatc.atc.tasks.*':{'queue':'atc'},
+}
 app.conf.update(
     task_serializer='pickle',
     result_serializer='pickle',
