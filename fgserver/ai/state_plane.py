@@ -72,6 +72,7 @@ class StatePlane(object):
         
         self.machine.add_transition('taxi', ['pushback', 'holding'], 'taxiing', conditions=[lambda: self.clearances.taxi])
         self.machine.add_transition('taxi', 'short', 'taxiing', conditions=[lambda: self.clearances.cross], after=[]) # remove clearance
+        self.machine.add_transition('taxi', 'crossing', 'taxiing', conditions=[lambda: self.clearances.cross], after=[]) # remove clearance
         
         self.machine.add_transition('taxi', 'short', 'taxiing', conditions=[lambda: self.clearances.lineup])
         self.machine.add_transition('taxi', 'short', 'taxiing', conditions=[lambda: self.clearances.take_off])
@@ -183,6 +184,9 @@ class StatePlane(object):
             self.stop()
         elif waypoint.status == PlaneInfo.TAXIING and self.is_pushback():
             self.taxi()
+        elif waypoint.status == PlaneInfo.TAXIING and self.is_crossing():
+            self.taxi()
+            self.clearances.cross = False
         elif waypoint.status == PlaneInfo.SHORT:
             self.hold()
         elif waypoint.status == PlaneInfo.CROSS:

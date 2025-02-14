@@ -325,6 +325,8 @@ class Aircraft(Model):
     updated = DateTimeField(blank=True,null=True)
     
     def get_addr(self):
+        if not self.ip or not self.port:
+            return None
         return (self.ip,int(self.port))
     def get_request(self):
         if self.last_request:
