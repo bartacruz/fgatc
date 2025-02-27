@@ -101,7 +101,7 @@ class Graph:
         if frm not in self.vert_dict:
             self.add_vertex(frm)
         if to not in self.vert_dict:
-            self.add_vertex(to)
+            self.add_vertex(to,Point((0,0)))
         if not cost:
             cost = self.get_vertex(frm).point.distance(self.get_vertex(to).point)*1000000
         self.vert_dict[frm].add_neighbor(self.vert_dict[to], cost)

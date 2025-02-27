@@ -188,6 +188,7 @@ class StatePlane(object):
             self.taxi()
             self.clearances.cross = False
         elif waypoint.status == PlaneInfo.SHORT:
+            # TODO: chequear si estamos cerca de la pista...
             self.hold()
         elif waypoint.status == PlaneInfo.CROSS:
             self.cross()

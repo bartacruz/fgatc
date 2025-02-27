@@ -48,10 +48,16 @@ class Controller(object):
         return Airport.objects.get(icao=self.comm.airport.icao)
                     
     def check_waiting(self):
-        # expire tags:
-#         expired = timezone.now() - timedelta(minutes=10)
-#         self.comm.airport.tags.filter(status__gt=0,status_changed__lt=expired).update(status=0,number=0)
+
         airport = self.get_airport()
+        # expire tags of disconnected aircrafts first
+        # TODO: Make expire time configurable
+        expire = timezone.now() - timedelta(minutes=2)
+        expired= airport.tags.filter(aircraft__status__date__lt=expire)
+        if expired.count():
+            llogger.info("expiring tags: %s" % expired)
+            expired.delete()
+
         landing = airport.tags.filter(status=PlaneInfo.LANDING)
         lined = airport.tags.filter(status__in=(PlaneInfo.LINED_UP, PlaneInfo.DEPARTING))
         short = airport.tags.filter(status=PlaneInfo.SHORT).order_by('number')
@@ -62,9 +68,11 @@ class Controller(object):
         runway = self.active_runway()
         self.debug("check_waiting:",landing,lined,short,lining)
         for li in lining.all():
+            a = li.aircraft
             if runway.on_runway(a.get_position()):
                 #Aircraft is already on the rwy.
                 self.set_status(a, PlaneInfo.LINED_UP)
+                
 
         if lined.count():
             '''there's someone taking-off'''
@@ -85,14 +93,19 @@ class Controller(object):
             for ll in landing.all():
                 l = landing.first().aircraft
                 #print("Landing?",l.get_position(),runway.get_position(),runway.bearing)
-                dist = get_distance(l.get_position(),runway.get_position())
-                head = get_heading_to_360(l.get_position(),runway.get_position())
-                adiff = angle_diff(head, float(runway.bearing))
-                # TODO: Make this values configurables.
-                if dist > 5*units.NM or adiff > 20 :
-                    ''' nop, he isn't'''
-                    self.debug("acft is not on landing path. removing LANDING state",l,dist, head,l.heading, adiff)
-                    self.set_status(l,0,0)
+                if runway.on_runway(l.get_position()):
+                    # Aircraft touched down, he's still landing
+                    pass
+                else:
+                    # Check he's on the landing path, ie: straight to the rwy.
+                    dist = get_distance(l.get_position(),runway.get_position())
+                    head = get_heading_to_360(l.get_position(),runway.get_position())
+                    adiff = angle_diff(head, float(runway.bearing))
+                    # TODO: Make this values configurables.
+                    if dist > 5*units.NM or adiff > 20 :
+                        ''' nop, he isn't'''
+                        self.debug("acft is not on landing path. removing LANDING state",l,dist, head,l.heading, adiff)
+                        self.set_status(l,0,0)
                     #return self.check_waiting() #check again
             
         elif holding.count():
@@ -151,6 +164,10 @@ class Controller(object):
         if created:
             self.debug(": Controller tag created for %s " % aircraft)
         return tag
+    
+    def remove_tag(self,aircraft):
+        aircraft.tags.filter(airport = self.comm.airport).delete()
+
     
     def set_status(self,aircraft,status,number=None):
         tag,created = Tag.objects.get_or_create(aircraft=aircraft,airport=self.comm.airport)
@@ -428,10 +445,10 @@ class Tower(Controller):
 
     def final(self,request):
         response=self._init_response(request)
-        lined = self.get_airport().tags.filter(status__in=[PlaneInfo.LINED_UP, PlaneInfo.LINING_UP]).count()
-        landing = self.get_airport().tags.filter(status=PlaneInfo.LANDING).count()
+        lined = self.get_airport().tags.filter(status__in=[PlaneInfo.LINED_UP, PlaneInfo.LINING_UP])
+        landing = self.get_airport().tags.filter(status=PlaneInfo.LANDING)
         self.debug("final lined=%s landing=%s" % (lined,landing,))
-        if lined or landing:
+        if lined.count() or (landing.count() and not landing.first().on_runway(self.active_runway())):
             response.add_param(Order.PARAM_ORDER,alias.GO_AROUND)
             response.add_param(Order.PARAM_CIRCUIT_WP,alias.CIRCUIT_BASE)
             self.set_status(request.sender, PlaneInfo.APPROACHING)
