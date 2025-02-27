@@ -37,9 +37,9 @@ def aircraft_updater():
     for non_active in loaded:
         print("Removing non-active: %s" % non_active)
         Aircrafts.remove(non_active)
+        PositionMessages.remove(non_active)
     
 def find_comm(aircraft):
-        # TODO: Use a cache?
         pos = PositionMessages.get(aircraft.callsign)
         #print("Pos for %s: %s" % (aircraft.callsign,pos,))
         freq = pos.get_frequency() 

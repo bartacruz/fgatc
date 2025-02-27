@@ -719,6 +719,12 @@ class PositionMessages():
         cls.server.publish(cls.CHANNEL, pickled)
     
     @classmethod
+    def remove(cls,callsign):
+        cls.check()
+        pickled = pickle.dumps({'callsign':callsign, 'remove':True})
+        cls.server.publish(cls.CHANNEL, pickled)
+
+    @classmethod
     def get(cls,callsign):
         cls.check()
         return cls.messages.get(callsign,None)
@@ -730,8 +736,14 @@ class PositionMessages():
         for new_message in p.listen():
             if new_message.get('type',None) == 'message':
                 pos = pickle.loads(new_message.get('data'))
-                #print("new posmsg",str(pos))
-                cls.messages[pos.callsign()]=pos
+                #print("new message",type(pos), str(pos))
+                if isinstance(pos,PosMsg):
+                    cls.messages[pos.callsign()]=pos   
+                elif isinstance(pos,dict) and pos.get('remove',False):
+                    print("Removing %s from cache" % pos)
+                    cls.messages.pop(pos.get('callsign',None), None)
+                
+                    
 
 
 
