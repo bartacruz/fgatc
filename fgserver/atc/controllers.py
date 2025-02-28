@@ -4,7 +4,7 @@ Created on 31/07/2015
 @author: julio
 '''
 from fgserver.atc.models import Tag
-from fgserver.models import Order, Comm, Request, Cache
+from fgserver.models import Order, Comm, Request, Cache, Airport
 from django.utils import timezone
 from fgserver.messages import alias
 from fgserver.ai.planes import PlaneInfo
@@ -42,21 +42,38 @@ class Controller(object):
     def configure(self):
         ''' Called from init. Subclasses can implement it '''
         pass
+
+    def get_airport(self):
+        # Read the airport from the DB to avoid cached and stale data.
+        return Airport.objects.get(icao=self.comm.airport.icao)
                     
     def check_waiting(self):
-        # expire tags:
-#         expired = timezone.now() - timedelta(minutes=10)
-#         self.comm.airport.tags.filter(status__gt=0,status_changed__lt=expired).update(status=0,number=0)
-        
-        landing = self.comm.airport.tags.filter(status=PlaneInfo.LANDING)
-        lined = self.comm.airport.tags.filter(status__in=(PlaneInfo.LINED_UP, PlaneInfo.DEPARTING))
-        short = self.comm.airport.tags.filter(status=PlaneInfo.SHORT).order_by('number')
-        lining = self.comm.airport.tags.filter(status=PlaneInfo.LINING_UP)
-        holding = self.comm.airport.tags.filter(status=PlaneInfo.HOLD)
-        crossing = self.comm.airport.tags.filter(status=PlaneInfo.CROSS)
+
+        airport = self.get_airport()
+        # expire tags of disconnected aircrafts first
+        # TODO: Make expire time configurable
+        expire = timezone.now() - timedelta(minutes=2)
+        expired= airport.tags.filter(aircraft__status__date__lt=expire)
+        if expired.count():
+            llogger.info("expiring tags: %s" % expired)
+            expired.delete()
+
+        landing = airport.tags.filter(status=PlaneInfo.LANDING)
+        lined = airport.tags.filter(status__in=(PlaneInfo.LINED_UP, PlaneInfo.DEPARTING))
+        short = airport.tags.filter(status=PlaneInfo.SHORT).order_by('number')
+        lining = airport.tags.filter(status=PlaneInfo.LINING_UP)
+        holding = airport.tags.filter(status=PlaneInfo.HOLD)
+        crossing = airport.tags.filter(status=PlaneInfo.CROSS)
         
         runway = self.active_runway()
         self.debug("check_waiting:",landing,lined,short,lining)
+        for li in lining.all():
+            a = li.aircraft
+            if runway.on_runway(a.get_position()):
+                #Aircraft is already on the rwy.
+                self.set_status(a, PlaneInfo.LINED_UP)
+                
+
         if lined.count():
             '''there's someone taking-off'''
             for ll in lined.all():
@@ -76,14 +93,19 @@ class Controller(object):
             for ll in landing.all():
                 l = landing.first().aircraft
                 #print("Landing?",l.get_position(),runway.get_position(),runway.bearing)
-                dist = get_distance(l.get_position(),runway.get_position())
-                head = get_heading_to_360(l.get_position(),runway.get_position())
-                adiff = angle_diff(head, float(runway.bearing))
-                # TODO: Make this values configurables.
-                if dist > 5*units.NM or adiff > 20 :
-                    ''' nop, he isn't'''
-                    self.debug("acft is not on landing path. removing LANDING state",l,dist, head,l.heading, adiff)
-                    self.set_status(l,0,0)
+                if runway.on_runway(l.get_position()):
+                    # Aircraft touched down, he's still landing
+                    pass
+                else:
+                    # Check he's on the landing path, ie: straight to the rwy.
+                    dist = get_distance(l.get_position(),runway.get_position())
+                    head = get_heading_to_360(l.get_position(),runway.get_position())
+                    adiff = angle_diff(head, float(runway.bearing))
+                    # TODO: Make this values configurables.
+                    if dist > 5*units.NM or adiff > 20 :
+                        ''' nop, he isn't'''
+                        self.debug("acft is not on landing path. removing LANDING state",l,dist, head,l.heading, adiff)
+                        self.set_status(l,0,0)
                     #return self.check_waiting() #check again
             
         elif holding.count():
@@ -120,9 +142,9 @@ class Controller(object):
         
 
     def active_runway(self):
-        return self.comm.airport.active_runway()
+        return self.get_airport().active_runway()
     def rwy_name(self):
-        return self.comm.airport.active_runway().name
+        return self.get_airport().active_runway().name
         
     def manages(self,req):
         # TODO: possible security leak?. A plane can issue a request with '__init__', or destroy. 
@@ -142,6 +164,10 @@ class Controller(object):
         if created:
             self.debug(": Controller tag created for %s " % aircraft)
         return tag
+    
+    def remove_tag(self,aircraft):
+        aircraft.tags.filter(airport = self.comm.airport).delete()
+
     
     def set_status(self,aircraft,status,number=None):
         tag,created = Tag.objects.get_or_create(aircraft=aircraft,airport=self.comm.airport)
@@ -249,8 +275,8 @@ class Ground(Controller):
         response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
         twr = get_controllers(self.comm.airport, Comm.TWR)[0]
         self.pass_control(response, twr)
-        count = self.comm.airport.tags.filter(status__in=(PlaneInfo.SHORT,PlaneInfo.TAXIING,)).count()
-        count_others = self.comm.airport.tags.filter(status__in=[PlaneInfo.LINED_UP,PlaneInfo.LINING_UP, PlaneInfo.DEPARTING,PlaneInfo.LANDING, PlaneInfo.CIRCUIT_FINAL, PlaneInfo.CIRCUIT_BASE,PlaneInfo.CIRCUIT_DOWNWIND]).count()
+        count = self.get_airport().tags.filter(status__in=(PlaneInfo.SHORT,PlaneInfo.TAXIING,)).count()
+        count_others = self.get_airport().tags.filter(status__in=[PlaneInfo.LINED_UP,PlaneInfo.LINING_UP, PlaneInfo.DEPARTING,PlaneInfo.LANDING, PlaneInfo.CIRCUIT_FINAL, PlaneInfo.CIRCUIT_BASE,PlaneInfo.CIRCUIT_DOWNWIND]).count()
         self.debug("readytaxi",count,count_others)
         if not self.master or count or count_others:
             response.add_param(Order.PARAM_HOLD, 1)
@@ -312,9 +338,9 @@ class Tower(Controller):
             return controller.manage(last_r)
         else:
             response.add_param(Order.PARAM_ORDER, alias.TAXI_PARK)
-            pk = self.comm.airport.startups.filter(aircraft=request.sender).first()
+            pk = self.get_airport().startups.filter(aircraft=request.sender).first()
             if not pk:
-                pk=self.comm.airport.startups.filter(aircraft=None).order_by('?').first()
+                pk=self.get_airport().startups.filter(aircraft=None).order_by('?').first()
                 pk.aircraft=request.sender
                 pk.save()
                 
@@ -329,7 +355,8 @@ class Tower(Controller):
         
         rwy = request.get_param(Order.PARAM_RUNWAY)
         response.add_param(Order.PARAM_RUNWAY,rwy)
-        count_others = self.comm.airport.tags.filter(status__in=[PlaneInfo.LINING_UP,PlaneInfo.LINED_UP, PlaneInfo.DEPARTING,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_FINAL,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_BASE]).exclude(aircraft=request.sender).count()
+        airport = self.get_airport()
+        count_others = airport.tags.filter(status__in=[PlaneInfo.LINING_UP,PlaneInfo.LINED_UP, PlaneInfo.DEPARTING,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_FINAL,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_BASE]).exclude(aircraft=request.sender).count()
         if count_others:
             response.add_param(Order.PARAM_ORDER, alias.WAIT)
             response.add_param(Order.PARAM_HOLD, alias.CROSS_RUNWAY)
@@ -343,8 +370,8 @@ class Tower(Controller):
     def holdingshort(self,request):
         response=self._init_response(request)
         response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
-        count = self.comm.airport.tags.filter(status=PlaneInfo.SHORT).exclude(aircraft=request.sender).count()
-        others = self.comm.airport.tags.filter(status__in=[PlaneInfo.LINING_UP,PlaneInfo.LINED_UP, PlaneInfo.DEPARTING,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_FINAL,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_BASE]).exclude(aircraft=request.sender)
+        count = self.get_airport().tags.filter(status=PlaneInfo.SHORT).exclude(aircraft=request.sender).count()
+        others = self.get_airport().tags.filter(status__in=[PlaneInfo.LINING_UP,PlaneInfo.LINED_UP, PlaneInfo.DEPARTING,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_FINAL,PlaneInfo.LANDING,PlaneInfo.CIRCUIT_BASE]).exclude(aircraft=request.sender)
         count_others = others.count()
         tag = self.get_tag(request.sender)
         self.set_status(request.sender, PlaneInfo.SHORT,count)
@@ -387,7 +414,7 @@ class Tower(Controller):
         return response
     
     def _circuiters(self):
-            tags = self.comm.airport.tags.filter(status__in=[PlaneInfo.LANDING,PlaneInfo.CIRCUIT_FINAL,PlaneInfo.CIRCUIT_STRAIGHT,PlaneInfo.CIRCUIT_BASE,PlaneInfo.CIRCUIT_DOWNWIND,PlaneInfo.CIRCUIT_CROSSWIND,]).order_by('-status','status_changed')
+            tags = self.get_airport().tags.filter(status__in=[PlaneInfo.LANDING,PlaneInfo.CIRCUIT_FINAL,PlaneInfo.CIRCUIT_STRAIGHT,PlaneInfo.CIRCUIT_BASE,PlaneInfo.CIRCUIT_DOWNWIND,PlaneInfo.CIRCUIT_CROSSWIND,]).order_by('-status','status_changed')
             return [x.aircraft for x in tags]
         
     def _report_circuit(self,request,cur_circuit,report_circuit,number=None):
@@ -418,10 +445,10 @@ class Tower(Controller):
 
     def final(self,request):
         response=self._init_response(request)
-        lined = self.comm.airport.tags.filter(status__in=[PlaneInfo.LINED_UP, PlaneInfo.LINING_UP]).count()
-        landing = self.comm.airport.tags.filter(status=PlaneInfo.LANDING).count()
+        lined = self.get_airport().tags.filter(status__in=[PlaneInfo.LINED_UP, PlaneInfo.LINING_UP])
+        landing = self.get_airport().tags.filter(status=PlaneInfo.LANDING)
         self.debug("final lined=%s landing=%s" % (lined,landing,))
-        if lined or landing:
+        if lined.count() or (landing.count() and not landing.first().on_runway(self.active_runway())):
             response.add_param(Order.PARAM_ORDER,alias.GO_AROUND)
             response.add_param(Order.PARAM_CIRCUIT_WP,alias.CIRCUIT_BASE)
             self.set_status(request.sender, PlaneInfo.APPROACHING)
@@ -461,8 +488,8 @@ class Departure(Controller):
         response=self._init_response(request)
         response.add_param(Order.PARAM_ORDER,'taxito')
         response.add_param(Order.PARAM_RUNWAY,self.rwy_name())
-        count = self.comm.airport.tags.filter(status=PlaneInfo.SHORT).count()
-        count_others = self.comm.airport.tags.filter(status__in=[PlaneInfo.LINING_UP,PlaneInfo.LINED_UP,PlaneInfo.LANDING]).count()
+        count = self.get_airport().tags.filter(status=PlaneInfo.SHORT).count()
+        count_others = self.get_airport().tags.filter(status__in=[PlaneInfo.LINING_UP,PlaneInfo.LINED_UP,PlaneInfo.LANDING]).count()
         self.debug("readytaxi",count,count_others)
         if count or count_others:
             response.add_param(Order.PARAM_HOLD, 1)
@@ -502,7 +529,7 @@ class Approach(Controller):
 
     def inbound(self,request):
         response=self._init_response(request)
-        circp = self.comm.airport.tags.filter(status__in=(PlaneInfo.LANDING,PlaneInfo.CIRCUIT_FINAL,PlaneInfo.CIRCUIT_BASE,PlaneInfo.CIRCUIT_DOWNWIND,PlaneInfo.CIRCUIT_CROSSWIND,PlaneInfo.CIRCUIT_STRAIGHT)).exclude(aircraft__callsign=request.sender.callsign).count()
+        circp = self.get_airport().tags.filter(status__in=(PlaneInfo.LANDING,PlaneInfo.CIRCUIT_FINAL,PlaneInfo.CIRCUIT_BASE,PlaneInfo.CIRCUIT_DOWNWIND,PlaneInfo.CIRCUIT_CROSSWIND,PlaneInfo.CIRCUIT_STRAIGHT)).exclude(aircraft__callsign=request.sender.callsign).count()
         ph = get_heading_to(request.sender.get_position(),self.active_runway().get_position())
         s = angle_diff(ph,float(self.active_runway().bearing))
         self.debug("circp=%s, ph=%s, s=%s" % (circp,ph,s))
@@ -585,12 +612,14 @@ class Requests():
             cls.server = redis.Redis()
             cls.thread = threading.Thread(target=cls.loop)
             cls.thread.start()
+            print("REQUESTS THREAD STARTED")
         
     @classmethod
     def set(cls,instance):
         cls.check()
         pickled = pickle.dumps(instance)
         cls.server.publish(cls.CHANNEL, pickled)
+        print("Requests: msg published")
     
     @classmethod
     def listen(cls,callback):
@@ -604,7 +633,7 @@ class Requests():
         for new_message in p.listen():
             if new_message.get('type',None) == 'message':
                 request = pickle.loads(new_message.get('data'))
-                #print("new posmsg",str(pos))
+                print("new posmsg",cls.listeners,str(request))
                 for c in cls.listeners:
                     try:
                         c(request)

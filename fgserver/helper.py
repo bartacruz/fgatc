@@ -6,10 +6,10 @@ Created on Apr 13, 2015
 '''
 
 from math import sqrt, fabs, atan2, pi, sin, cos, asin, acos
-from scipy import rint
+from numpy import rint
 from random import randint
-from fgserver import units, llogger
-from fgserver.units import ERAD, RAD, EPSILON
+from . import units, llogger
+from .units import ERAD, RAD, EPSILON
 from pyproj.geod import Geod
 from django.contrib.gis.geos.point import Point
 

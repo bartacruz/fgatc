@@ -51,7 +51,7 @@ def process_message(pos):
         
         freq = pos.get_frequency()
         if not freq:
-            #llogger.debug("Ignoring request without freq from %s: %s" % (aircraft, pos.properties.properties,))
+            #llogger.debug("Ignoring request without freq %s from %s: %s" % (freq, aircraft, pos.properties.properties,))
             return
         
         # Handle aircraft
@@ -118,6 +118,12 @@ def get_pos_msg(airport, simtime=None):
     if not order:
         return msg
     
+    if order.received and (timezone.now() - order.date).total_seconds() > 60:
+        llogger.info("Expiring order due to inactivity %s" % order)
+        order.expired = True
+        order.save()
+        return msg
+
     if not order.get_instruction() == alias.TUNE_OK and (timezone.now() - order.date).total_seconds()<ORDER_DELAY:
         return msg
     

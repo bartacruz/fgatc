@@ -99,10 +99,10 @@ for p in parkings:
 print("</parkingList>")
 print("<TaxiNodes>")
 for p in nodes:
-    print('    <node index="%d" lat="%s" lon="%s" name="%s" isOnRunWay="%s" holdPointType="%s" />'%(i+p[3]+1, p[0], p[1], p[4],0,"none"))
+    print('    <node index="%d" lat="%s" lon="%s" name="%s" isOnRunWay="%s" holdPointType="%s" />'%(i+p[3], p[0], p[1], p[4],0,"none"))
 print("</TaxiNodes>\n")
 print("<TaxiWaySegments>")
 for p in ways:
-    print('    <arc begin="%s" end="%s" isPushBackRoute="%d" name="%s" />'%(p[0], p[1], p[2],p[3]))
+    print('    <arc begin="%s" end="%s" isPushBackRoute="%d" name="%s" />'% ( i+int(p[0]), i+int(p[1]), p[2],p[3]))
 print("</TaxiWaySegments>")
 print("</groundnet>")

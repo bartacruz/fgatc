@@ -345,6 +345,10 @@ class Tag(StatusModel):
     number = IntegerField(default=1)
     ack_order=CharField(max_length=255,null=True,blank=True)
 
+    def on_runway(self, runway=None):
+        runway = runway or self.airport.active_runway()
+        return runway.on_runway(self.aircraft.get_position())
+
     def __str__(self):
         return self.__unicode__()
     

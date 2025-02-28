@@ -143,12 +143,14 @@ class Copilot():
             self.actions.append(ReadBackAction(self, order))
             clearances.lineup = True
             clearances.take_off = False
+            clearances.short = False
             llogger.debug("{%s-CP}(%s) lining up" % (self.aircraft, self.plane.state))
             self.plane.dynamics.wait(30) # wait 30 seconds to start moving
             self.plane.depart()
         elif order.ord==alias.CLEAR_TK:
             self.actions.append(ReadBackAction(self, order))
             clearances.take_off = True
+            clearances.short = False
             self.plane.dynamics.wait(30)
             llogger.debug("{%s-CP}(%s) taking off" % (self.aircraft, self.plane.state))
             self.plane.depart()
@@ -278,7 +280,7 @@ class Copilot():
             comm = self.get_comm_by_type(self.airport(),Comm.GND)
             self.actions.append(TuneInAction(self,comm.frequency)) # Make sure we are tunned right
             self.actions.append( ReadyTaxiAction(self) )
-        elif self.plane.is_holding() and not clearances.cross:
+        elif self.plane.is_holding() and not clearances.lineup and not clearances.cross:
             print("{%s-CP} check_request: queing RequestCrossAction" % self.aircraft)
             # TODO: detect wich runway we got in front
             self.actions.append( CrossRunwayAction(self,clearances.runway) )
@@ -495,12 +497,12 @@ class CircuitHandler():
                             last_short.save()
                         last_short=wp
                     elif on_runway:
-                        wp = self.create_waypoint(p, "On runway %s" % way.id, WayPoint.RWY, PlaneInfo.TAXIING)
+                        wp = self.create_waypoint(p, "rwy %s" % way.id, WayPoint.RWY, PlaneInfo.TAXIING)
                     else:
                         wp = self.create_waypoint(p, "Taxi %s" % way.id, WayPoint.TAXI, PlaneInfo.TAXIING)
                         last_taxi=wp
                 elif on_runway:
-                    wp = self.create_waypoint(p, "On runway %s" % way.id, WayPoint.RWY, PlaneInfo.TAXIING)
+                    wp = self.create_waypoint(p, "Rwy %s" % way.id, WayPoint.RWY, PlaneInfo.TAXIING)
                 else:
                     wp = self.create_waypoint(p, "Taxi %s" % way.id, WayPoint.TAXI, PlaneInfo.TAXIING)
                     last_taxi = wp
@@ -584,5 +586,9 @@ class CircuitHandler():
         # TODO: Create parking
         
     def create_waypoint(self,position, name, atype, status):
-        return self.circuit.create_waypoint(position,name,atype,status)
+        try:
+            name = name[:20] # truncate to avoid overflowing the field.
+            return self.circuit.create_waypoint(position,name,atype,status)
+        except:
+            llogger.exception("Al intentar con %s" % name)
 

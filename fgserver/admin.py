@@ -8,7 +8,7 @@ from django.contrib import admin
 from django.contrib.admin.options import ModelAdmin, TabularInline,\
     StackedInline
 from fgserver.models import Airport, Runway, Aircraft, Comm, StartupLocation,\
-    MetarObservation, Order, AircraftStatus
+    MetarObservation, Order, AircraftStatus, Request
 from fgserver.ai.models import Circuit
 from django.contrib.admin.decorators import register
 
@@ -61,6 +61,10 @@ class AircraftAdmin(ModelAdmin):
 @register(Order)
 class OrderAdmin(ModelAdmin):
     list_display=('id','date','sender','receiver','sent_date','expired','received','acked','lost')
+
+@register(Request)
+class RequestAdmin(ModelAdmin):
+    list_display=('id','date','sender','receiver','request','received','processed')
     pass
 
 admin.site.register(Airport, AirportAdmin)

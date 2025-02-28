@@ -14,7 +14,6 @@ urlpatterns = [
     path('map/', include('fgserver.map.urls')),
     path('tracker/', include('fgserver.tracker.urls')),
     path('admin_tools/', include('admin_tools.urls')),
-    path('ajax_select/', include('ajax_select.urls')),
     path("activate_airport/<str:icao>",views.activate_airport,{'active':True}),
     path("deactivate_airport/<str:icao>",views.activate_airport,{'active':False}),
     path("single/<str:icao>",views.activate_airport,{'active':True,'single':True}),

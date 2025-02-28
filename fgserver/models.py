@@ -325,6 +325,8 @@ class Aircraft(Model):
     updated = DateTimeField(blank=True,null=True)
     
     def get_addr(self):
+        if not self.ip or not self.port:
+            return None
         return (self.ip,int(self.port))
     def get_request(self):
         if self.last_request:
@@ -449,6 +451,13 @@ class AircraftStatus(Model):
         # HACK
         props.set_prop(302,self.linear_vel.x*50) # engine 0 rpms
         props.set_prop(312,self.linear_vel.x*50) # engine 1 rpms
+        props.set_prop(800,self.linear_vel.x*50) # rotor RPM
+
+        #LIGHTS
+        props.set_prop(10312,1) # beacon
+        props.set_prop(10313,2) # strobes
+        props.set_prop(10314,3) # nav
+
         
         if self.order:
             props.set_prop(PROP_OID,str(self.order))
