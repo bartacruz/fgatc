@@ -4,11 +4,11 @@ Django settings for fgserver project.
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 import os
-
-#METAR_URL='http://weather.noaa.gov/pub/data/observations/metar/stations'
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+FGATC_MAP_DEFAULT_ICAO='SABE'
 METAR_URL='https://tgftp.nws.noaa.gov/data/observations/metar/stations'
 METAR_UPDATE = 60*60 # in seconds
-MESSAGES_FILE = '/opt/git/fgatc/multiplaymgr.cxx'
+MESSAGES_FILE = os.path.join(BASE_DIR, 'multiplaymgr.cxx')
 DEFAULT_CONTROLLERS = {
         50:'fgserver.atc.controllers.Controller', # ATIS
         51: 'fgserver.atc.controllers.Controller', # UNICOM
@@ -18,19 +18,20 @@ DEFAULT_CONTROLLERS = {
         55: 'fgserver.atc.controllers.Approach', #Approach
         56: 'fgserver.atc.controllers.Departure', #Departure
         }
-BROKER_URL = 'django://'
-
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-
+CELERY_BROKER_URL = 'redis://localhost:6379'
 # Port that server listens
 FGATC_SERVER_PORT=5100
-
+FGATC_AI_SERVER=('localhost',5100)
 FGATC_AI_INTERVAL=0.1
+FGATC_AI_HANDLERS = [('Circuit','fgserver.ai.handlers.CircuitHandler'), ('fgserver.ai.handlers.CircuitHandler', 'Circuit pattern')]
 FGATC_UPDATE_RATE=2
 
+FGATC_FG_SCENERY='/home/julio/.fgfs/TerraSync' # for taxiway discovery.
+
 # Relay to FG multipĺayer servers
-FGATC_RELAY_ENABLED=True
-FGATC_RELAY_SERVER = ('217.78.131.42',5000)
+# WARNING: not thoroughly tested. Use it with care. No warranties!
+FGATC_RELAY_ENABLED=False 
+FGATC_RELAY_SERVER = ('217.78.131.42',5000) # some MP server
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/1.6/howto/deployment/checklist/
@@ -52,6 +53,7 @@ TEMPLATE_LOADERS = (
 # Application definition
 
 INSTALLED_APPS = (
+    'daphne',
     'django.contrib.admin',
     'channels',
     'django.contrib.auth',
@@ -64,6 +66,7 @@ INSTALLED_APPS = (
     'fgserver.atc',
     'fgserver.map',
     'fgserver.tracker',
+    'fgserver.server',
     
 )
 
@@ -97,7 +100,7 @@ TEMPLATES = [
 WSGI_APPLICATION = 'fgserver.wsgi.application'
 
 # Channels configuration (websocket updates for the map)
-ASGI_APPLICATION = "fgserver.routing.application"
+ASGI_APPLICATION = "fgserver.asgi.application"
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
@@ -109,10 +112,11 @@ CHANNEL_LAYERS = {
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        #'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'ENGINE': 'django.contrib.gis.db.backends.postgis',
         'NAME': 'fgatc',
-        'USER': 'fgatc',
-        'PASSWORD': '********',
+        'USER': 'your user',
+        'PASSWORD': 'your password',
         'HOST': 'localhost',
         'PORT': '5432',
     }
@@ -194,7 +198,7 @@ LOGGING = {
         },
         'debugfile':{
            'class':'logging.handlers.WatchedFileHandler',
-            'filename': '/opt/log/fgatc.log',
+            'filename': '/tmp/fgatc.log',
             'formatter': 'verbose',
         },
     },
