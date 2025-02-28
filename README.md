@@ -12,12 +12,10 @@ The project contains:
   Includes a dialog for sending messages.
 
 * Multiplayer server that
-  * relays positions of near planes.
-  
-  * creates AI traffic that can be configured with the Django admin app
-  
-  * creates AI ATCs on demand and react to player's messages
-    
+  * send positions of near planes, real and AI to you.
+  * relays traffic messages between players and ATCs
+  * optionally, relays all positions and messages to a FG MP server.
+* Celery task that creates AI ATCs on demand and react to player's messages
   For instance, you can send a message like 
 
 > San Francisco Tower, Ready to taxi, YOURCALLSIGN 
@@ -25,8 +23,8 @@ The project contains:
   and the AI ATC that you are tunned in will respond with something like 
  
 > YOURCALLSIGN, Taxi to runway 28 and hold short
- 
-
+* Celery task that creates AI Planes on demand.
+    
 * Django admin app for configuration and administration of airports, aircrafts and AI traffic.
   
 * An interactive map (made with Leaflet), that shows current multiplayer and AI traffic.
@@ -72,27 +70,21 @@ There is a neat script in `fgserver/tools/airport_importer.py` that imports ALL 
 
 1. Run the Django app: `$ python manage.py runserver`
 1. Point to your host (i.e.: <http://localhost:8000>) and do some admin stuff like:
-  * Create airports and runways
-  * Create AI Aircrafts.
-1. Run the server: `$ python -m fgserver.server.mpserver`
+    * Create airports and runways
+    * Create AI Aircrafts.
+1. Run the server: 
+    `$ python -m fgserver.server.mpserver`
 1. Run the ATC celery task:
-   ```console
-  $ celery -A fgserver worker -Q atc
-  ```
+    `$ celery -A fgserver worker -Q atc`
 1. Optionally, run the AI planes celery task.
- ```console
-  $ celery -A fgserver worker -Q ai
-  ```
+    `$ celery -A fgserver worker -Q ai`
 1. Start Flightgear and use the server address as a multiplayer server. The default port is 5100. ex:
- ```console
-  $ fgfs --multiplay=out,10,localhost,5100 --multiplay=in,10,localhost,5001
-```
-or add those parameters into the Additional Settings box of the launcher, on separate lines.
- ```
---multiplay=out,10,localhost,5100
---multiplay=in,10,localhost,5001
-```
-
+    `$ fgfs --multiplay=out,10,localhost,5100 --multiplay=in,10,localhost,5001`
+    or add those parameters into the Additional Settings box of the launcher, on separate lines.
+    ```
+    --multiplay=out,10,localhost,5100
+    --multiplay=in,10,localhost,5001
+    ```
 1. Tune the radio to some ATC controller's frequency in range. If succesfull, you'll see a notification "Tunned to xxxx"
   Now you can use the menu with the key `'` and communicate with the ATC controllers.
   NOTE: the ATC menu will show ONLY when tunned to an active ATC in range.
