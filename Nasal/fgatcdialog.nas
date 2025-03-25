@@ -184,6 +184,12 @@ var dialog = {
             me.init();
             me.create();
         }
-
+	},
+	toggle: func {
+		if (CONFIG_DLG) {
+			me.destroy();
+		} else {
+			me.show();
+		}
 	}
 };

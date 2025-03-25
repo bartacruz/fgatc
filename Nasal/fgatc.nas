@@ -391,7 +391,7 @@ setlistener("/instrumentation/comm/frequencies/selected-mhz",fgatc.set_frequency
 setlistener("/instrumentation/comm/power-btn",fgatc.set_frequency,1,0);
 setlistener("/instrumentation/comm[1]/frequencies/selected-mhz",fgatc.set_frequency,1,0);
 setlistener("/instrumentation/comm[1]/power-btn",fgatc.set_frequency,1,0);
-setlistener("/control/switches/master-avionics",fgatc.set_frequency,1,0);
+setlistener("/controls/switches/master-avionics",fgatc.set_frequency,1,0);
 setprop("/sim/fgatc/request","Test");
 setprop("/sim/fgatc/message",my_callsign);
 setprop("/sim/fgatc/oid",17);
