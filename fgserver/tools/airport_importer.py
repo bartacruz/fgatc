@@ -138,7 +138,11 @@ def import_apts(file):
                 comms=[]
                 while not done:
                     l = f.readline()
-                    if l == '\n':
+                    if l.startswith("99"):
+                        done=True
+                        cont=False
+                        break
+                    if l == '\n'or l.startswith("99"):
                         done=True
                         break
                     l = l.strip()
