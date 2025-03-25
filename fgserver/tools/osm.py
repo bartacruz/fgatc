@@ -108,7 +108,79 @@ def get_taxiways(icao, data=None):
     print("rwy", [i.name for i in nodes.values() if i.on_runway])
     
     
+def export_groundnet(icao):
+    data = fetch_taxiways(icao)
+    parkings = []
+    nodes={}
+    ways={}
+    print("processing %s elements" % len(data['elements']))
+    for element in data['elements']:
+        if element.get('tags').get('aeroway') == 'parking_position':
+            way_name = element.get('tags').get('ref',element.get('id'))
+            geom = element['geometry'][-1]
+            #TODO get heading
+            node = {'name': way_name, 'lon': geom.get('lon'), 'lat': geom.get('lat'), 'heading':0.0 }
+            
+            parkings.append(node)
+            print("found parking",node)
         
+        if element.get("type") == "node":
+            continue
+        else:
+            way_name = element.get('tags').get('ref',element.get('id'))
+            taxiway = ways.get(way_name)
+            if not taxiway:
+                taxiway = ways[way_name] = []
+            i=0
+            parent = None
+            print("found way %s with %d nodes" % (way_name,len(element['nodes']),))
+            while i < len(element['nodes']):
+                node_id = element['nodes'][i]
+                node = nodes.get(node_id)
+                if not node:
+                    geom = element['geometry'][i]
+                    node = {'name': node_id, 'lon': geom.get('lon'), 'lat': geom.get('lat') }
+                    nodes[node_id]= node
+                if parent:
+                    taxiway.append((parent,node_id))
+                parent = node_id
+                i = i+1
+
+    i = 0
+    print("parkings", parkings)
+    
+    print('<?xml version="1.0"?>\n<groundnet>\n  <version>1</version>\n  <parkingList>')        
+
+    for p in parkings:
+            print('    <Parking index="%d" type="gate" name="%s" lat="%s" lon="%s" heading="%f" />'%(i,p.get('name') ,
+                                                                                                    p.get('lat'),
+                                                                                                    p.get('lon'),
+                                                                                                    p.get('heading')) )
+            i = i + 1
+    print("</parkingList>")
+    print("<TaxiNodes>")
+    for n in nodes:
+        p = nodes.get(n)
+        print('    <node index="%d" lat="%s" lon="%s" name="%s" isOnRunWay="%s" holdPointType="%s" />'%(i ,
+                                                                                                    p.get('lat'),
+                                                                                                    p.get('lon'),
+                                                                                                    p.get('name'),
+                                                                                                    0,'none'
+            ))
+        p['index']=i
+        i = i + 1
+    print("</TaxiNodes>\n")
+    print("<TaxiWaySegments>")
+    for w in ways:
+        way = ways.get(w)
+        for p in way:
+            n1 = nodes.get(p[0])
+            n2 = nodes.get(p[1])
+            print('    <arc begin="%s" end="%s" isPushBackRoute="%d" name="%s" />'% ( n1.get('index'), n2.get('index'), w in parkings,w))
+    print("</TaxiWaySegments>")
+    print("</groundnet>")
+
+
 def show_intersections(icao, airport=None):
     airport = airport or Airport.objects.get(icao=icao)
     for node in airport.taxinodes.annotate(adjacent_count=Count('adjacents')).filter(adjacent_count__gte=3):
@@ -147,7 +219,8 @@ if __name__ == '__main__':
     #show_intersections("SAAR")
     # data = fetch_taxiways("SAAR")
     # save_taxiways("SAAR", data)
-    data = load_taxiways("SAAR")
-    get_taxiways("SAAR", data)
+    # data = load_taxiways("SAAR")
+    # get_taxiways("SAAR", data)
+    export_groundnet("SAAR")
     # check_on_runway("SAAR")
     
