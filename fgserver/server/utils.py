@@ -3,15 +3,17 @@ Created on 28 abr. 2020
 
 @author: julio
 '''
+import logging
+import random
+from django.conf import settings
+from django.utils import timezone
+
 from fgserver.models import Aircrafts, Aircraft, Order, airportsWithinRange,\
-    AircraftStatus, Cache, Request
+    AircraftStatus, Cache, Request, Comm
 from fgserver.messages import PosMsg, alias, sim_time
 from fgserver import messages, units
-import logging
-from django.utils import timezone
-import random
 from fgserver.signals import signal_order_sent, signal_order_expired
-
+from fgserver.helper import get_distance
 llogger = logging.getLogger(__name__)
 
 class AckedOrders(Cache):
@@ -185,8 +187,24 @@ def find_comm(request):
         for apt in apts:
             c = apt.comms.filter(frequency=freq)
             if c.count():
-                #self.controllers[tag]=c.first().id
-                return c.first().id
+                comm = c.first()
+                if comm.type == Comm.UNICOM and get_distance(apt.get_position(),request.sender.get_position(), units.NM) > 3:
+                    # Too far for using unicom/ctaf
+                    continue
+                return comm.id
+        ctafs = getattr(settings,'FGATC_CTAFS',[])
+        llogger.debug("freq %s ctafs %s, in? %s",freq, ctafs, freq in ctafs)
+        if freq in ctafs:
+            apts = airportsWithinRange(request.sender.get_position(), 3, units.NM)
+            llogger.debug("freq is ctaf! searching airports %s" % apts)
+            for apt in apts:
+                if apt.comms.exclude(type = Comm.UNICOM).count() == 0:
+                    # Sender is using a CTAF/Unicom freq near a non.controlled airport.
+                    # Create a Unicom controller for that Airport
+                    llogger.debug("Creating unicom")
+                    unicomm = apt.comms.create(type=Comm.UNICOM,frequency=freq,name=apt.name,identifier=apt.name)
+                    llogger.info("Created UNICOM for %s at %s: %s" % apt.icao,freq, unicomm)
+                    return unicomm.id
         #self.controllers[tag]=None
     except:
         llogger.exception("Finding comm for %s" % request)

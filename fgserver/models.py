@@ -174,6 +174,7 @@ class Airports(Cache):
             
 
 def airportsWithinRange(pos,max_range, unit=units.NM):
+    #TODO: Use a circle instead of a box, for Gawd sake!
     ne = move(pos, 45, max_range*unit, 0)
     sw = move(pos, 225, max_range*unit, 0)
     apts = Airport.objects.filter(lat__gte=sw.x, lon__gte=sw.y, lat__lte=ne.x,lon__lte=ne.y)

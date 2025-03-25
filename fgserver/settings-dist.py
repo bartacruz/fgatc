@@ -32,6 +32,7 @@ FGATC_FG_SCENERY='/home/julio/.fgfs/TerraSync' # for taxiway discovery.
 # WARNING: not thoroughly tested. Use it with care. No warranties!
 FGATC_RELAY_ENABLED=False 
 FGATC_RELAY_SERVER = ('217.78.131.42',5000) # some MP server
+FGATC_CTAFS=[12350,] # CTAFS/Unicom freqs
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/1.6/howto/deployment/checklist/

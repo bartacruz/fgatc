@@ -16,9 +16,10 @@ django.setup()
 import logging
 from django.conf import settings
 from fgserver.models import Airport, Order, Aircrafts, airportsWithinRange,\
-    Aircraft, AircraftStatus
+    Aircraft, AircraftStatus, Comm
 from fgserver.server.utils import get_pos_msg, process_message
 from fgserver.server.server import FGServer
+from fgserver.helper import get_distance
 
 llogger = logging.getLogger(__name__)
 
@@ -51,7 +52,10 @@ def find_comm(aircraft):
         for apt in apts:
             c = apt.comms.filter(frequency=freq)
             if c.count():
-                return c.first()
+                comm = c.first()
+                if comm.type == Comm.UNICOM and get_distance(apt.get_position(),aircraft.get_position(), units.NM) > 3:
+                    continue
+                return comm
         return None
 
 class MPServer(FGServer):
