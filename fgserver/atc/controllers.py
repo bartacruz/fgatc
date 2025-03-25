@@ -232,7 +232,9 @@ class Controller(object):
         response=self._init_response(request)
         response.message = ""
         response.add_param(Order.PARAM_CONTROLLER,self.comm.identifier)
+        response.add_param(Order.PARAM_CONTROLLER_TYPE, self.comm.type)
         response.add_param(Order.PARAM_ORDER, alias.TUNE_OK)
+
         self.set_status(request.sender, PlaneInfo.TUNNED)
         return response
     

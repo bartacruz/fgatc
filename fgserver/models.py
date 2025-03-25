@@ -537,6 +537,7 @@ class Order(Model):
     PARAM_ATIS='atis'
     PARAM_RECEIVER='to'
     PARAM_CONTROLLER='atc'
+    PARAM_CONTROLLER_TYPE='cty'
     
     
     def add_param(self,key,val):

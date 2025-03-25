@@ -203,7 +203,7 @@ def find_comm(request):
                     # Create a Unicom controller for that Airport
                     llogger.debug("Creating unicom")
                     unicomm = apt.comms.create(type=Comm.UNICOM,frequency=freq,name=apt.name,identifier=apt.name)
-                    llogger.info("Created UNICOM for %s at %s: %s" % apt.icao,freq, unicomm)
+                    llogger.info("Created UNICOM for %s at %s: %s" % (apt.icao,freq, unicomm))
                     return unicomm.id
         #self.controllers[tag]=None
     except:

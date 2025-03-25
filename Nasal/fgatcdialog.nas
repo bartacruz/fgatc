@@ -22,6 +22,7 @@ var get_dialog_column=func(tag){
 
 var dialog_columns=func(){
 	var cols = [];
+	var unicom = fgatc.controller_type == "51";
 	if (fgatc.last_order != nil and fgatc.last_order != "") {
 		append(cols,get_dialog_column('roger'));
 	}
@@ -31,11 +32,16 @@ var dialog_columns=func(){
 			append(cols,get_dialog_column(next));
 	    }
 	} else if (viewnode == 'depart') {
-
-		append(cols,get_dialog_column('startup'));
-		append(cols,get_dialog_column('readytaxi'));
-		append(cols,get_dialog_column('holdingshort'));
-		append(cols,get_dialog_column('readytko'));
+		if (unicom) {
+			append(cols,get_dialog_column('abt_tko'));
+			append(cols,get_dialog_column('enterrw'));
+		} else {
+			append(cols,get_dialog_column('startup'));
+			append(cols,get_dialog_column('readytaxi'));
+			append(cols,get_dialog_column('holdingshort'));
+			append(cols,get_dialog_column('readytko'));
+			
+		}
 		append(cols,get_dialog_column('leaving'));
 	} else if (viewnode == 'arrival') {
 		append(cols,get_dialog_column('inbound'));
@@ -48,11 +54,15 @@ var dialog_columns=func(){
     	append(cols,get_dialog_column('around'));    	
     } else if (viewnode == 'approach') {
     	append(cols,get_dialog_column('transition'));
-    	append(cols,get_dialog_column('withyou'));
+    	if (!unicom) {
+			append(cols,get_dialog_column('withyou'));
+		}
     } else if (viewnode == 'options') {
 		append(cols,{ type: "checkbox", label: "Remain in the pattern", code: "remain", halign: "left", callback: "fgatcdialog.set_option", property: fgatc.root ~ "/options/remain" });
 		append(cols,{ type: "checkbox", label: "Touch & go", code: "tngo", halign: "left", callback: "fgatcdialog.set_option", property: fgatc.root ~ "/options/tngo" });
 		append(cols,{ type: "input", label: "ATIS report", format: "%s", code: "atis", halign: "left", property: fgatc.root ~ "/options/atis", callback:nil });
+		append(cols,{ type: "input", label: "Target Altitude", format: "%d", code: "talt", halign: "left", property: fgatc.root ~ "/options/talt", callback:nil });
+		append(cols,{ type: "input", label: "Force RWY", format: "%s", code: "frwy", halign: "left", property: fgatc.root ~ "/options/frwy", callback:nil });
 		append(cols,{ type: "checkbox", label: "test", code: "test", halign: "left", callback: "fgatcdialog.set_option", property: fgatc.root ~ "/options/test" });
 		
     }

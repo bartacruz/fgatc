@@ -5,6 +5,7 @@ var messages={};
 var requests={};
 
 var controller = nil;
+var controller_type = nil;
 var airport = nil;
 var selected_runway = "";
 
@@ -94,13 +95,15 @@ var check_models = func(){
 	}
 }
 
-var set_radio = func(apt=nil,contr=nil) {
+var set_radio = func(apt=nil,contr=nil, ctype=nil) {
 	airport = apt;
-	setprop(root ~ "/airport", apt == nil ? '':apt);
 	controller = contr;
-	setprop(root ~ "/controller", controller == nil ? '':controller);
-	if (controller) {
-		screen.log.write(sprintf("Tunned to %s", controller),0.7, 1.0, 0.7);
+	controller_type = ctype;
+	setprop(root ~ "/airport", apt == nil ? '':apt);
+	setprop(root ~ "/controller", contr == nil ? '':contr);
+	setprop(root ~ "/controller_type", ctype == nil ? '':ctype);
+	if (contr) {
+		screen.log.write(sprintf("Tunned to %s", contr),0.7, 1.0, 0.7);
 	}
 }
 
@@ -152,7 +155,7 @@ var process_order = func(order=nil) {
 	}
 	
 	if (last_order['ord']=='tuneok') {
-		set_radio(last_order['apt'],last_order['atc']);
+		set_radio(last_order['apt'],last_order['atc'],last_order['cty']);
 	} else {
 		print( sprintf("[FGATC] Dummy %s (not sent)",parse_message("roger") ) );
 	}
@@ -197,7 +200,7 @@ var messages = {
 	readytaxi: '{apt}, {cs},{atis} ready to taxi',
 	holdingshort: '{apt}, {cs},{atis} holding short {rwyof}',
 	readytko: '{apt}, {cs}, ready for departure',
-	leaving: '{apt}, {cs}, leaving airfield',
+	leaving: '{apt}, {cs}, leaving airfield {talt}',
 	transition: '{apt}, {cs} to transition your airspace{atis}',
 	inbound: '{apt}, {cs}{atis} for inbound approach',
 	crosswind: '{apt}, {cs}, crosswind for runway {rwy}',
@@ -209,6 +212,8 @@ var messages = {
 	around: '{apt}, {cs}, going around',
 	goodbye: 'Goodbye',
 	withyou: '{apt}, {cs}, with you at {alt} feet, heading {heading}{atis}',
+	abt_tko: '{apt}, {cs}, about to departure from runway {rwy}',
+	enterrw: '{apt}, {cs}, entering runway {rwy} for departure',
 	tunein: '',
 	
 };
@@ -300,6 +305,11 @@ var parse_message = func(tag) {
 	if (msg == nil or msg == "") {
 		return "";
 	}
+	if (selected_runway == "" and get_option("frwy")) {
+		selected_runway = get_option("frwy");
+		print(sprintf("[FGATC]: Forcing RWY: %s", selected_runway));
+
+	}
 	# print (sprintf("parse_message. tag=%s, msg=%s",tag,msg));
 	var sc = short_callsign(my_callsign);
 	msg = string.replace(msg,'{cs}',sc);
@@ -309,6 +319,11 @@ var parse_message = func(tag) {
 	msg = string.replace(msg,'{apt}',controller);
 	msg = string.replace(msg,'{alt}',int(getprop("/position/altitude-ft")));
 	msg = string.replace(msg,'{heading}',say_number(int(getprop("/orientation/heading-magnetic-deg"))));
+	if (get_option("talt")) {
+		msg = string.replace(msg,'{talt}', sprintf(" climbing to %s feet", get_option('talt')) );
+	} else {
+		msg = string.replace(msg,'{talt}', "");
+	}
 	if (get_option('tngo')) {
 		msg = string.replace(msg,'{tngo}', " for touch and go");
 	} else {
@@ -375,11 +390,12 @@ var parse_message = func(tag) {
 			var tuneto = sprintf(", %s on %s",last_order['atc'], last_order['freq']);
 			msg = string.replace(msg,'{tuneto}',tuneto);
 		}
-		if (last_order['qnh'] != nil) {
-			msg = string.replace(msg,'{qnh}', sprintf(" QNH %s",last_order['qnh']));
-		} else {
-			msg = string.replace(msg,'{qnh}', '');
-		}
+		# if (last_order['qnh'] != nil) {
+		# 	msg = string.replace(msg,'{qnh}', sprintf(" QNH %s",last_order['qnh']));
+		# } else {
+		# 	msg = string.replace(msg,'{qnh}', '');
+		# }
+		msg = string.replace(msg,'{qnh}', '');
 		msg = string.replace(msg, ",,", ",");
 		msg = string.trim(msg,1, func(c) c==",");
 	}
