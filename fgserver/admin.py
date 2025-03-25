@@ -9,7 +9,8 @@ from django.contrib.admin.options import ModelAdmin, TabularInline,\
     StackedInline
 from fgserver.models import Airport, Runway, Aircraft, Comm, StartupLocation,\
     MetarObservation, Order, AircraftStatus, Request
-from fgserver.ai.models import Circuit
+from fgserver.ai.models import Circuit, TaxiNode, TaxiWay
+from fgserver.atc.models import Tag
 from django.contrib.admin.decorators import register
 
 admin.autodiscover()
@@ -17,9 +18,11 @@ admin.autodiscover()
 def activate(modeladmin, request, queryset):
     queryset.update(active=True)
 activate.short_description = "Activate selected"
+
 def deactivate(modeladmin,request,queryset):
     queryset.update(active=False)
 deactivate.short_description = "Deactivate selected"
+
 class CommInline(TabularInline):
     model = Comm
     extra=0
@@ -30,6 +33,12 @@ class RunwayInline(TabularInline):
 
 class CircuitInline(TabularInline):
     model=Circuit
+    extra=0
+class TaxiWayInline(TabularInline):
+    model=TaxiWay
+    extra=0
+class TaxiNodeInline(TabularInline):
+    model=TaxiNode
     extra=0
 
 class StartupInline(TabularInline):
@@ -43,12 +52,16 @@ class AircraftStatusInline(StackedInline):
 class MetarObservationInline(TabularInline):
     model = MetarObservation
     extra = 0
+
+class TagInline(TabularInline):
+    model = Tag
+    extra = 0
     
 class AirportAdmin(ModelAdmin):
     search_fields = ['icao','name']
     list_display=('icao','name','lat','lon', 'active')
     list_filter = ('active',) 
-    inlines = [RunwayInline,CommInline, StartupInline, MetarObservationInline, CircuitInline]
+    inlines = [RunwayInline,CommInline, StartupInline, MetarObservationInline, CircuitInline, TaxiWayInline]
     actions = [activate, deactivate]
 class RunwayAdmin(ModelAdmin):
     search_fields = ['airport__icao','airport__name']
@@ -56,7 +69,7 @@ class RunwayAdmin(ModelAdmin):
 
 class AircraftAdmin(ModelAdmin):
     list_display=('callsign','lat','lon','altitude','last_request','last_order','state')
-    inlines = [AircraftStatusInline]
+    inlines = [AircraftStatusInline, TagInline]
 
 @register(Order)
 class OrderAdmin(ModelAdmin):
