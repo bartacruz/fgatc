@@ -533,6 +533,7 @@ class Order(Model):
     PARAM_REPEAT='repeat'
     PARAM_ALTITUDE='alt'
     PARAM_QNH='qnh'
+    PARAM_WIND='wnd'
     PARAM_LEG='leg'
     PARAM_ATIS='atis'
     PARAM_RECEIVER='to'

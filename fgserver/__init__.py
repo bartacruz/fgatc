@@ -93,6 +93,31 @@ def get_qnh(apt):
         return round(obs.press.value('in'),2)
     return None
 
+def get_wind(apt):
+    metar = apt.metar.last()
+    if metar:
+        obs = Metar(metar.observation)
+        if obs.wind_speed is None:
+            return None
+        elif obs.wind_speed.value() == 0.0:
+            text = "wind calm"
+        else:
+            wind_speed = obs.wind_speed.string()
+            if not obs.wind_dir:
+                text = "wind variable at %s" % wind_speed
+            elif obs.wind_dir_from:
+                text = "wind from %s to %s at %s" % (
+                    obs.wind_dir_from.string(),
+                    obs.wind_dir_to.string(),
+                    wind_speed,
+                )
+            else:
+                text = "wind %s at %s" % (obs.wind_dir.string(), wind_speed)
+            if obs.wind_gust:
+                text += ", gusting to %s" % obs.wind_gust.string()
+        return text
+    return None
+
 def get_closest_metar(apt,max_range=80,unit=units.NM):
     from fgserver.models import airportsWithinRange
     obs = fetch_metar(apt.icao)

@@ -8,21 +8,21 @@ import re
 from fgserver.helper import short_callsign, say_number, say_char
 from fgserver.messages import alias
 from fgserver.models import Order
-from fgserver import get_qnh
+from fgserver import get_qnh, get_wind
 
 
 templates={
            alias.CLEAR_CROSS:"{cs}, clear to cross airspace above {alt}",
            alias.CLEAR_CROSS_RUNWAY:"{cs}, cross runway {rwy}, report vacated",
-           alias.CLEAR_LAND:"{cs}, runway {rwy}, clear to land{onum}{qnh}{atis}",
-           alias.CLEAR_TOUCHNGO:"{cs}, runway {rwy}, clear touch and go{onum}{qnh}{atis}",
-           alias.CLEAR_TK : "{cs}, runway {rwy}, cleared for take off{atis}",
+           alias.CLEAR_LAND:"{cs}, runway {rwy},{wind} clear to land{onum}{atis}",
+           alias.CLEAR_TOUCHNGO:"{cs}, runway {rwy},{wind} clear touch and go{onum}{atis}",
+           alias.CLEAR_TK : "{cs}, runway {rwy},{wind} cleared for take off{atis}",
            alias.GO_AROUND : "{cs}, go around, I repeat, go around. Report on {cirw}{atis}",
-           alias.JOIN_CIRCUIT:"{cs}, join {cirt} hand {cirw} for runway {rwy} at {alt}{qnh}{atis}",
-           alias.CIRCUIT_STRAIGHT:"{cs}, make straight-in approach runway {rwy}, report on {cirw}{qnh}{atis}",
+           alias.JOIN_CIRCUIT:"{cs}, join {cirt} hand {cirw} for runway {rwy} at {alt}{wind}{qnh}{atis}",
+           alias.CIRCUIT_STRAIGHT:"{cs}, make straight-in approach runway {rwy}, report on {cirw}{wind}{qnh}{atis}",
            alias.LINEUP : "{cs}, line up on runway {rwy}{hld}",
            alias.REPORT_CIRCUIT: '{cs}, report on {cirw}, number {num}',
-           alias.STARTUP: "{cs}, start up approved{qnh}{atis}. Call ready to taxi",
+           alias.STARTUP: "{cs}, start up approved{qnh}{wind}{atis}. Call ready to taxi",
            alias.TAXI_TO: "{cs}, taxi to runway {rwy} {via}{hld}{short}{lineup}",
            alias.WAIT: "{cs}, wait until advised",
            alias.TUNE_TO: "{cs}", 
@@ -67,6 +67,11 @@ def get_message(order):
         #msg = re.sub(r'{qnh}','. QNH %s' % qnh,msg)
     else:
         msg = re.sub(r'{qnh}','',msg)
+    wind = get_wind(order.sender.airport)
+    if wind:
+        msg = re.sub(r'{wind}',' %s. ' % wind,msg)
+    else:
+        msg = re.sub(r'{wind}','',msg)
     # Clean up tags not replaced
     msg = re.sub(r'{\w+}','',msg)
     return msg
