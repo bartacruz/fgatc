@@ -40,12 +40,12 @@
 		map_start();
 		$(window).resize(resize_map);
 		$('#aircraft_list').on("click","a",pan_callsign);
+		$('.toggle-airports').on("click",toggle_airports);		
 		
 	});
 </script>
 
 {% endblock %}
-
 {% block content %}
 <div id="map"></div>
 {% endblock %}
@@ -55,14 +55,16 @@
 
 {% block extra_navbar_collapse %}
 		<ul class="navbar-nav mr-auto">
-				<li class="navitem dropdown">
-					<a href="#" class="nav-link dropdown-toggle"
-					data-toggle="dropdown" role="button" aria-haspopup="true"
-					aria-expanded="false"><span class="fas fa-plane"></span>&nbsp;Aircrafts</a>
-					<div class="dropdown-menu" id="aircraft_list">
-						
-					</div>
-				</li>				
+			<li class="navitem">
+			       	<a class="nav-link"><span class="navbar-text fas fa-plane-departure toggle-airports" title="Toggle Airports"></span></a>
+			</li>
+			<li class="navitem dropdown">
+				<a href="#" class="nav-link dropdown-toggle"
+				data-toggle="dropdown" role="button" aria-haspopup="true"
+				aria-expanded="false"><span class="fas fa-plane"></span>&nbsp;Aircrafts</a>
+				<div class="dropdown-menu" id="aircraft_list">
+				</div>
+			</li>				
 		</ul>
 		<span class="navbar-text fas fa-map-marker-alt" title="Point location"></span>
 		<div class="position"  title="Latitude">

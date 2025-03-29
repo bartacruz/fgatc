@@ -7,6 +7,9 @@ var _route_markers=null;
 var _spot=null;
 var callsigns=[];
 var taxiways = {};
+var _show_airports=false;
+var aircrafts_layer = L.layerGroup();
+var airports_layer = L.layerGroup();
 
 function showcords(a,b,c){
 	$('#lat').html(a.latlng.lat);
@@ -36,9 +39,18 @@ function edit_osm() {
 	}
 }
 function initMap(ll) {
-	map = L.map('map').setView(ll,13);
+	
+	var osm = L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png?{foo}', {foo: 'bar'});
+	var baseMaps = {
+		"OpenStreetMap": osm
+	};
+	var overlayMaps={"Aircrafts":aircrafts_layer,"Airports": airports_layer};
+	map = L.map('map', {layers:[osm,aircrafts_layer]}).setView(ll,13);
 	map.on({click:showcords,});
-	L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png?{foo}', {foo: 'bar'}).addTo(map);	
+	var layerControl = L.control.layers(baseMaps, overlayMaps).addTo(map);
+	
+	
+	_show_airports = true;
 }
 
 function show_plan(ev) {
@@ -62,7 +74,7 @@ function addPlane(fields,airport) {
 	    iconSize: [25,25],
 	    className: callsign,
 	});
-	var marker = L.rotatedMarker([fields.lat,fields.lon],{icon:planeicon,title:callsign,angle:fields.heading}).addTo(map);
+	var marker = L.rotatedMarker([fields.lat,fields.lon],{icon:planeicon,title:callsign,angle:fields.heading}).addTo(aircrafts_layer);
 	marker.on({
 		click:show_plan,
 	});
@@ -70,12 +82,6 @@ function addPlane(fields,airport) {
 	//console.debug(callsign,marker.getLatLng(),marker);
 }
 
-function map_start() {
-	_handler = setInterval(fg_update,2000);
-}
-function map_stop() {
-	clearInterval(_handler);
-}
 
 function pan_callsign(a,b,c) {
 	var cs = $( this ).text();
@@ -85,11 +91,24 @@ function pan_callsign(a,b,c) {
 	
 }
 
-function update_aircrafts_XHR(data,textStatus,jqXHR) {
-	update_aircrafts(data.aircrafts)
-}
 var _airports = {};
+function toggle_airports() {
 
+	// _show_airports=!_show_airports;
+	// if (!_show_airports) {
+	// 	var actives = {};
+	// 	for(var icao in _airports) {
+	// 		var apt = _airports[icao];
+	// 		if (apt.options.active) {
+	// 			actives[icao] = apt;
+	// 		} else {
+	// 			apt.remove();
+	// 		}
+	// 	}
+	// 	_airports = actives;
+	// }
+	// ws_update_pos();
+}
 function update_airports(airports) {
 	
 	for (i in airports) {
@@ -103,7 +122,12 @@ function update_airports(airports) {
 		    	iconSize: [25,25],
 	    		className: callsign,
 			});
-			var marker = L.marker([fields.lat,fields.lon],{icon:planeicon,title:callsign}).addTo(map);
+			var apt_icon= L.divIcon({
+				html:'<span class="fas fa-plane-departure"></span><span>'+callsign+"</span>",
+				className: 'fgatc-airport',
+
+			})
+			var marker = L.marker([fields.lat,fields.lon],{icon:apt_icon,title:airport.fields.name, active:airport.fields.active}).addTo(airports_layer);
 			marker.on({
 				click: get_airport,
 			});
@@ -133,27 +157,7 @@ function update_aircrafts(aircrafts) {
 	}
 	callsigns = ceeses;
 }
-function update_error(XHR, textStatus, errorThrow) {
-	console.debug("ERROR",textStatus,errorThrow);
-}
-function fg_update(){
-	url = '/map/aircrafts/';
-	data = {
-			center: ""+map.getCenter(),
-			bounds: ""+map.getBounds(),
-			zoom: map.getZoom(),
-			lat: map.getCenter().lat,
-			lon: map.getCenter().lng
-	};
-	//console.debug("update. data=",data);
-	$.ajax({
-		dataType: "json",
-		url: url,
-		data: data,
-		success: update_aircrafts_XHR,
-		error: update_error
-	});
-}
+
 function show_runway(data,textStatus,jqXHR) {
 	console.debug("show_runway",data);
 	_runway = L.polyline(data.boundaries, {color: 'blue', weight:3, lineJoin:'round'}).addTo(map);

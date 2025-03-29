@@ -11,9 +11,12 @@ function map_start(){
     }
 	fgatcws.onmessage = function(event) {
     	var message=JSON.parse(event.data);
-    	//console.debug("onmessage:",message);
-    	update_aircrafts(message.data);
-    	update_airports(message.airports);
+    	console.debug("onmessage:",message);
+		if (message.type=='airports_update') {
+			update_airports(message.data);
+		} else if (message.type=='aircrafts_update') {
+    		update_aircrafts(message.data);
+		}
     }
 	map.on({moveend:ws_update_pos});
 	fgatcws.onclose = function(event) {
@@ -28,6 +31,8 @@ function ws_update_pos() {
 		lat: map.getCenter().lat,
 		lon: map.getCenter().lng,
 		zoom:map.getZoom(),
+		bounds: map.getBounds().toBBoxString(),
+		show_airports: _show_airports,
 		
 		}));
 }

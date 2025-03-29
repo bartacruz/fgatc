@@ -16,4 +16,12 @@
 	padding: 0px 5px;
 	margin: 0px;
 }
+.fgatc-airport {
+	color:blue;
+	font-size: 0.6rem;
+}
+.fgatc-airport .fas {
+	display:inline;
+	margin-right:5px;
+}
 
