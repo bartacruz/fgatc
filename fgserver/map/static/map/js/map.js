@@ -10,6 +10,8 @@ var taxiways = {};
 var _show_airports=false;
 var aircrafts_layer = L.layerGroup();
 var airports_layer = L.layerGroup();
+var airport_details_layer = L.layerGroup();
+var route_layer = L.layerGroup();
 
 function showcords(a,b,c){
 	$('#lat').html(a.latlng.lat);
@@ -44,12 +46,15 @@ function initMap(ll) {
 	var baseMaps = {
 		"OpenStreetMap": osm
 	};
-	var overlayMaps={"Aircrafts":aircrafts_layer,"Airports": airports_layer};
-	map = L.map('map', {layers:[osm,aircrafts_layer]}).setView(ll,13);
+	var overlayMaps={
+		"Aircrafts":aircrafts_layer,
+		"Airports": airports_layer, 
+		"Details": airport_details_layer, 
+		"Routes": route_layer
+	};
+	map = L.map('map', {layers:[osm,aircrafts_layer, airports_layer,route_layer]}).setView(ll,13);
 	map.on({click:showcords,});
 	var layerControl = L.control.layers(baseMaps, overlayMaps).addTo(map);
-	
-	
 	_show_airports = true;
 }
 
@@ -92,23 +97,7 @@ function pan_callsign(a,b,c) {
 }
 
 var _airports = {};
-function toggle_airports() {
 
-	// _show_airports=!_show_airports;
-	// if (!_show_airports) {
-	// 	var actives = {};
-	// 	for(var icao in _airports) {
-	// 		var apt = _airports[icao];
-	// 		if (apt.options.active) {
-	// 			actives[icao] = apt;
-	// 		} else {
-	// 			apt.remove();
-	// 		}
-	// 	}
-	// 	_airports = actives;
-	// }
-	// ws_update_pos();
-}
 function update_airports(airports) {
 	
 	for (i in airports) {
@@ -127,7 +116,13 @@ function update_airports(airports) {
 				className: 'fgatc-airport',
 
 			})
-			var marker = L.marker([fields.lat,fields.lon],{icon:apt_icon,title:airport.fields.name, active:airport.fields.active}).addTo(airports_layer);
+			var marker = L.marker([fields.lat,fields.lon],{
+				icon:apt_icon,
+				title:airport.fields.name, 
+				active:airport.fields.active, 
+				icao:airport.fields.icao
+			}).addTo(airports_layer);
+			
 			marker.on({
 				click: get_airport,
 			});
@@ -160,7 +155,7 @@ function update_aircrafts(aircrafts) {
 
 function show_runway(data,textStatus,jqXHR) {
 	console.debug("show_runway",data);
-	_runway = L.polyline(data.boundaries, {color: 'blue', weight:3, lineJoin:'round'}).addTo(map);
+	_runway = L.polyline(data.boundaries, {color: 'blue', weight:3, lineJoin:'round'}).addTo(airport_details_layer);
 	rstart = data.start;
 	var wpicon = L.icon({
 	    iconUrl: static_url + 'images/wp.png',
@@ -169,7 +164,7 @@ function show_runway(data,textStatus,jqXHR) {
 	    iconAnchor:[13,25],
 	});
 	var pos = [rstart[0],rstart[1]];
-	var marker = L.marker(pos,{icon:wpicon,title:'Runway Start'}).addTo(map);
+	var marker = L.marker(pos,{icon:wpicon,title:'Runway Start'}).addTo(airports_layer);
 }
 function update_plan(data,textStatus,jqXHR) {
 	//console.debug("update plan",data);
@@ -185,7 +180,7 @@ function update_plan(data,textStatus,jqXHR) {
 		    iconAnchor:[13,25],
 		});
 		var pos = [wp.fields.lat,wp.fields.lon]
-		var marker = L.marker(pos,{icon:wpicon,title:wp.fields.name}).addTo(map);
+		var marker = L.marker(pos,{icon:wpicon,title:wp.fields.name}).addTo(route_layer);
 		markers.push(marker)
 		path.push(pos);
 	}
@@ -199,8 +194,9 @@ function update_plan(data,textStatus,jqXHR) {
 	
 }
 var _taxiways={};
+
 function show_airport(data,textStatus,jqXHR) {
-	console.debug("airport",data);
+	console.debug("show airport",data);
 	for (var i in data.taxiways) {
 		var way = data.taxiways[i];
 		var path =[];
@@ -209,12 +205,23 @@ function show_airport(data,textStatus,jqXHR) {
 			path.push([node.lat,node.lon]);
 		}
 		console.debug(way.name, path);
-		var line = L.polyline(path, {color: 'yellow', weight:4, lineJoin:'round'}).addTo(map)
+		var line = L.polyline(path, {color: 'yellow', weight:1, lineJoin:'round'}).addTo(airport_details_layer);
 		_taxiways[way.name] = line;
 	}
+	for (var i in data.parkings) {
+		park = data.parkings[i];
+		var park_icon= L.divIcon({
+			html:'<span>['+park.name+"]</span>",
+			className: 'fgatc-startup',
+		})
+		L.marker([park.lat,park.lon],{icon:park_icon}).addTo(airport_details_layer);
+	}
+}
+function update_error(a,b,c) {
+	console.debug("ERROR",a,b,c);
 }
 function get_airport(ev) {
-	var icao = ev.target.options.title;
+	var icao = ev.target.options.icao;
 	url = '/map/airport/';
 	data = {
 		icao: icao
@@ -229,7 +236,7 @@ function get_airport(ev) {
 	get_runway(ev);
 }
 function get_runway(ev) {
-	var icao = ev.target.options.title;
+	var icao = ev.target.options.icao;
 	url = '/map/runway/';
 		data = {
 			icao: icao

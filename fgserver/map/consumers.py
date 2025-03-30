@@ -18,7 +18,7 @@ class Updater():
     thread = None
     
     @classmethod
-    @setInterval(1)
+    @setInterval(2)
     def update(cls):
         if not cls.thread:
             cls.thread=uuid4().hex    

@@ -420,7 +420,7 @@ class TaxiNode(Model):
     
 class TaxiWay(Model):
     name = models.CharField(max_length=30)
-    airport = ForeignKey(Airport, related_name='taxi_ways', on_delete=CASCADE)
+    airport = ForeignKey(Airport, related_name='taxiways', on_delete=CASCADE)
     nodes = ManyToManyField(TaxiNode)
     parking = BooleanField(default=False)
     

@@ -11,7 +11,7 @@ function map_start(){
     }
 	fgatcws.onmessage = function(event) {
     	var message=JSON.parse(event.data);
-    	console.debug("onmessage:",message);
+    	//console.debug("onmessage:",message);
 		if (message.type=='airports_update') {
 			update_airports(message.data);
 		} else if (message.type=='aircrafts_update') {

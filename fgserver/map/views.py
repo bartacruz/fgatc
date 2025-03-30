@@ -47,13 +47,13 @@ def airport(request):
     airport = Airport.objects.get(icao=icao)
     airport_j=json.loads(serialize('json',[airport]))[0]
     ways = []
-    for way in airport.taxi_ways.all():
+    for way in airport.taxiways.all():
         nodes=[]
         for node in way.nodes.all():
-            nodes.append({'name':node.name, 'lat':node.point.x, 'lon': node.point.y})
+            nodes.append({'name':node.name, 'lat':node.point.y, 'lon': node.point.x})
         ways.append({'name':way.name, 'nodes':nodes})
-
-    return JsonResponse({'airport': airport_j, 'taxiways':ways})
+    parkings = [{'name': x.name, 'lat':x.lat,'lon':x.lon} for x in airport.startups.all()]
+    return JsonResponse({'airport': airport_j, 'taxiways':ways, 'parkings': parkings})
     
         
 

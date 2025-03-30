@@ -285,7 +285,7 @@ def _get_path(graph,p1,p2):
 
 def taxi_path2(airport,start,endp, end_on_rwy=False):
     #s1=sim_time()
-    if airport.taxi_ways.count() == 0:
+    if airport.taxiways.count() == 0:
         return dj_waypoints(airport, start, endp, start_on_rwy=False,end_on_rwy=False)
     
     if isinstance(start,Position):
@@ -331,7 +331,7 @@ def taxi_path2(airport,start,endp, end_on_rwy=False):
     return route
     
 def taxi_path(airport, start, endp, start_on_rwy=False,end_on_rwy=False):
-    if airport.taxi_ways.count() == 0:
+    if airport.taxiways.count() == 0:
         return dj_waypoints(airport, start, endp, start_on_rwy=False,end_on_rwy=False)
     
     if isinstance(start,Position):

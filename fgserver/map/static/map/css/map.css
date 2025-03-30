@@ -20,6 +20,11 @@
 	color:blue;
 	font-size: 0.6rem;
 }
+.fgatc-startup {
+	color:red;
+	font-size: 0.6rem;
+	white-space: nowrap;
+}
 .fgatc-airport .fas {
 	display:inline;
 	margin-right:5px;
