@@ -5,3 +5,4 @@ syntax: glob
 /runserver.sh
 /nohup.out
 .venv
+*/cache/*
