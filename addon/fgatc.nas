@@ -170,6 +170,8 @@ var compute_flow = func() {
 	var lao =last_order['ord']; 
 	if ( lao == 'startup') {
 		next = "readytaxi";
+	} else if (lao == 'pushback') {
+		next = "readytaxi";
 	} else if (lao == 'taxito') {
 		if (last_order['short']) {
 			next = "holdingshort";
@@ -196,10 +198,11 @@ var compute_flow = func() {
 var messages = {
 	roger:'{ack}{qnh}{tuneto}, {cs}',
 	repeat:'{apt}, {cs}, say again',
-	startup: '{apt}, {cs},{parkn} request startup{atis}',
+	startup: '{apt}, {cs},{parkn} request startup clearance{atis}',
+	pushback: '{apt}, {cs},{parkn} request pushback',
 	readytaxi: '{apt}, {cs},{atis} ready to taxi',
 	holdingshort: '{apt}, {cs},{atis} holding short {rwyof}',
-	readytko: '{apt}, {cs}, ready for departure',
+	readytko: '{apt}, {cs}, ready for departure from runway {rwy}',
 	leaving: '{apt}, {cs}, leaving airfield {talt}',
 	transition: '{apt}, {cs} to transition your airspace{atis}',
 	inbound: '{apt}, {cs}{atis} for inbound approach',
@@ -211,7 +214,7 @@ var messages = {
 	clearrw: '{apt}, {cs}, clear {rwyof}',
 	around: '{apt}, {cs}, going around',
 	goodbye: 'Goodbye',
-	withyou: '{apt}, {cs}, with you at {alt} feet, heading {heading}{atis}',
+	withyou: '{apt}, {cs}, with you at {ralt} feet, heading {heading}{atis}',
 	abt_tko: '{apt}, {cs}, about to departure from runway {rwy}',
 	enterrw: '{apt}, {cs}, entering runway {rwy} for departure',
 	tunein: '',
@@ -248,7 +251,7 @@ var sendmessage = func(message="",dlg=1){
 	setprop(channel_message,msg);
 	setprop(channel_pilot_message,msg);
 	if (dlg) {
-		fgatcdialog.dialog.destroy();
+		dialog.destroy();
 	}
 };
 
@@ -318,6 +321,7 @@ var parse_message = func(tag) {
 	msg = string.replace(msg,'{rwyof}', "of runway  " ~ selected_runway);
 	msg = string.replace(msg,'{apt}',controller);
 	msg = string.replace(msg,'{alt}',int(getprop("/position/altitude-ft")));
+	msg = string.replace(msg,'{ralt}',math.round(getprop("/position/altitude-ft")/100)*100);
 	msg = string.replace(msg,'{heading}',say_number(int(getprop("/orientation/heading-magnetic-deg"))));
 	if (get_option("talt")) {
 		msg = string.replace(msg,'{talt}', sprintf(" climbing to %s feet", get_option('talt')) );
@@ -353,6 +357,8 @@ var parse_message = func(tag) {
 			msg = string.replace(msg,'{ack}','Cleared for takeoff');
 		} else if(last_order['ord'] == 'startup') {
 			msg = string.replace(msg,'{ack}','start up approved');
+		} else if(last_order['ord'] == 'pushback') {
+			msg = string.replace(msg,'{ack}','pushback approved');
 		} else if(last_order['ord'] == 'join') {
 			var ack = sprintf("%s for %s at %s",last_order['cirw'],last_order['rwy'],last_order['alt']);
 			msg = string.replace(msg,'{ack}',ack);

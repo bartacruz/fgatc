@@ -37,6 +37,7 @@ var dialog_columns=func(){
 			append(cols,get_dialog_column('enterrw'));
 		} else {
 			append(cols,get_dialog_column('startup'));
+			append(cols,get_dialog_column('pushback'));
 			append(cols,get_dialog_column('readytaxi'));
 			append(cols,get_dialog_column('holdingshort'));
 			append(cols,get_dialog_column('readytko'));
@@ -58,12 +59,12 @@ var dialog_columns=func(){
 			append(cols,get_dialog_column('withyou'));
 		}
     } else if (viewnode == 'options') {
-		append(cols,{ type: "checkbox", label: "Remain in the pattern", code: "remain", halign: "left", callback: "fgatcdialog.set_option", property: fgatc.root ~ "/options/remain" });
-		append(cols,{ type: "checkbox", label: "Touch & go", code: "tngo", halign: "left", callback: "fgatcdialog.set_option", property: fgatc.root ~ "/options/tngo" });
+		append(cols,{ type: "checkbox", label: "Remain in the pattern", code: "remain", halign: "left", callback: "fgatc.set_option", property: fgatc.root ~ "/options/remain" });
+		append(cols,{ type: "checkbox", label: "Touch & go", code: "tngo", halign: "left", callback: "fgatc.set_option", property: fgatc.root ~ "/options/tngo" });
 		append(cols,{ type: "input", label: "ATIS report", format: "%s", code: "atis", halign: "left", property: fgatc.root ~ "/options/atis", callback:nil });
 		append(cols,{ type: "input", label: "Target Altitude", format: "%d", code: "talt", halign: "left", property: fgatc.root ~ "/options/talt", callback:nil });
 		append(cols,{ type: "input", label: "Force RWY", format: "%s", code: "frwy", halign: "left", property: fgatc.root ~ "/options/frwy", callback:nil });
-		append(cols,{ type: "checkbox", label: "test", code: "test", halign: "left", callback: "fgatcdialog.set_option", property: fgatc.root ~ "/options/test" });
+		append(cols,{ type: "checkbox", label: "test", code: "test", halign: "left", callback: "fgatc.set_option", property: fgatc.root ~ "/options/test" });
 		
     }
      return cols;
@@ -126,7 +127,7 @@ var dialog = {
         w.set("pref-height", 16);
         w.set("legend", "");
         w.set("default", 0);
-        w.setBinding("nasal", "fgatcdialog.dialog.destroy(); ");
+        w.setBinding("nasal", "fgatc.dialog.destroy(); ");
         w.setBinding("dialog-close");
 
         var options = me.dialog.addChild("group");
@@ -134,30 +135,30 @@ var dialog = {
         options.set("halign", "center");
         options.set("default-padding", 5);
 		b1 = options.addChild("button");
-		b1.node.setValues({ type: "button", legend: "Reset", code: "reset", halign: "right", callback: "fgatcdialog.reset" });
-        b1.setBinding("nasal", 'fgatcdialog.reset()');		
+		b1.node.setValues({ type: "button", legend: "Reset", code: "reset", halign: "right", callback: "fgatc.reset" });
+        b1.setBinding("nasal", 'fgatc.reset()');		
         b2 = options.addChild("button");
-		b2.node.setValues({ type: "button", legend: "Flow", code: "flow", halign: "right", callback: "fgatcdialog.setview" });
-        b2.setBinding("nasal", 'fgatcdialog.setview("flow")');		
+		b2.node.setValues({ type: "button", legend: "Flow", code: "flow", halign: "right", callback: "fgatc.setview" });
+        b2.setBinding("nasal", 'fgatc.setview("flow")');		
         b2 = options.addChild("button");
-		b2.node.setValues({ type: "button", legend: "Depart", code: "depart", halign: "right", callback: "fgatcdialog.setview" });
-        b2.setBinding("nasal", 'fgatcdialog.setview("depart")');		
+		b2.node.setValues({ type: "button", legend: "Depart", code: "depart", halign: "right", callback: "fgatc.setview" });
+        b2.setBinding("nasal", 'fgatc.setview("depart")');		
         b2 = options.addChild("button");
-		b2.node.setValues({ type: "button", legend: "Arrival", code: "arrive", halign: "right", callback: "fgatcdialog.setview" });
-        b2.setBinding("nasal", 'fgatcdialog.setview("arrival")');		
+		b2.node.setValues({ type: "button", legend: "Arrival", code: "arrive", halign: "right", callback: "fgatc.setview" });
+        b2.setBinding("nasal", 'fgatc.setview("arrival")');		
         b2 = options.addChild("button");
-		b2.node.setValues({ type: "button", legend: "Approach", code: "approach", halign: "right", callback: "fgatcdialog.setview" });
-        b2.setBinding("nasal", 'fgatcdialog.setview("approach")');		
+		b2.node.setValues({ type: "button", legend: "Approach", code: "approach", halign: "right", callback: "fgatc.setview" });
+        b2.setBinding("nasal", 'fgatc.setview("approach")');		
         b2 = options.addChild("button");
-		b2.node.setValues({ type: "button", legend: "Options", code: "options", halign: "right", callback: "fgatcdialog.setview" });
-        b2.setBinding("nasal", 'fgatcdialog.setview("options")');		
+		b2.node.setValues({ type: "button", legend: "Options", code: "options", halign: "right", callback: "fgatc.setview" });
+        b2.setBinding("nasal", 'fgatc.setview("options")');		
         
 		me.dialog.addChild("hrule");
 		var content = me.dialog.addChild("group");
         content.set("layout", "vbox");
         content.set("halign", "center");
         content.set("default-padding", 5);
-		me.columns = fgatcdialog.dialog_columns();
+		me.columns = fgatc.dialog_columns();
 		foreach (var column; me.columns) {
 			w = content.addChild(column.type);
 			w.node.setValues(column);

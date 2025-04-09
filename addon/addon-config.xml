@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+
+<PropertyList>
+    <input>
+        <keyboard>
+            <key n="39">
+                <name>'</name>
+                <desc>Display a dialog for sending messages to the tuned-in ATC service (if any)</desc>
+                <binding>
+                    <command>nasal</command>
+                    <script>fgatc.dialog.show()</script>
+                </binding>
+            </key>
+        </keyboard>
+    </input>
+    <sim>
+        <fgatc>
+            <version>1.0</version>
+        </fgatc>
+    </sim>
+</PropertyList>

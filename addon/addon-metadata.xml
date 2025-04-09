@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<PropertyList>
+    <meta>
+        <file-type type="string">FlightGear add-on metadata</file-type>
+        <format-version type="int">1</format-version>
+    </meta>
+
+    <addon>
+        <identifier type="string"> com.bartatech.addons.FGAtc</identifier>
+        <name type="string">FG ATC</name>
+        <version type="string">1.0.0</version>
+
+        <authors>
+            <author>
+                <name type="string">Julio Santa Cruz</name>
+                <email type="string">bartacruz@gmail.com</email>
+                <url type="string"></url>
+            </author>
+        </authors>
+
+        <maintainers>
+            <maintainer>
+                <name type="string">Julio Santa Cruz</name>
+                <email type="string">bartacruz@gmail.com</email>
+                <url type="string"></url>
+            </maintainer>
+        </maintainers>
+        <short-description type="string">
+        FlightGear AI ATC
+        </short-description>
+
+        <long-description type="string">
+        A complete FlightGear multiplayer server with AI ATC, AI Planes, interactive map. Messages are sent and received only in the tunned frequency.
+        </long-description>
+
+        <license>
+            <designation type="string">
+            GNU GPL version 2 or later
+            </designation>
+
+            <url type="string">
+            https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html
+            </url>
+        </license>
+
+        <min-FG-version type="string">2017.4.0</min-FG-version>
+        <max-FG-version type="string">none</max-FG-version>
+        <urls>
+            <home-page type="string">
+            https://github.com/bartacruz/fgatc
+            </home-page>
+
+            <download type="string">
+            https://github.com/bartacruz/fgatc
+            </download>
+
+            <support type="string"></support>
+
+            <code-repository type="string">
+            https://github.com/bartacruz/fgatc
+            </code-repository>
+        </urls>
+
+        <tags>
+            <tag type="string">ATC</tag>
+            <tag type="string">Air Traffic Control</tag>
+            <tag type="string">spoken</tag>
+            <tag type="string">instructions</tag>
+            <tag type="string">voice</tag>
+            <tag type="string">sound</tag>
+            <tag type="string">vectoring</tag>
+            <tag type="string">guidance</tag>
+            <tag type="string">phraseology</tag>
+        </tags>
+    </addon>
+</PropertyList>

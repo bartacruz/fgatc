@@ -22,7 +22,7 @@ Place the `*.nas` files into FlightGear's root directory or in your local .fgfs/
 
 | Helper | Use |
 | ------- | ------ |
-| fgatcdialog.dialog.show() | Opens the messages dialog | 
+| fgatc.dialog.show() | Opens the messages dialog | 
 | fgatc.readback()| Sends a readback of the last message received |
 | fgatcdiaglog.flow_next()|Sends a message with the next step of the communication flow |
 
@@ -47,7 +47,7 @@ Alternatively, you can edit the `keyboard.xml` file of the FG instalation and re
   <desc>Display a dialog for sending messages to the tuned-in ATC service (if any)</desc>
   <binding>
     <command>nasal</command>
-    <script>fgatcdialog.dialog.show()</script>
+    <script>fgatc.dialog.show()</script>
   </binding>
 </key>
 ```
@@ -79,7 +79,7 @@ Having `readback()` and `flow_next()` assigned to joystic buttons, you can make 
   <desc>Sends next message according to ATC Flow</desc>
   <binding>
     <command>nasal</command>
-    <script>fgatcdialog.flow_next();</script>
+    <script>fgatc.flow_next();</script>
   </binding>
 </button>
 ```
