@@ -1,7 +1,7 @@
 import django
 if __name__ == '__main__':
     django.setup()
-
+import sys
 import time
 import pprint
 from django.utils import timezone
@@ -32,15 +32,15 @@ def fetch_taxiways(icao):
 [out:json][timeout:25];
 area["icao"="%s"]->.apt;
 (
-  way(area.apt)["aeroway"="taxiway"];
-  way(area.apt)["aeroway"="parking_position"];
+  nwr(area.apt)["aeroway"="parking_position"];
   nwr(area.apt)["aeroway"="holding_position"];
+  way(area.apt)["aeroway"="taxiway"];
   way(area.apt)["aeroway"="runway"];
 );
 out geom;
 """ % icao
 
-    print(overpass_query)
+    # print(overpass_query)
     response = requests.get(overpass_url, 
                         params={'data': overpass_query})
     data = response.json()
@@ -61,7 +61,7 @@ def get_taxiways(icao, data=None):
     nodes = {}
     ways = {}
     hold = []
-    airport.taxi_ways.all().delete()
+    airport.taxiways.all().delete()
     airport.taxinodes.all().delete()
     for element in data['elements']:
         if element.get("type") == "node":
@@ -72,7 +72,7 @@ def get_taxiways(icao, data=None):
         way_name = element.get('tags').get('ref',element.get('id'))
         taxiway = ways.get(way_name)
         if not taxiway:
-            taxiway = airport.taxi_ways.create(name=way_name, parking = element.get('tags').get('aeroway')=='parking_position')
+            taxiway = airport.taxiways.create(name=way_name, parking = element.get('tags').get('aeroway')=='parking_position')
             ways[way_name]=taxiway
 
         i=0
@@ -106,26 +106,27 @@ def get_taxiways(icao, data=None):
     print("Airport runway",[i.name for i in airport.taxinodes.filter(on_runway=True)])
     print("holds", [i.name for i in nodes.values() if i.short])
     print("rwy", [i.name for i in nodes.values() if i.on_runway])
-    
-    
-def export_groundnet(icao):
-    data = fetch_taxiways(icao)
+
+def process_groundnet(airport, data):
     parkings = []
     nodes={}
     ways={}
-    print("processing %s elements" % len(data['elements']))
+    _node_cache = {}
     for element in data['elements']:
         if element.get('tags').get('aeroway') == 'parking_position':
             way_name = element.get('tags').get('ref',element.get('id'))
-            geom = element['geometry'][-1]
+            if element.get('type') == 'node':
+                geom = element
+            else:
+                geom = element['geometry'][-1]
             #TODO get heading
             node = {'name': way_name, 'lon': geom.get('lon'), 'lat': geom.get('lat'), 'heading':0.0 }
             
             parkings.append(node)
-            print("found parking",node)
+            # print("found parking",node)
         
         if element.get("type") == "node":
-            continue
+            _node_cache[element.get("id")] = element
         else:
             way_name = element.get('tags').get('ref',element.get('id'))
             taxiway = ways.get(way_name)
@@ -133,19 +134,64 @@ def export_groundnet(icao):
                 taxiway = ways[way_name] = []
             i=0
             parent = None
-            print("found way %s with %d nodes" % (way_name,len(element['nodes']),))
+            # print("found way %s with %d nodes" % (way_name,len(element['nodes']),))
             while i < len(element['nodes']):
                 node_id = element['nodes'][i]
                 node = nodes.get(node_id)
                 if not node:
                     geom = element['geometry'][i]
-                    node = {'name': node_id, 'lon': geom.get('lon'), 'lat': geom.get('lat') }
+                    point = Point(geom.get('lon'),geom.get('lat'))
+                    on_rwy = 1 if airport.on_runway(point) else 0
+                    hold = 'none'
+                    if _node_cache.get(node_id,False):
+                        hold = _node_cache[node_id].get('tags').get('holding_position:type','none')
+                    node = {'name': node_id, 'lon': geom.get('lon'), 'lat': geom.get('lat'), 'on_rwy': on_rwy ,'hold': hold}
                     nodes[node_id]= node
                 if parent:
                     taxiway.append((parent,node_id))
                 parent = node_id
                 i = i+1
+    return parkings,nodes,ways
 
+def import_groundnet(icao):
+    airport = Airport.objects.get(icao=icao)
+    data = fetch_taxiways(icao)
+    parkings,nodes,ways = process_groundnet(airport, data)
+    parking_names = [x.get('name') for x in parkings]
+    airport.startups.all().delete()
+    for p in parkings:
+        airport.startups.create(name=p.get('name'),lat=p.get('lat'),lon=p.get('lon'),altitude=airport.altitude)
+    airport.taxinodes.all().delete()
+    airport.taxiways.all().delete()
+    for w in ways:
+        way = ways.get(w)
+        taxiway = airport.taxiways.create(name=w, parking=w in parking_names)
+        
+        for p in way:
+            n1 = nodes.get(p[0])
+            n2 = nodes.get(p[1])
+            node1,created = airport.taxinodes.get_or_create(name=n1.get('name'),point=Point(n1.get('lon'), n1.get('lat')), on_runway = n1.get('on_rwy')==1, short=n1.get('hold')== 'runway' )
+            node2,created = airport.taxinodes.get_or_create(name=n2.get('name'),point=Point(n2.get('lon'), n2.get('lat')), on_runway = n2.get('on_rwy')==1, short=n2.get('hold')== 'runway' )
+            taxiway.nodes.add(node1)
+            taxiway.nodes.add(node2)
+
+
+def latc(lat):
+    if lat < 0:
+        return "S%d %f"%(int(abs(lat)), (abs(lat) - int(abs(lat)) )* 60)
+    else:
+        return "N%d %f"%(int(abs(lat)), (abs(lat) - int(abs(lat)) )* 60)
+def lonc(lon):
+    if lon < 0:
+        return "W%d %f"%(int(abs(lon)), (abs(lon) - int(abs(lon)) )* 60)
+    else:
+        return "E%d %f"%(int(abs(lon)), (abs(lon) - int(abs(lon)) )* 60)
+
+def export_groundnet(icao):
+    data = fetch_taxiways(icao)
+    airport = Airport.objects.get(icao=icao)
+    parkings,nodes,ways = process_groundnet(airport,data)
+    parking_names = [x.get('name') for x in parkings]
     i = 0
     print("parkings", parkings)
     
@@ -153,8 +199,8 @@ def export_groundnet(icao):
 
     for p in parkings:
             print('    <Parking index="%d" type="gate" name="%s" lat="%s" lon="%s" heading="%f" />'%(i,p.get('name') ,
-                                                                                                    p.get('lat'),
-                                                                                                    p.get('lon'),
+                                                                                                    latc(p.get('lat')),
+                                                                                                    lonc(p.get('lon')),
                                                                                                     p.get('heading')) )
             i = i + 1
     print("</parkingList>")
@@ -162,10 +208,11 @@ def export_groundnet(icao):
     for n in nodes:
         p = nodes.get(n)
         print('    <node index="%d" lat="%s" lon="%s" name="%s" isOnRunWay="%s" holdPointType="%s" />'%(i ,
-                                                                                                    p.get('lat'),
-                                                                                                    p.get('lon'),
+                                                                                                    latc(p.get('lat')),
+                                                                                                    lonc(p.get('lon')),
                                                                                                     p.get('name'),
-                                                                                                    0,'none'
+                                                                                                    p.get('on_rwy'),
+                                                                                                    p.get('hold')
             ))
         p['index']=i
         i = i + 1
@@ -176,7 +223,7 @@ def export_groundnet(icao):
         for p in way:
             n1 = nodes.get(p[0])
             n2 = nodes.get(p[1])
-            print('    <arc begin="%s" end="%s" isPushBackRoute="%d" name="%s" />'% ( n1.get('index'), n2.get('index'), w in parkings,w))
+            print('    <arc begin="%s" end="%s" isPushBackRoute="%d" name="%s" />'% ( n1.get('index'), n2.get('index'), w in parking_names,w))
     print("</TaxiWaySegments>")
     print("</groundnet>")
 
@@ -192,7 +239,7 @@ def show_nodes(icao,airport=None):
     for node in airport.taxinodes.all():
         print(node.name,node.on_runway, node.short, [i.name for i in node.taxiway_set.all()],[i.name for i in node.adjacents.all()], node.point)
     print("ways")
-    for way in airport.taxi_ways.all().order_by('name'):
+    for way in airport.taxiways.all().order_by('name'):
         print(way.name, way.parking, [i.name for i in way.nodes.all()])
 
 def check_on_runway(icao):
@@ -221,6 +268,22 @@ if __name__ == '__main__':
     # save_taxiways("SAAR", data)
     # data = load_taxiways("SAAR")
     # get_taxiways("SAAR", data)
-    export_groundnet("SAAR")
+    #
+    if len(sys.argv) < 3:
+        print("Usage osm.py [command] [icao]")
+        sys.exit(1)
+    
+    command = sys.argv[1]
+    icao = sys.argv[2]
+    if command == 'export':
+        export_groundnet(icao)
+    elif command == 'import':
+        import_groundnet(icao)
+    elif command == 'save':
+        data = fetch_taxiways(icao)
+        save_taxiways(icao, data)
+    else:
+        print("Unrecognized command: ", command)
+    
     # check_on_runway("SAAR")
     
