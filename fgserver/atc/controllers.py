@@ -302,7 +302,15 @@ class Ground(Controller):
         response.message=get_message(response)
         self.set_status(request.sender, PlaneInfo.STOPPED)
         return response
-
+    
+    def pushback(self,request):
+        response=self._init_response(request)
+        response.add_param(Order.PARAM_ORDER, alias.PUSHBACK)
+        self.check_atis(request, response)
+        response.message=get_message(response)
+        self.set_status(request.sender, PlaneInfo.PUSHBACK)
+        return response
+    
 
 class Tower(Controller):
     
@@ -514,8 +522,7 @@ class Departure(Controller):
         response.message=get_message(response)
         self.set_status(request.sender, PlaneInfo.STOPPED)
         return response
-    
-    
+
 class Approach(Controller):
     pass_alt = 8000
     circuit_alt= 1000

@@ -23,6 +23,7 @@ templates={
            alias.LINEUP : "{cs}, line up on runway {rwy}{hld}",
            alias.REPORT_CIRCUIT: '{cs}, report on {cirw}, number {num}',
            alias.STARTUP: "{cs}, start up approved{qnh}{wind}{atis}. Call ready to taxi",
+           alias.PUSHBACK: "{cs}, pushback approved.",
            alias.TAXI_TO: "{cs}, taxi to runway {rwy} {via}{hld}{short}{lineup}",
            alias.WAIT: "{cs}, wait until advised",
            alias.TUNE_TO: "{cs}", 

@@ -46,6 +46,7 @@ class Action():
     def send_message(self,request):
         templates={
            alias.STARTUP:"{atis}request startup clearance",
+           alias.PUSHBACK:"{atis}request pushback",
            alias.TAXI_READY:"{atis}ready to taxi",
            alias.HOLDING_SHORT : "holding short of runway {rwy}",
            alias.CROSS_RUNWAY : "requests cross runway {rwy}",
@@ -104,6 +105,7 @@ class ReadBackAction(Action):
            alias.LINEUP : "line up on {rwy}{hld}",
            alias.REPORT_CIRCUIT: 'report on {cirw}',
            alias.STARTUP: "start up approved{qnh}",
+           alias.PUSHBACK: "pushback approved",
            alias.TAXI_TO: "taxi to {rwy}{via}{hld}{short}{lineup}",
            alias.WAIT: "we wait", 
            alias.SWITCHING_OFF: "Good day",
