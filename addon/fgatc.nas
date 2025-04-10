@@ -178,6 +178,8 @@ var compute_flow = func() {
 		} else {
 			next = "readytko";
 		}
+	} else if (lao == 'lineup') {
+		next = "readytko";
 	} else if (lao == 'clearland') {
 		next = "clearrw";
 	} else if (lao == 'soff') {
@@ -203,7 +205,7 @@ var messages = {
 	readytaxi: '{apt}, {cs},{atis} ready to taxi',
 	holdingshort: '{apt}, {cs},{atis} holding short {rwyof}',
 	readytko: '{apt}, {cs}, ready for departure from runway {rwy}',
-	leaving: '{apt}, {cs}, leaving airfield {talt}',
+	leaving: '{apt}, {cs}, leaving airfield {talt}{remain}',
 	transition: '{apt}, {cs} to transition your airspace{atis}',
 	inbound: '{apt}, {cs}{atis} for inbound approach',
 	crosswind: '{apt}, {cs}, crosswind for runway {rwy}',
@@ -328,6 +330,11 @@ var parse_message = func(tag) {
 	} else {
 		msg = string.replace(msg,'{talt}', "");
 	}
+	if (get_option("remain")) {
+		msg = string.replace(msg,'{remain}', ", remaining in the pattern" );
+	} else {
+		msg = string.replace(msg,'{remain}', "");
+	}
 	if (get_option('tngo')) {
 		msg = string.replace(msg,'{tngo}', " for touch and go");
 	} else {
@@ -355,6 +362,9 @@ var parse_message = func(tag) {
 			msg = string.replace(msg,'{ack}',ack);
 		} else if(last_order['ord'] == 'cleartk') {
 			msg = string.replace(msg,'{ack}','Cleared for takeoff');
+		} else if(last_order['ord'] == 'lineup') {
+			var ack = sprintf("Lineup and wait, runway %s",last_order['rwy']);
+			msg = string.replace(msg,'{ack}',ack);
 		} else if(last_order['ord'] == 'startup') {
 			msg = string.replace(msg,'{ack}','start up approved');
 		} else if(last_order['ord'] == 'pushback') {
