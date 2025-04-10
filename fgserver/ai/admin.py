@@ -6,7 +6,7 @@ Created on Apr 16, 2015
 '''
 from django.contrib import admin
 from django.contrib.admin.options import ModelAdmin, TabularInline
-from .models import Circuit, WayPoint, FlightPlan
+from .models import  FlightPlan, WayPoint 
 # from ajax_select.helpers import make_ajax_form
 # from ajax_select.admin import AjaxSelectAdmin
 
@@ -22,25 +22,10 @@ class WaypointInline(TabularInline):
     model=WayPoint
     extra=0
 
-class CircuitInline(TabularInline):
-    model=Circuit
-    extra=0
-
 class FlightPlanAdmin(ModelAdmin):
     search_fields = ['name']
-    list_display=('name','description', 'aircraft','enabled')
+    list_display=('name','aircraft', 'departure','arrival','description','enabled')
     inlines = [WaypointInline]
     actions = [activate, deactivate]
-    
-class CircuitAdmin(ModelAdmin):
-    list_display=('name','airport','description','radius','altitude','enabled')
-    search_fields = ['name','airport__icao','airport__name']
-    inlines = [WaypointInline]
-    actions = [activate, deactivate]
-    
-    # form = make_ajax_form(Circuit, {
-    #     'airport': 'airports'
-    #     })
 
 admin.site.register(FlightPlan, FlightPlanAdmin)
-admin.site.register(Circuit, CircuitAdmin)

@@ -50,7 +50,8 @@ class Clearances():
 class StatePlane(object):
     
     states = ['stopped','starting','pushback','taxiing','holding','short','linedup','departing','climbing','cruising','approaching','on_circuit','rejoining','landing', 'rolling', 'crossing']
-    
+    departing_states = ['stopped','starting','pushback','taxiing','holding','short','linedup','departing','climbing','crossing',]
+    arriving_states = ['cruising','approaching','on_circuit','rejoining','landing', 'rolling',]
     
     def __init__(self, aircraft, dynamic_manager, init_delay=0):
         #self.circuit = circuit
@@ -89,11 +90,11 @@ class StatePlane(object):
         
         self.machine.add_transition('depart', 'linedup', 'departing', conditions=[lambda: self.clearances.take_off ],after=['generate_waypoints','depart'])
         self.machine.add_transition('depart', 'short', 'taxiing', conditions=[lambda: self.clearances.lineup or self.clearances.take_off])
-        self.machine.add_transition('depart', '*', 'linedup', conditions=[lambda: not self.flightplan.depart_generated],after=['generate_waypoints','depart'])
+        self.machine.add_transition('depart', '*', 'linedup', conditions=[lambda: not self.manager.depart_generated],after=['generate_waypoints','depart'])
         self.machine.add_transition('depart', '*', 'linedup', conditions=[lambda: not self.clearances.take_off])
         
         
-        self.machine.add_transition('climb', 'departing', 'climbing')
+        self.machine.add_transition('climb', 'departing', 'climbing', after=['generate_waypoints'])
         
         self.machine.add_transition('cruise', '*', 'cruising')
         
@@ -113,13 +114,13 @@ class StatePlane(object):
         
         self.dynamics = dynamic_manager(self)
         
-        self.flightplan = FlightPlanManager(self,aircraft.plans.first().circuit)
+        self.manager = FlightPlanManager(self,aircraft.plans.first())
         
         self.copilot = Copilot(self)
         
         # HACK
-        self.dynamics.position = self.flightplan.waypoint().get_position()
-        self.dynamics.set_waypoint(self.flightplan.waypoint(),self.flightplan.next_waypoint())
+        self.dynamics.position = self.manager.waypoint().get_position()
+        self.dynamics.set_waypoint(self.manager.waypoint(),self.manager.next_waypoint())
         
         
         
@@ -148,7 +149,7 @@ class StatePlane(object):
         if self.is_stopped() and self.init_delay != None:
             if sim_time() - self.stopped_time > self.init_delay:
                 llogger.debug("{%s}(%s) starting! %s > %s " % (self.aircraft, self.state, sim_time() - self.stopped_time, self.init_delay))
-                self.flightplan._waypoint = 0
+                self.manager._waypoint = 0
                 self.clearances.start = True
                 self.start()
             else:
@@ -209,12 +210,12 @@ class StatePlane(object):
             self.hold()
         
         
-        self.flightplan.reached(waypoint)
-        self.dynamics.set_waypoint(self.flightplan.waypoint(),self.flightplan.next_waypoint())
+        self.manager.reached(waypoint)
+        self.dynamics.set_waypoint(self.manager.waypoint(),self.manager.next_waypoint())
         
     def generate_waypoints(self):
         try:
-            self.flightplan.generate_waypoints()
+            self.manager.generate_waypoints()
         except:
             llogger.exception("Generating waypoints")
         

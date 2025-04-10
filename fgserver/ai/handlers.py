@@ -3,23 +3,25 @@ Created on 29 abr. 2020
 
 @author: julio
 '''
-from fgserver.ai.models import WayPoint
-from fgserver.ai.common import PlaneInfo, PlaneRequest
-from django.contrib.gis.geos.point import Point
-from fgserver.models import Runway, Comm, get_runway
-from fgserver.ai.dijkstra import dj_waypoints, get_next_on_runway,\
-    get_runway_exit, taxi_path, taxi_path2
-from fgserver import units
-from fgserver.helper import move, normdeg, Position, normalize, say_char,\
-    get_heading_to, get_distance
-from random import randint
-from fgserver.messages import alias
 
-import logging
+from random import randint
+
+from fgserver import units
 from fgserver.ai.actions import TuneInAction, ReadyTaxiAction, ReadBackAction,\
     RequestInboundAction, HoldingShortAction, ReadyTakeoffAction, LeavingAction,\
     ReportCircuitAction, RequestParkAction, ClearedRunwayAction,\
     CrossRunwayAction
+from fgserver.ai.common import PlaneInfo, PlaneRequest
+from fgserver.ai.consumers import FlightPlanConsumer
+from fgserver.ai.dijkstra import dj_waypoints, get_next_on_runway,\
+    get_runway_exit, taxi_path, taxi_path2
+from fgserver.ai.models import WayPoint
+from fgserver.helper import move, normdeg, Position, normalize, say_char,\
+    get_heading_to, get_distance, angle_diff
+from fgserver.messages import alias
+from fgserver.models import Runway, Comm, get_runway
+
+import logging
 
 llogger = logging.getLogger(__name__)
 
@@ -242,7 +244,10 @@ class Copilot():
         return "%s.%s" % (sf[:3],sf[3:])
     
     def airport(self):
-        return self.plane.flightplan.airport
+        if self.plane.state in self.plane.departing_states: 
+            return self.plane.manager.flightplan.departure
+        else:
+            return self.plane.manager.flightplan.arrival
     
     def check_clearances(self):
         clearances = self.plane.clearances
@@ -303,7 +308,7 @@ class Copilot():
             self.actions.append(TuneInAction(self,comm.frequency)) # Make sure we are tunned right
             self.actions.append(RequestInboundAction(self)) 
         elif self.plane.is_on_circuit() and clearances.report:
-            circ = self.circuits_helper[self.plane.flightplan.waypoint().status]
+            circ = self.circuits_helper[self.plane.plan.waypoint().status]
             if clearances.report and clearances.report == circ:
                 print("{%s-CP} check_request: queing report circuit action for %s" % (self.aircraft, circ))
                 comm = self.get_comm_by_type(self.airport(),Comm.TWR)
@@ -322,16 +327,19 @@ class FlightPlanManager():
     def __init__(self,plane,flightplan):
         self.plane = plane
         self.flightplan = flightplan
-        self.airport = flightplan.airport
+        # self.airport = flightplan.airport
         self.reset()
         
     def reset(self):
         self._waypoint = 0
         # TODO: free handler from FlightPlan.
-        self.flightplan.init()
+        self.flightplan.waypoints.all().delete()
+        self.plane.aircraft.state=2
+        self.plane.aircraft.save()
         self.handler = self.flightplan.get_handler()
         self.landing_generated = False
         self.depart_generated = False
+        self.cruise_generated = False
         self.rolling_generated = False
         self.parking_generated = False
 #         self.reached(self.waypoint())
@@ -355,7 +363,7 @@ class FlightPlanManager():
         position = self.plane.dynamics.position
         if self.plane.is_starting():
             print("{%s-FP} generating waypoints to runway %s. wp=%s" % (self.plane.aircraft, clearances.runway, self._waypoint))
-            runway = self.airport.runways.get(name=clearances.runway)
+            runway = self.flightplan.departure.runways.get(name=clearances.runway)
             self.handler.generate_taxi_waypoints(position,runway)
             self.reached(self.waypoint())
             self.plane.dynamics.set_waypoint(self.waypoint(),self.next_waypoint())    
@@ -363,37 +371,43 @@ class FlightPlanManager():
         elif self.plane.is_linedup() and not self.depart_generated:
             print("{%s-FP} generating circuit waypoints" % self.plane.aircraft)
             self.depart_generated=True
-            runway = self.airport.runways.get(name=clearances.runway)
-            self.handler.generate_circuit_waypoints(runway)
+            runway = self.flightplan.departure.runways.get(name=clearances.runway)
+            self.handler.generate_depart_waypoints(runway)
+        elif self.plane.is_climbing() and not self.cruise_generated:
+            print("{%s-FP} generating circuit waypoints" % self.plane.aircraft)
+            self.cruise_generated=True
+            self.handler.generate_cruise_waypoints()
         elif self.plane.is_cruising() and self._waypoint > 3:
             # RESET FLIGHTPLAN??
             pass
-        elif self.plane.is_approaching() and clearances.join and not self.landing_generated:
+        # TODO: implement straight-in approach
+        elif self.plane.is_approaching() and (clearances.join or clearances.straight) and not self.landing_generated:
             print("{%s-FP} generating circuit landing waypoints" % self.plane.aircraft)
             self.landing_generated=True
-            runway = self.airport.runways.get(name=clearances.runway)
+            runway = self.flightplan.arrival.runways.get(name=clearances.runway)
             self.handler.generate_landing_waypoints(runway)
         elif self.plane.is_approaching() and clearances.straight and not self.landing_generated:
             print("{%s-FP} generating straight landing waypoints" % self.plane.aircraft)
             # TODO: Por ahora generamos los normales.
             clearances.join=True
             self.landing_generated=True
-            runway = self.airport.runways.get(name=clearances.runway)
+            runway = self.flightplan.arrival.runways.get(name=clearances.runway)
             self.handler.generate_landing_waypoints(runway)
         elif self.plane.is_rolling() and not self.rolling_generated:
             print("{%s-FP} generating roling waypoints" % self.plane.aircraft)
-            runway = self.airport.runways.get(name=clearances.runway)
+            runway = self.flightplan.arrival.runways.get(name=clearances.runway)
             self.handler.generate_rolling_waypoints(position,runway)
             self.rolling_generated = True
         elif clearances.parking and not self.parking_generated:
             print("{%s-FP} generating parking waypoints" % self.plane.aircraft)
-            parking = self.airport.startups.get(pk=clearances.parking)
+            parking = self.flightplan.arrival.startups.get(pk=clearances.parking)
             nwp = self.waypoints().count() 
             self.handler.generate_parking_waypoints(position,parking.get_position())
             self.parking_generated = True
             self._waypoint = nwp
             self.plane.dynamics.set_waypoint(self.waypoint(),self.next_waypoint())
-           
+        FlightPlanConsumer.publish_plan(self.plan)
+
     def waypoint(self):
         if self.flightplan.waypoints.all().count() <= self._waypoint:
             self._waypoint=self.flightplan.waypoints.all().count()-1
@@ -407,15 +421,16 @@ class FlightPlanManager():
             return self.flightplan.waypoints.all().order_by('id')[self._waypoint+1]
         return None
 
-        
+
 class CircuitHandler():
     
-    def __init__(self,circuit):
-        self.circuit = circuit
-        self.airport = circuit.airport
-        self.aircraft = circuit.aircraft
+    def __init__(self,flightplan):
+        self.plan = flightplan
+        self.airport = flightplan.departure
+        self.aircraft = flightplan.aircraft
         self.generate_start_waypoints()
         self.status=None
+        self.radius = 2*units.NM
     
     def waypoint_reached(self,wp):
         self.status=wp.status
@@ -493,7 +508,8 @@ class CircuitHandler():
                     if taxinode.short:
                         wp = self.create_waypoint(p, "Short %s" % way.id, WayPoint.HOLD, PlaneInfo.SHORT)
                         if last_short:
-                            last_short.status=PlaneInfo.CROSS
+                            last_short.status=PlaneInfo.TAXIING
+                            last_short.type=WayPoint.TAXI
                             last_short.save()
                         last_short=wp
                     elif on_runway:
@@ -517,12 +533,30 @@ class CircuitHandler():
             self.create_waypoint(lineup, "Lineup  %s"% pos2.name, WayPoint.RWY, PlaneInfo.LINED_UP)
             position = move(lineup,pos2.bearing,50,self.apalt)
             self.create_waypoint(position, "Departure hack  %s"% pos2.name, WayPoint.RWY, PlaneInfo.DEPARTING)
+    
+    def generate_cruise_waypoints(self):
+        radius = self.radius
+        altitude = self.plan.altitude
+        straight = self.plane.aircraft.heading
+        position = self.plan.next_waypoint().get_position()
+        position = move(position,normdeg(straight+40),radius*0.7,self.apalt+altitude)
+        self.create_waypoint(position, "Cruising 2", WayPoint.POINT, PlaneInfo.CRUISING)
+        position = move(position,normdeg(straight+80),radius*0.6,self.apalt+altitude)
+        self.create_waypoint(position, "Cruising 3", WayPoint.POINT, PlaneInfo.CRUISING)
+        position = move(position,normdeg(straight+120),radius*0.6,self.apalt+altitude)
+        self.create_waypoint(position, "Cruising 4", WayPoint.POINT, PlaneInfo.CRUISING)
+        position = move(position,normdeg(straight+150),radius*0.6,self.apalt+altitude)
+        self.create_waypoint(position, "Cruising 5", WayPoint.POINT, PlaneInfo.CRUISING)
+        position = move(position,normdeg(straight+190),radius*0.6,self.apalt+altitude)
+        self.create_waypoint(position, "Approaching 1", WayPoint.POINT, PlaneInfo.APPROACHING)
+        position = move(position,normdeg(straight+230),radius*0.6,self.apalt+altitude)
+        self.create_waypoint(position, "Approaching 2", WayPoint.POINT, PlaneInfo.APPROACHING)
 
-    def generate_circuit_waypoints(self, runway):
-        radius = self.circuit.radius
-        altitude = self.circuit.altitude
+    def generate_depart_waypoints(self, runway):
+        
+        altitude = self.plan.altitude
         rwystart = move(runway.position(), normdeg(runway.bearing-180), runway.length/2,self.apalt)
-        linedup = self.circuit.waypoints.filter(status = PlaneInfo.LINED_UP).last()
+        linedup = self.plan.waypoints.filter(status = PlaneInfo.LINED_UP).last()
         straight=runway.bearing
         if linedup:
             print("{%s-CH} using startup waypoint %s" % (self.aircraft, linedup,) )
@@ -537,24 +571,12 @@ class CircuitHandler():
         position = move(position,straight,500,self.apalt+30)
         self.create_waypoint(position, "Climbing %s" % runway.name, WayPoint.RWY, PlaneInfo.CLIMBING)
         #self.create_waypoint(position, "Departure %s"%runway.name, WayPoint.RWY, PlaneInfo.CLIMBING)
-        position = move(position,straight,radius,self.apalt+altitude)
-        self.create_waypoint(position, "Cruising", WayPoint.POINT, PlaneInfo.CRUISING)
-        position = move(position,normdeg(straight+40),radius*0.7,self.apalt+altitude)
-        self.create_waypoint(position, "Cruising 2", WayPoint.POINT, PlaneInfo.CRUISING)
-        position = move(position,normdeg(straight+80),radius*0.6,self.apalt+altitude)
-        self.create_waypoint(position, "Cruising 3", WayPoint.POINT, PlaneInfo.CRUISING)
-        position = move(position,normdeg(straight+120),radius*0.6,self.apalt+altitude)
-        self.create_waypoint(position, "Cruising 4", WayPoint.POINT, PlaneInfo.CRUISING)
-        position = move(position,normdeg(straight+150),radius*0.6,self.apalt+altitude)
-        self.create_waypoint(position, "Cruising 5", WayPoint.POINT, PlaneInfo.CRUISING)
-        position = move(position,normdeg(straight+190),radius*0.6,self.apalt+altitude)
-        self.create_waypoint(position, "Cruising 5", WayPoint.POINT, PlaneInfo.APPROACHING)
-        position = move(position,normdeg(straight+230),radius*0.6,self.apalt+altitude)
-        self.create_waypoint(position, "Cruising 6", WayPoint.POINT, PlaneInfo.APPROACHING)
+        position = move(position,straight,self.radius,self.apalt+altitude)
+        self.create_waypoint(position, "Cruising start", WayPoint.POINT, PlaneInfo.CRUISING)
 
     def generate_landing_waypoints(self,runway):
-        radius = self.circuit.radius
-        altitude = self.circuit.altitude
+        radius = self.radius
+        altitude = self.plan.altitude
         straight=runway.bearing
         reverse= normdeg(straight-180)
         left = normdeg(straight-90)
@@ -588,7 +610,29 @@ class CircuitHandler():
     def create_waypoint(self,position, name, atype, status):
         try:
             name = name[:20] # truncate to avoid overflowing the field.
-            return self.circuit.create_waypoint(position,name,atype,status)
+            return self.plan.create_waypoint(position,name,atype,status)
         except:
             llogger.exception("Al intentar con %s" % name)
 
+class TripHandler(CircuitHandler):
+    def generate_cruise_waypoints(self):
+        
+        altitude = self.plan.altitude
+        position = self.plan.waypoints.last().get_position()
+        position_to = self.plan.arrival.get_position()
+        bearing = get_heading_to(position,position_to)
+        course = self.plan.aircraft.heading
+        turns = 0
+        while angle_diff(bearing,course) > 40:
+            turns = turns +1
+            course = normdeg(course+20)
+            position = move(position,course,0.5*units.NM,self.apalt+altitude)
+            self.create_waypoint(position, "Cruising turn %d" % turns, WayPoint.POINT, PlaneInfo.CRUISING)
+            bearing = get_heading_to(position,position_to)
+
+        position = move(position_to,normdeg(bearing-180),22*units.NM,altitude)
+        self.create_waypoint(position, "Cruising Long", WayPoint.POINT, PlaneInfo.CRUISING)
+        position = move(position,normdeg(bearing),2*units.NM,altitude)
+        self.create_waypoint(position, "Approaching 1", WayPoint.POINT, PlaneInfo.APPROACHING)
+        position = move(position,normdeg(bearing),5*units.NM,self.apalt+altitude)
+        self.create_waypoint(position, "Approaching 2", WayPoint.POINT, PlaneInfo.APPROACHING)

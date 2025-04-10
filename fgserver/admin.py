@@ -9,7 +9,7 @@ from django.contrib.admin.options import ModelAdmin, TabularInline,\
     StackedInline
 from fgserver.models import Airport, Runway, Aircraft, Comm, StartupLocation,\
     MetarObservation, Order, AircraftStatus, Request
-from fgserver.ai.models import Circuit, TaxiNode, TaxiWay
+from fgserver.ai.models import FlightPlan, TaxiNode, TaxiWay
 from fgserver.atc.models import Tag
 from django.contrib.admin.decorators import register
 
@@ -31,8 +31,8 @@ class RunwayInline(TabularInline):
     model=Runway
     extra=0
 
-class CircuitInline(TabularInline):
-    model=Circuit
+class FlightPlanInline(TabularInline):
+    model=FlightPlan
     extra=0
 class TaxiWayInline(TabularInline):
     model=TaxiWay
@@ -61,7 +61,7 @@ class AirportAdmin(ModelAdmin):
     search_fields = ['icao','name']
     list_display=('icao','name','lat','lon', 'active')
     list_filter = ('active',) 
-    inlines = [RunwayInline,CommInline, StartupInline, MetarObservationInline, CircuitInline, TaxiWayInline]
+    inlines = [RunwayInline,CommInline, StartupInline, MetarObservationInline, TaxiWayInline]
     actions = [activate, deactivate]
 class RunwayAdmin(ModelAdmin):
     search_fields = ['airport__icao','airport__name']
@@ -69,7 +69,7 @@ class RunwayAdmin(ModelAdmin):
 
 class AircraftAdmin(ModelAdmin):
     list_display=('callsign','lat','lon','altitude','last_request','last_order','state')
-    inlines = [AircraftStatusInline, TagInline]
+    inlines = [AircraftStatusInline, TagInline, FlightPlanInline]
 
 @register(Order)
 class OrderAdmin(ModelAdmin):

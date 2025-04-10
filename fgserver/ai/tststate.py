@@ -12,7 +12,6 @@ django.setup()
 
 
 
-from fgserver.ai.models import Circuit
 from fgserver.messages import alias, sim_time
 from fgserver.ai.common import ReceivedOrder, PlaneRequest
 from fgserver.ai.state_plane import StatePlane
@@ -32,54 +31,54 @@ def init_plane(plan):
 
 def process_request(plane,request):
     callsign = plane.aircraft.callsign
-                
-                if request.req == alias.TUNE_IN:
-                    freq = int(request.freq.replace(".",''))
-                    comm = plane.copilot.get_comm_by_freq(airport, freq)
-                    plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.TUNE_OK, atc=comm.identifier, freq=request.freq)
-                
-                elif request.req == alias.TAXI_READY:
-                    comm = plane.copilot.get_comm_by_type(airport, Comm.TWR) 
-                    rwy = airport.active_runway().name
-                    plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.TAXI_TO, rwy =rwy, freq=comm.get_FGfreq(),atc=comm.identifier, hld=1,short=1)
-                
-                elif request.req == alias.HOLDING_SHORT:
-                    rwy = airport.active_runway().name
-                    if not busy:
-                        plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.LINEUP, rwy=rwy)
-                    else:
-                        plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.WAIT, rwy=rwy)
-                elif request.req == alias.READY_TAKEOFF:
-                    rwy = airport.active_runway().name
-                    if not busy or busy == plane:
-                        plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.CLEAR_TK, rwy=rwy)
-                        busy = plane
-                    else:
-                        plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.WAIT, rwy=rwy)
-                elif request.req == alias.LEAVING:
-                    if busy and busy == plane:
-                        busy = False
-                elif request.req == alias.INBOUND_APPROACH:
-                    rwy = airport.active_runway().name
-                    plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.JOIN_CIRCUIT, rwy=rwy, cirt=alias.CIRCUIT_LEFT,\
-                                          cirw = alias.CIRCUIT_CROSSWIND, alt = plan.altitude )
-                
-                elif request.req == alias.CIRCUIT_CROSSWIND:
-                    plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.REPORT_CIRCUIT, rwy=rwy,cirw = alias.CIRCUIT_DOWNWIND)
-                
-                elif request.req == alias.CIRCUIT_DOWNWIND:
-                    plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.REPORT_CIRCUIT, rwy=rwy,cirw = alias.CIRCUIT_BASE)
-                
-                elif request.req == alias.CIRCUIT_BASE:
-                    plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.REPORT_CIRCUIT, rwy=rwy,cirw = alias.CIRCUIT_FINAL)
-                
-                elif request.req == alias.CIRCUIT_FINAL:
-                    if not busy or busy == plane:
-                        plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.CLEAR_LAND, rwy=rwy,)
-                        busy = plane 
-                    else:
-                        plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.GO_AROUND, rwy=rwy,cirw = alias.CIRCUIT_CROSSWIND)
-                        plane._rerouted = True
+    airport = request.receiver.airport
+    if request.req == alias.TUNE_IN:
+        freq = int(request.freq.replace(".",''))
+        comm = plane.copilot.get_comm_by_freq(airport, freq)
+        plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.TUNE_OK, atc=comm.identifier, freq=request.freq)
+    
+    elif request.req == alias.TAXI_READY:
+        comm = plane.copilot.get_comm_by_type(airport, Comm.TWR) 
+        rwy = airport.active_runway().name
+        plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.TAXI_TO, rwy =rwy, freq=comm.get_FGfreq(),atc=comm.identifier, hld=1,short=1)
+    
+    elif request.req == alias.HOLDING_SHORT:
+        rwy = airport.active_runway().name
+        if not busy:
+            plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.LINEUP, rwy=rwy)
+        else:
+            plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.WAIT, rwy=rwy)
+    elif request.req == alias.READY_TAKEOFF:
+        rwy = airport.active_runway().name
+        if not busy or busy == plane:
+            plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.CLEAR_TK, rwy=rwy)
+            busy = plane
+        else:
+            plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.WAIT, rwy=rwy)
+    elif request.req == alias.LEAVING:
+        if busy and busy == plane:
+            busy = False
+    elif request.req == alias.INBOUND_APPROACH:
+        rwy = airport.active_runway().name
+        plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.JOIN_CIRCUIT, rwy=rwy, cirt=alias.CIRCUIT_LEFT,\
+                                cirw = alias.CIRCUIT_CROSSWIND, alt = plan.altitude )
+    
+    elif request.req == alias.CIRCUIT_CROSSWIND:
+        plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.REPORT_CIRCUIT, rwy=rwy,cirw = alias.CIRCUIT_DOWNWIND)
+    
+    elif request.req == alias.CIRCUIT_DOWNWIND:
+        plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.REPORT_CIRCUIT, rwy=rwy,cirw = alias.CIRCUIT_BASE)
+    
+    elif request.req == alias.CIRCUIT_BASE:
+        plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.REPORT_CIRCUIT, rwy=rwy,cirw = alias.CIRCUIT_FINAL)
+    
+    elif request.req == alias.CIRCUIT_FINAL:
+        if not busy or busy == plane:
+            plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.CLEAR_LAND, rwy=rwy,)
+            busy = plane 
+        else:
+            plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.GO_AROUND, rwy=rwy,cirw = alias.CIRCUIT_CROSSWIND)
+            plane._rerouted = True
  
     
 def dummy_atc(icao):

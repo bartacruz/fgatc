@@ -54,3 +54,33 @@ class StatePlaneConsumer(JsonWebsocketConsumer):
         channel_layer = get_channel_layer()
         #llogger.debug("Updater: sending %s" % message)
         async_to_sync(channel_layer.group_send)("stateplanes",message)
+
+class FlightPlanConsumer(JsonWebsocketConsumer):
+    groups = ["flightplans"]
+
+    def connect(self):
+        self.accept()
+        llogger.debug("Connect to %s" % self)
+    
+    def disconnect(self, code):
+        llogger.debug("Disconnect from %s: %s" % (self,code))
+        WebsocketConsumer.disconnect(self, code)
+        
+    def plane_update(self,event):
+        self.send_json(event,)
+
+    def receive_json(self, content):
+        llogger.debug("Receive from %s. data=%s" % (self, content))
+        
+    @staticmethod
+    def publish_plan(plan):
+        wps = plan.waypoints.all().order_by('id')
+        # d = json.loads(serialize('json',wps ))
+        ser = {'callsign': plan.aircraft.callsign,
+               'wps': wps
+               }
+        message = {'type': 'flightplan_update', 'Model':'FlightPlan','data':ser}
+    
+        channel_layer = get_channel_layer()
+        #llogger.debug("Updater: sending %s" % message)
+        async_to_sync(channel_layer.group_send)("flightplans",message)
