@@ -11,7 +11,7 @@ import time
 from django.utils import timezone
 django.setup()
 from fgserver.server import utils
-from fgserver.ai.consumers import StatePlaneConsumer
+from fgserver.ai.consumers import StatePlaneConsumer, FlightPlanConsumer
 from fgserver.ai.dynamics import TurboPropDynamicManager
 from fgserver.ai.state_plane import StatePlane
 from fgserver.models import Airport, Order
@@ -55,14 +55,6 @@ def dummy_atc(icao, time_factor=2):
         
         time.sleep(.1/time_factor) # 100ms loop, time-factorized 
         
-        atcpos = get_pos_msg(airport)
-        
-        strorder = atcpos.get_order() # get last order from ATC
-        if strorder:
-            order = ReceivedOrder.from_string(strorder)
-        else:
-            order = None
-        
         for plane in planes: # planes loop
             
             status = plane.update(sim_time())
@@ -76,9 +68,11 @@ def dummy_atc(icao, time_factor=2):
                 StatePlaneConsumer.publish_plane(plane) # publish to map!
             
             process_message(pos) # check the Pos msg for requests
+            order = Order.objects.filter(receiver=plane.aircraft, expired=False, received=False, acked=False, lost=False).first()
+            if order:
+                received= ReceivedOrder.from_string(order.get_order())
+                plane.process_order(received)
             
-            if order and order.to ==plane.aircraft.callsign:
-                plane.process_order(order)
 
 if __name__ == '__main__':
     import sys
@@ -87,6 +81,6 @@ if __name__ == '__main__':
     if len(sys.argv) >= 2:
         icao = sys.argv[1]
     if len(sys.argv) >= 3:
-        factor = sys.argv[2]
+        factor = int(sys.argv[2])
     dummy_atc(icao, factor)
 
