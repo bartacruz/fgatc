@@ -33,7 +33,7 @@ $.widget("fgatc.bench", {
 	 	$(this.element).find(".selected-callsign").html(callsign);
 	 },
 	 fill_plane: function(plane) {
-	 	console.debug("plane:",plane);
+	 	//console.debug("plane:",plane);
 	 	$("#bench .properties .lat").html(round(plane.position[0],5));
 	 	$("#bench .properties .lon").html(round(plane.position[1],5));
 	 	$("#bench .properties .altitude").html(parseInt(plane.altitude));

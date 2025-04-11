@@ -11,4 +11,5 @@ from fgserver.ai import consumers as cc
 websocket_urlpatterns = [
     path('aircrafts', consumers.AircraftConsumer.as_asgi()),
     path('stateplanes', cc.StatePlaneConsumer.as_asgi()),
+    path('flightplans', cc.FlightPlanConsumer.as_asgi()),
 ]

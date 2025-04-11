@@ -12,7 +12,7 @@ from fgserver.ai.actions import TuneInAction, ReadyTaxiAction, ReadBackAction,\
     ReportCircuitAction, RequestParkAction, ClearedRunwayAction,\
     CrossRunwayAction
 from fgserver.ai.common import PlaneInfo, PlaneRequest
-from fgserver.ai.consumers import FlightPlanConsumer
+from fgserver.map.consumers import AircraftConsumer
 from fgserver.ai.dijkstra import dj_waypoints, get_next_on_runway,\
     get_runway_exit, taxi_path, taxi_path2
 from fgserver.ai.models import WayPoint
@@ -168,6 +168,7 @@ class Copilot():
         elif order.ord==alias.CIRCUIT_STRAIGHT:
             self.actions.append(ReadBackAction(self, order))
             clearances.straight = True
+            clearances.join = True
             clearances.runway = order.rwy
             clearances.report = order.cirw
             llogger.debug("{%s-CP}(%s) joining straight" % (self.aircraft, self.plane.state))
@@ -308,7 +309,7 @@ class Copilot():
             self.actions.append(TuneInAction(self,comm.frequency)) # Make sure we are tunned right
             self.actions.append(RequestInboundAction(self)) 
         elif self.plane.is_on_circuit() and clearances.report:
-            circ = self.circuits_helper[self.plane.plan.waypoint().status]
+            circ = self.circuits_helper[self.plane.manager.waypoint().status]
             if clearances.report and clearances.report == circ:
                 print("{%s-CP} check_request: queing report circuit action for %s" % (self.aircraft, circ))
                 comm = self.get_comm_by_type(self.airport(),Comm.TWR)
@@ -380,19 +381,11 @@ class FlightPlanManager():
         elif self.plane.is_cruising() and self._waypoint > 3:
             # RESET FLIGHTPLAN??
             pass
-        # TODO: implement straight-in approach
-        elif self.plane.is_approaching() and (clearances.join or clearances.straight) and not self.landing_generated:
+        elif self.plane.is_approaching() and clearances.join and not self.landing_generated:
             print("{%s-FP} generating circuit landing waypoints" % self.plane.aircraft)
             self.landing_generated=True
             runway = self.flightplan.arrival.runways.get(name=clearances.runway)
-            self.handler.generate_landing_waypoints(runway)
-        elif self.plane.is_approaching() and clearances.straight and not self.landing_generated:
-            print("{%s-FP} generating straight landing waypoints" % self.plane.aircraft)
-            # TODO: Por ahora generamos los normales.
-            clearances.join=True
-            self.landing_generated=True
-            runway = self.flightplan.arrival.runways.get(name=clearances.runway)
-            self.handler.generate_landing_waypoints(runway)
+            self.handler.generate_landing_waypoints(runway, clearances)
         elif self.plane.is_rolling() and not self.rolling_generated:
             print("{%s-FP} generating roling waypoints" % self.plane.aircraft)
             runway = self.flightplan.arrival.runways.get(name=clearances.runway)
@@ -406,7 +399,7 @@ class FlightPlanManager():
             self.parking_generated = True
             self._waypoint = nwp
             self.plane.dynamics.set_waypoint(self.waypoint(),self.next_waypoint())
-        FlightPlanConsumer.publish_plan(self.plan)
+        AircraftConsumer.publish_plan(self.flightplan)
 
     def waypoint(self):
         if self.flightplan.waypoints.all().count() <= self._waypoint:
@@ -431,6 +424,7 @@ class CircuitHandler():
         self.generate_start_waypoints()
         self.status=None
         self.radius = 2*units.NM
+        AircraftConsumer.publish_plan(flightplan)
     
     def waypoint_reached(self,wp):
         self.status=wp.status
@@ -574,7 +568,7 @@ class CircuitHandler():
         position = move(position,straight,self.radius,self.apalt+altitude)
         self.create_waypoint(position, "Cruising start", WayPoint.POINT, PlaneInfo.CRUISING)
 
-    def generate_landing_waypoints(self,runway):
+    def generate_landing_waypoints(self,runway,clearances):
         radius = self.radius
         altitude = self.plan.altitude
         straight=runway.bearing
@@ -583,14 +577,24 @@ class CircuitHandler():
         right = normdeg(straight+90)
         rwystart = move(runway.position(), reverse, runway.length/2,self.apalt)
         rwyend = move(runway.position(), straight, runway.length/2,self.apalt)
-        position = move(rwyend,right,radius/5,self.apalt+altitude)
-        self.create_waypoint(position, "Crosswind %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_CROSSWIND)
-        position = move(rwyend,left,radius,self.apalt+altitude)
-        self.create_waypoint(position, "Downwind %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_DOWNWIND)
-        position = move(position,reverse,radius*1.2+runway.length,self.apalt+altitude)
-        self.create_waypoint(position, "Base %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_BASE)
-        position = move(position,right,radius,self.apalt+500*units.FT)
-        self.create_waypoint(position, "Final 1 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_FINAL)
+        if clearances.straight:
+            position = move(rwystart,reverse,radius*2,self.apalt+altitude)
+            self.create_waypoint(position, "Straight 1 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_STRAIGHT)
+            position = move(rwystart,reverse,radius*1.2,self.apalt+altitude*0.7)
+            self.create_waypoint(position, "Straight 2 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_STRAIGHT)
+            position = move(position,straight,radius/3,self.apalt+500*units.FT)
+            self.create_waypoint(position, "Final 1 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_FINAL)
+        else:
+            position = move(rwyend,right,radius/5,self.apalt+altitude)
+            self.create_waypoint(position, "Crosswind %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_CROSSWIND)
+            position = move(rwyend,left,radius,self.apalt+altitude)
+            self.create_waypoint(position, "Downwind %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_DOWNWIND)
+            position = move(position,reverse,radius*1.2+runway.length,self.apalt+altitude)
+            self.create_waypoint(position, "Base %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_BASE)
+            position = move(position,right,radius,self.apalt+500*units.FT)
+            self.create_waypoint(position, "Final 1 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_FINAL)
+
+        
         position = move(position,straight,radius/3,self.apalt+350*units.FT)
         self.create_waypoint(position, "Final 2 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.LANDING)
         position = move(position,straight,radius/3,self.apalt+250*units.FT)
@@ -630,9 +634,9 @@ class TripHandler(CircuitHandler):
             self.create_waypoint(position, "Cruising turn %d" % turns, WayPoint.POINT, PlaneInfo.CRUISING)
             bearing = get_heading_to(position,position_to)
 
-        position = move(position_to,normdeg(bearing-180),22*units.NM,altitude)
+        position = move(position_to,normdeg(bearing-180),12*units.NM,altitude)
         self.create_waypoint(position, "Cruising Long", WayPoint.POINT, PlaneInfo.CRUISING)
         position = move(position,normdeg(bearing),2*units.NM,altitude)
         self.create_waypoint(position, "Approaching 1", WayPoint.POINT, PlaneInfo.APPROACHING)
-        position = move(position,normdeg(bearing),5*units.NM,self.apalt+altitude)
+        position = move(position,normdeg(bearing),5*units.NM,altitude)
         self.create_waypoint(position, "Approaching 2", WayPoint.POINT, PlaneInfo.APPROACHING)

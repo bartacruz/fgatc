@@ -45,7 +45,7 @@ def dummy_atc(icao, time_factor=2):
     utils.ORDER_MAX_LIFESPAN/(time_factor*2)
     
     ''' Loads all available circuits on the selected airport'''
-    for plan in airport.circuits.filter(enabled=True):
+    for plan in airport.departures.filter(enabled=True):
         plane = init_plane(plan)
         planes.append(plane)
 #         plane.start()
@@ -81,5 +81,12 @@ def dummy_atc(icao, time_factor=2):
                 plane.process_order(order)
 
 if __name__ == '__main__':
-    dummy_atc("SABE", 3)
+    import sys
+    icao = 'SABE'
+    factor = 3
+    if len(sys.argv) >= 2:
+        icao = sys.argv[1]
+    if len(sys.argv) >= 3:
+        factor = sys.argv[2]
+    dummy_atc(icao, factor)
 

@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from fgserver import units, llogger, get_qnh
 import fgserver
-from fgserver.ai.planes import PlaneInfo
+from fgserver.ai.common import PlaneInfo
 from fgserver.helper import  get_distance, angle_diff, get_heading_to_360
 from fgserver.messages import alias
 from fgserver.models import Order, Airport, Aircraft, Request

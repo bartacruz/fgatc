@@ -11,6 +11,7 @@ var _show_airports=false;
 var aircrafts_layer = L.layerGroup();
 var airports_layer = L.layerGroup();
 var airport_details_layer = L.layerGroup();
+var flight_details_layer = L.layerGroup();
 var route_layer = L.layerGroup();
 
 function showcords(a,b,c){
@@ -131,6 +132,35 @@ function update_airports(airports) {
 		}
 	}
 }
+var _flightplans={};
+function update_flightplan(plan) {
+	console.debug("update flightplan",plan);
+	var plan_layer = _flightplans[plan.callsign];
+	if (! plan_layer) {
+		plan_layer = L.layerGroup();
+		_flightplans[plan.callsign]=plan_layer;
+		plan_layer.addTo(route_layer);
+		console.debug("Created new plan layer for",plan.callsign);
+	}
+	plan_layer.clearLayers();
+	var path =[];
+	for (var i in plan.wps) {
+		var wp = plan.wps[i];
+
+		var wpicon = L.icon({
+		    iconUrl: static_url + 'images/wpred.png',
+		    className: "wp-"+wp.fields.type,
+		    iconSize:[10,10],
+		    iconAnchor:[5,5],
+		});
+		var pos = [wp.fields.lat,wp.fields.lon]
+		path.push(pos);
+		L.marker(pos,{title:wp.fields.name, icon:wpicon}).addTo(plan_layer);
+		// var marker = L.marker(pos,{icon:wpicon,title:wp.fields.name}).addTo(plan_layer);
+	}
+	console.debug(path);
+	var line = L.polyline(path, {color: 'red', weight:2, lineJoin:'round'}).addTo(plan_layer);
+}
 function update_aircrafts(aircrafts) {
 	//console.debug("update aircraft",data);
 	var ceeses=[]
@@ -148,7 +178,7 @@ function update_aircrafts(aircrafts) {
 		}
 	}
 	for (i in callsigns) {
-		$('#cs_'+callsigns[i]).remove();
+		$('#cs_'+callsigns[i]).clear();
 	}
 	callsigns = ceeses;
 }
@@ -188,7 +218,7 @@ function update_plan(data,textStatus,jqXHR) {
 		_route.setLatLngs(path);
 		_route.redraw();
 	} else {
-		_route = L.polyline(path, {color: 'red', weight:3, lineJoin:'round'}).addTo(map);		
+		_route = L.polyline(path, {color: 'red', weight:3, lineJoin:'round'}).addTo(route_layer);		
 	}
 	map.fitBounds(_route.getBounds());
 	

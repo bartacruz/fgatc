@@ -1,6 +1,5 @@
 
 var fgatcws=null;
-
 var _map_start=map_start; // backup method before override
 function map_start(){
 	var url = "ws://" + window.location.host+ "/aircrafts";
@@ -16,6 +15,8 @@ function map_start(){
 			update_airports(message.data);
 		} else if (message.type=='aircrafts_update') {
     		update_aircrafts(message.data);
+		} else if (message.type=='flightplan_update') {
+    		update_flightplan(message.data);
 		}
     }
 	map.on({moveend:ws_update_pos});

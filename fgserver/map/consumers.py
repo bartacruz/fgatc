@@ -9,7 +9,9 @@ from uuid import uuid4
 from channels.layers import get_channel_layer
 import json
 from django.core.serializers import serialize
+from fgserver.ai.models import FlightPlan
 from fgserver.models import Aircraft, Airport
+
 from asgiref.sync import async_to_sync
 from datetime import timedelta
 from django.utils import timezone
@@ -46,6 +48,7 @@ class AircraftConsumer(JsonWebsocketConsumer):
         # Update airports only if consumer changed location or options
         if self.dirty:
             self.update_airports()
+            self.update_flightplans()
             self.dirty = False
         
     def update_aircrafts(self):
@@ -67,6 +70,22 @@ class AircraftConsumer(JsonWebsocketConsumer):
 
     def aircrafts_update(self,event):
         self.send_json(event,)
+    
+    def update_flightplans(self):
+        aircrafts = Aircraft.objects.filter(lat__gte=self.bounds[1], lon__gte=self.bounds[0], lat__lte=self.bounds[3],lon__lte=self.bounds[2])
+        for a in aircrafts:
+            plan= a.plans.filter(enabled=True).first()
+            if plan:
+                wps = plan.waypoints.all().order_by('id')
+                ser = {'callsign': plan.aircraft.callsign,
+                    'wps': json.loads(serialize('json',wps))
+                    }
+                self.update_flightplan(ser)
+
+    def update_flightplan(self,event):
+        message = {'type': 'flightplan_update', 'Model':'FlightPlan','data':event}
+        llogger.debug("update_flightplan: sending %s" % message)
+        self.send_json(message,)
 
     def receive_json(self, content):
         llogger.debug("Receive from %s. thread=%s, data=%s" % (self,Updater.thread,content))
@@ -78,4 +97,16 @@ class AircraftConsumer(JsonWebsocketConsumer):
         self.dirty = True # new coords, need update.
             
 
+    @staticmethod
+    def publish_plan(plan):
+        wps = plan.waypoints.all().order_by('id')
+        # d = json.loads(serialize('json',wps ))
+        ser = {'callsign': plan.aircraft.callsign,
+               'wps': json.loads(serialize('json',wps))
+               }
         
+        message = {'type': 'update_flightplan','data':ser}
+        
+        channel_layer = get_channel_layer()
+        llogger.debug("update_flightplan: sending %s" % message)
+        async_to_sync(channel_layer.group_send)("aircrafts",message)   

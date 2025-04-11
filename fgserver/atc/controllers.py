@@ -7,7 +7,7 @@ from fgserver.atc.models import Tag
 from fgserver.models import Order, Comm, Request, Cache, Airport
 from django.utils import timezone
 from fgserver.messages import alias
-from fgserver.ai.planes import PlaneInfo
+from fgserver.ai.common import PlaneInfo
 from random import randint
 from fgserver import get_qnh, units, get_controllers, setInterval,\
     get_metar_cycle
