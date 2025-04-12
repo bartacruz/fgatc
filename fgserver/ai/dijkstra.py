@@ -210,14 +210,17 @@ def get_next_on_runway(pos, runway, heading):
     points = list(runway.airport.taxinodes.filter(on_runway=True))
     points.sort(key = delta)
     print('on runway:', [x.name for x in points])
-    return points[0]
+    if len(points):
+        return points[0]
+    return None
 
 def get_runway_exit(runway, pos, heading):
     if isinstance(pos, Position):
         pos = pos.to_point()
     
     first = get_next_on_runway(pos, runway, heading)
-    
+    if not first:
+        return []
     # Get short nodes, sort by angle difference and distance
     s = list(runway.airport.taxinodes.filter(short=True))    
     print("shorts",s)
@@ -402,7 +405,8 @@ def dj_waypoints(airport, start, endp, start_on_rwy=False,end_on_rwy=False):
     routed = list(set(routed))
     vstart = None
     vend = None
-    
+    if not len(routed):
+        return []
     # loop on routed points to find closest to start and end.
     for ident in routed:
         v = graph.get_vertex(ident)
@@ -413,6 +417,7 @@ def dj_waypoints(airport, start, endp, start_on_rwy=False,end_on_rwy=False):
         if (not end_on_rwy or ident in runway_points)  and (not vend or endp.distance(vend.point) > endp.distance(p)):
             #print("vend=",ident)
             vend = v
+    
     print("Searching from %s to %s" % (vstart,vend))
     dijkstra(graph, vstart, vend) 
     

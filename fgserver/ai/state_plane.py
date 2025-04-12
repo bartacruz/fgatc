@@ -88,14 +88,14 @@ class StatePlane(object):
         self.machine.add_transition('cross', 'crossing', 'taxiing', conditions=[lambda: self.clearances.cross])
         
         
+        self.machine.add_transition('depart', 'taxiing', 'linedup', conditions=[lambda: not self.manager.depart_generated],after=['generate_waypoints','depart'])
         self.machine.add_transition('depart', 'linedup', 'departing', conditions=[lambda: self.clearances.take_off ],after=['generate_waypoints','depart'])
         self.machine.add_transition('depart', 'short', 'taxiing', conditions=[lambda: self.clearances.lineup or self.clearances.take_off])
-        self.machine.add_transition('depart', '*', 'linedup', conditions=[lambda: not self.manager.depart_generated],after=['generate_waypoints','depart'])
         self.machine.add_transition('depart', '*', 'linedup', conditions=[lambda: not self.clearances.take_off])
         
         
         self.machine.add_transition('climb', 'departing', 'climbing', after=['generate_waypoints'])
-        
+
         self.machine.add_transition('cruise', '*', 'cruising')
         
         self.machine.add_transition('approach', ['approaching','cruising'], 'approaching', conditions=[lambda: self.clearances.join],after=['generate_waypoints'])
@@ -194,11 +194,11 @@ class StatePlane(object):
         elif waypoint.status == PlaneInfo.CROSS:
             self.cross()
         elif waypoint.status == PlaneInfo.LINED_UP:
-            self.state = 'linedup'
+            # self.state = 'linedup'
             self.depart()
-        elif waypoint.status == PlaneInfo.CLIMBING:
+        elif waypoint.status == PlaneInfo.CLIMBING and not self.is_climbing():
             self.climb()
-        elif waypoint.status == PlaneInfo.CRUISING:
+        elif waypoint.status == PlaneInfo.CRUISING and not self.is_cruising():
             self.cruise()
         elif waypoint.status == PlaneInfo.APPROACHING:
             self.approach()
