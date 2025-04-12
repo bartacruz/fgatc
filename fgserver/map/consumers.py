@@ -83,7 +83,8 @@ class AircraftConsumer(JsonWebsocketConsumer):
                 self.update_flightplan(ser)
 
     def update_flightplan(self,event):
-        message = {'type': 'flightplan_update', 'Model':'FlightPlan','data':event}
+        data = event.get('data',event)
+        message = {'type': 'flightplan_update', 'Model':'FlightPlan','data':data}
         llogger.debug("update_flightplan: sending %s" % message)
         self.send_json(message,)
 
