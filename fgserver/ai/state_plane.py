@@ -125,7 +125,7 @@ class StatePlane(object):
         # HACK
         self.dynamics.position = self.manager.waypoint().get_position()
         self.dynamics.set_waypoint(self.manager.waypoint(),self.manager.next_waypoint())
-        
+        self.jammed = False
         
         
     def process_order(self,order):
@@ -133,12 +133,15 @@ class StatePlane(object):
     
             
     def update(self,time):
+        # Jam detection
         ahead = PositionMessages.get_near(self.aircraft.callsign, 10, True)
-        if len(ahead) and self.dynamics.props.speed > 0:
+        if not self.jammed and len(ahead) and self.dynamics.props.speed > 0:
             llogger.debug("[%s] Traffic ahead while at %s. Waiting..." % (self.aircraft.callsign,self.dynamics.props.speed,))
-            self.dynamics.wait(5)
-        elif self.dynamics._waiting:
+            self.jammed = True
+            self.dynamics.wait(max(5, self.dynamics._waiting))
+        elif self.jammed and not len(ahead):
             llogger.debug("[%s] No traffic ahead. Resuming at %s" % (self.aircraft.callsign,self._bkp_speed,))
+            self.jammed = False
             self.dynamics._waiting=0
 
         self.dynamics.update(time)
