@@ -10,13 +10,12 @@ import threading
 
 from django.conf import settings
 from django.utils import timezone
-
+from random import randint
 from fgserver.celery import app
 from fgserver.atc.models import Order
 from fgserver.server.utils import process_message
 from fgserver.messages import sim_time, PositionMessages
 from fgserver.ai.state_plane import StatePlane
-from fgserver.ai.dynamics import TurboPropDynamicManager
 from fgserver.ai.consumers import StatePlaneConsumer
 from fgserver.ai.common import ReceivedOrder
 
@@ -25,7 +24,7 @@ loop_enabled = True
 
 def init_plane(plan):
     ''' Inits a state plane, with a Start clearance and an initial push'''
-    plane = StatePlane(plan.aircraft, TurboPropDynamicManager, init_delay=30)
+    plane = StatePlane(plan, init_delay=randint(20,120))
     plane.clearances.start = True
     #plane.dynamics.wait(randint(5,60))
     plane.update(sim_time())
@@ -35,7 +34,7 @@ def init_plane(plan):
 def stateplanes_loop():
     from fgserver.ai.models import FlightPlan
     global loop_enabled
-    delay = getattr(settings,'FGATC_CIRCUITS_DELAY',0.5)
+    delay = getattr(settings,'FGATC_CIRCUITS_DELAY',0.2)
     llogger.info('Starting AI stateplanes loop')
     planes = {}
     while loop_enabled:

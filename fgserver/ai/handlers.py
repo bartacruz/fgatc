@@ -197,7 +197,7 @@ class Copilot():
             self.plane.park()
             self.plane.dynamics.wait(30)
             
-            print("{%s-CP}(%s) park called %s (%s)" % (self.aircraft, self.plane.state, self.plane.state,clearances.parking))
+            llogger.debug("{%s-CP}(%s) park called %s (%s)" % (self.aircraft, self.plane.state, self.plane.state,clearances.parking))
         #llogger.debug("{%s-CP}(%s) clearances out:%s" % (self.aircraft, self.plane.state, self.plane.clearances))
         
     def new_request(self,what):
@@ -232,7 +232,7 @@ class Copilot():
             
         if self.plane.is_rejoining():
             llogger.debug("{%s-CP} Plane is rejoining, finding waypoint" % self.aircraft)
-            wp = self.plane.flightplan.waypoints().filter(status=PlaneInfo.APPROACHING).last()
+            wp = self.plane.flightplan.waypoints.filter(status=PlaneInfo.APPROACHING).last()
             self.plane.clearances.report=alias.CIRCUIT_CROSSWIND
             self.plane.flightplan.reroute(wp)
             llogger.debug("{%s-CP} Waypoint found. Setting course to %s" % (self.aircraft,wp))
@@ -269,12 +269,8 @@ class Copilot():
             clearances.land=False
             #clearances.parking=True # TODO: request parking
         elif self.plane.is_stopped():
-            print("CLEARING CLEARANCES")
             for i in clearances.__dict__:
                 setattr(clearances, i, False)
-            print("CLEARED", str(clearances))
-#             clearances.parking=False
-#             clearances.runway=False
             
     def check_request(self):
         llogger.debug("{%s-CP} check_request. self.freq=%s, clearances=%s" %  (self.aircraft,self.freq, self.plane.clearances,))
@@ -282,42 +278,42 @@ class Copilot():
         clearances = self.plane.clearances
 
         if self.plane.is_starting() and not clearances.taxi:
-            print("{%s-CP} check_request: queing ReadyTaxiAction" % self.aircraft)
+            llogger.debug("{%s-CP} check_request: queing ReadyTaxiAction" % self.aircraft)
             comm = self.get_comm_by_type(self.airport(),Comm.GND)
             self.actions.append(TuneInAction(self,comm.frequency)) # Make sure we are tunned right
             self.actions.append( ReadyTaxiAction(self) )
         elif self.plane.is_holding() and not clearances.lineup and not clearances.cross:
-            print("{%s-CP} check_request: queing RequestCrossAction" % self.aircraft)
+            llogger.debug("{%s-CP} check_request: queing RequestCrossAction" % self.aircraft)
             # TODO: detect wich runway we got in front
             self.actions.append( CrossRunwayAction(self,clearances.runway) )
         elif self.plane.is_taxiing() and clearances.cross:
-            print("{%s-CP} check_request: queing ClearedRunway" % self.aircraft)
+            llogger.debug("{%s-CP} check_request: queing ClearedRunway" % self.aircraft)
             # TODO: detect wich runway we got in front
             clearances.cross = False
             self.actions.append( ClearedRunwayAction(self,clearances.runway) )
         elif self.plane.is_short() and clearances.taxi and not clearances.take_off and not self.already_requested(alias.HOLDING_SHORT):
-            print("{%s-CP} check_request: queing HoldingShortAction" % self.aircraft)
+            llogger.debug("{%s-CP} check_request: queing HoldingShortAction" % self.aircraft)
             self.actions.append( HoldingShortAction(self,clearances.runway) )
         elif self.plane.is_linedup() and not clearances.take_off and not self.already_requested(alias.READY_TAKEOFF):
-            print("{%s-CP} check_request: queing ReadyTakeoffAction" % self.aircraft)
+            llogger.debug("{%s-CP} check_request: queing ReadyTakeoffAction" % self.aircraft)
             self.actions.append( ReadyTakeoffAction(self,clearances.runway) )
         elif self.plane.is_climbing() and not self.request.req == alias.LEAVING:
             self.actions.append( LeavingAction(self,clearances.runway) )
         elif self.plane.is_approaching() and not (clearances.join or clearances.land) and not self.already_requested(alias.INBOUND_APPROACH):
-            print("{%s-CP} check_request: queing inbound approach action" % self.aircraft)
+            llogger.debug("{%s-CP} check_request: queing inbound approach action" % self.aircraft)
             comm = self.get_comm_by_type(self.airport(),Comm.APP)
             self.actions.append(TuneInAction(self,comm.frequency)) # Make sure we are tunned right
             self.actions.append(RequestInboundAction(self)) 
         elif self.plane.is_on_circuit() and clearances.report:
             circ = self.circuits_helper[self.plane.manager.waypoint().status]
             if clearances.report and clearances.report == circ:
-                print("{%s-CP} check_request: queing report circuit action for %s" % (self.aircraft, circ))
+                llogger.debug("{%s-CP} check_request: queing report circuit action for %s" % (self.aircraft, circ))
                 comm = self.get_comm_by_type(self.airport(),Comm.TWR)
                 self.actions.append(TuneInAction(self,comm.frequency)) # Make sure we are tunned right
                 self.actions.append(ReportCircuitAction(self, circ, clearances.runway)) 
                 clearances.report = None
         elif self.plane.is_short() and not clearances.taxi:
-            print("{%s-CP} check_request: short after rolling" % self.aircraft)
+            llogger.debug("{%s-CP} check_request: short after rolling" % self.aircraft)
             comm = self.get_comm_by_type(self.airport(),Comm.TWR)
             self.actions.append(TuneInAction(self,comm.frequency)) # Make sure we are tunned right
             self.actions.append(ClearedRunwayAction(self,clearances.runway))
@@ -348,9 +344,8 @@ class FlightPlanManager():
         llogger.debug("{%s-FP} waypoint: %s %s" % (self.plane.aircraft,self._waypoint,self.waypoint() ) )
         
     def reached(self,waypoint):
-        print("End?", self.flightplan.waypoints.all().count(), self._waypoint)
         if self.flightplan.waypoints.all().count() <= self._waypoint:
-            print("{%s-FP} end of the line. %s" % (self.plane.aircraft, self._waypoint))
+            llogger.debug("{%s-FP} end of the line. %s" % (self.plane.aircraft, self._waypoint))
             return
         self._waypoint += 1
         llogger.info("{%s-FP} Next wp: %s" % (self.plane.aircraft,self.waypoint() ) )
@@ -368,40 +363,40 @@ class FlightPlanManager():
         clearances = self.plane.clearances
         position = self.plane.dynamics.position
         if self.plane.is_starting():
-            print("{%s-FP} generating waypoints to runway %s. wp=%s" % (self.plane.aircraft, clearances.runway, self._waypoint))
+            llogger.debug("{%s-FP} generating waypoints to runway %s. wp=%s" % (self.plane.aircraft, clearances.runway, self._waypoint))
             runway = self.flightplan.departure.runways.get(name=clearances.runway)
             self.handler.generate_taxi_waypoints(position,runway)
             self.reached(self.waypoint())
             self.plane.dynamics.set_waypoint(self.waypoint(),self.next_waypoint())    
-            print(self._waypoint,self.waypoints().all().order_by("id"))
+            llogger.debug(self._waypoint,self.waypoints().all().order_by("id"))
         elif self.plane.is_linedup() and not self.depart_generated:
-            print("{%s-FP} generating depart waypoints" % self.plane.aircraft)
+            llogger.debug("{%s-FP} generating depart waypoints" % self.plane.aircraft)
             self.depart_generated=True
             runway = self.flightplan.departure.runways.get(name=clearances.runway)
             self.handler.generate_depart_waypoints(runway)
         elif self.plane.is_departing() and not self.climb_generated:
-            print("{%s-FP} generating climb waypoints" % self.plane.aircraft)
+            llogger.debug("{%s-FP} generating climb waypoints" % self.plane.aircraft)
             self.climb_generated=True
             self.handler.generate_climb_waypoints()
         elif self.plane.is_climbing() and not self.cruise_generated:
-            print("{%s-FP} generating cruise waypoints" % self.plane.aircraft)
+            llogger.debug("{%s-FP} generating cruise waypoints" % self.plane.aircraft)
             self.cruise_generated=True
             self.handler.generate_cruise_waypoints()
         elif self.plane.is_cruising() and self._waypoint > 3:
             # RESET FLIGHTPLAN??
             pass
         elif self.plane.is_approaching() and clearances.join and not self.landing_generated:
-            print("{%s-FP} generating circuit landing waypoints" % self.plane.aircraft)
+            llogger.debug("{%s-FP} generating circuit landing waypoints" % self.plane.aircraft)
             self.landing_generated=True
             runway = self.flightplan.arrival.runways.get(name=clearances.runway)
             self.handler.generate_landing_waypoints(runway, clearances)
         elif self.plane.is_rolling() and not self.rolling_generated:
-            print("{%s-FP} generating roling waypoints" % self.plane.aircraft)
+            llogger.debug("{%s-FP} generating roling waypoints" % self.plane.aircraft)
             runway = self.flightplan.arrival.runways.get(name=clearances.runway)
             self.handler.generate_rolling_waypoints(position,runway)
             self.rolling_generated = True
         elif clearances.parking and not self.parking_generated:
-            print("{%s-FP} generating parking waypoints" % self.plane.aircraft)
+            llogger.debug("{%s-FP} generating parking waypoints" % self.plane.aircraft)
 
             parking = self.flightplan.arrival.startups.get(pk=clearances.parking)
             nwp = self.waypoints().count() 
@@ -417,7 +412,7 @@ class FlightPlanManager():
             return None
         if count <= self._waypoint:
             self._waypoint=self.flightplan.waypoints.all().count()-1
-            print("{%s-FP} reset waypoint to %s" % (self.plane.aircraft, self._waypoint))
+            llogger.debug("{%s-FP} reset waypoint to %s" % (self.plane.aircraft, self._waypoint))
             
         return self.flightplan.waypoints.all().order_by('id')[self._waypoint]
         
@@ -564,7 +559,7 @@ class CircuitHandler():
         linedup = self.plan.waypoints.filter(status = PlaneInfo.LINED_UP).last()
         straight=runway.bearing
         if linedup:
-            print("{%s-CH} using startup waypoint %s" % (self.aircraft, linedup,) )
+            llogger.debug("{%s-CH} using startup waypoint %s" % (self.aircraft, linedup,) )
             position = move(linedup.get_position(),straight,50,linedup.get_position().z)
         else:
             position = move(rwystart,straight,100,self.apalt)

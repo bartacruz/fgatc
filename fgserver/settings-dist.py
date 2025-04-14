@@ -23,7 +23,7 @@ CELERY_BROKER_URL = 'redis://localhost:6379'
 FGATC_SERVER_PORT=5100
 FGATC_AI_SERVER=('localhost',5100)
 FGATC_AI_INTERVAL=0.1
-FGATC_AI_HANDLERS = [('Circuit','fgserver.ai.handlers.CircuitHandler'), ('fgserver.ai.handlers.CircuitHandler', 'Circuit pattern')]
+FGATC_AI_HANDLERS = [('fgserver.ai.handlers.CircuitHandler', 'Circuit pattern'),('fgserver.ai.handlers.TripHandler', 'Normal Trip'),]
 FGATC_UPDATE_RATE=2
 
 FGATC_FG_SCENERY='/home/julio/.fgfs/TerraSync' # for taxiway discovery.

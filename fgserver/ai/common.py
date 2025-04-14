@@ -158,6 +158,24 @@ class PlaneInfo():
         (str(ROLLING),'Rolling'),
         (str(CROSS),'Cross rwy'),
     )
+    CHOICES_STATE = (
+        ('stopped','Stopped'),
+        ('starting','Starting'),
+        ('pushback','Pushback'),
+        ('taxiing','Taxiing'),
+        ('holding','Holding'),
+        ('short','Short'),
+        ('linedup','Linedup'),
+        ('departing','Departing'),
+        ('climbing','Climbing'),
+        ('cruising','Cruising'),
+        ('approaching','Approaching'),
+        ('on_circuit','On_circuit'),
+        ('rejoining','Rejoining'),
+        ('landing','Landing'), 
+        ('rolling','Rolling'),
+        ('crossing','Crossing'),
+    )
     @classmethod
     def label(cls,code):
         return cls.LABELS[int(code)]

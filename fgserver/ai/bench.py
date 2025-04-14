@@ -12,7 +12,6 @@ from django.utils import timezone
 django.setup()
 from fgserver.server import utils
 from fgserver.ai.consumers import StatePlaneConsumer, FlightPlanConsumer
-from fgserver.ai.dynamics import TurboPropDynamicManager
 from fgserver.ai.state_plane import StatePlane
 from fgserver.models import Airport, Order
 from random import randint
@@ -22,7 +21,8 @@ from fgserver.ai.common import ReceivedOrder
 
 def init_plane(plan):
     ''' Inits a state plane, with a Start clearance and an initial push'''
-    plane = StatePlane(plan.aircraft, TurboPropDynamicManager, init_delay=30)
+    # plane = StatePlane(plan.aircraft, TurboPropDynamicManager, init_delay=30)
+    plane = StatePlane(plan, init_delay=randint(20,120))
     plane.clearances.start = True
     #plane.dynamics.wait(randint(5,60))
     plane.update(sim_time())

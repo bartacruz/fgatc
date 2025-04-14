@@ -5,10 +5,12 @@ Created on 7 may. 2020
 '''
 
 from transitions import Machine
+from fgserver import units
 from fgserver.messages import alias, sim_time, PositionMessages
 import time
 from fgserver.ai.handlers import Copilot, FlightPlanManager
 from fgserver.ai.common import PlaneInfo
+from fgserver.ai.dynamics import DynamicManager
 import logging
 
 llogger = logging.getLogger(__name__)
@@ -53,9 +55,11 @@ class StatePlane(object):
     departing_states = ['stopped','starting','pushback','taxiing','holding','short','linedup','departing','climbing','crossing',]
     arriving_states = ['cruising','approaching','on_circuit','rejoining','landing', 'rolling',]
     
-    def __init__(self, aircraft, dynamic_manager, init_delay=0):
+    #def __init__(self, aircraft, dynamic_manager, init_delay=0):
+    def __init__(self, flightplan, init_delay=0):
         #self.circuit = circuit
-        self.aircraft = aircraft
+        self.flightplan = flightplan
+        self.aircraft = flightplan.aircraft
         self.order = None
         self.started = False
         self.init_delay = init_delay
@@ -111,10 +115,10 @@ class StatePlane(object):
         self.machine.add_transition('park', 'short', 'taxiing', before=['generate_waypoints'] )
         
         
+        self.manager = FlightPlanManager(self,self.flightplan)
+        self.dynamics = DynamicManager(self,self.flightplan.fdm)
         
-        self.dynamics = dynamic_manager(self)
         
-        self.manager = FlightPlanManager(self,aircraft.plans.first())
         
         self.copilot = Copilot(self)
         
@@ -125,23 +129,18 @@ class StatePlane(object):
         
         
     def process_order(self,order):
-        #print("%s process_order: %s" % (self.aircraft.callsign,order,))
-        #llogger.debug("{%s} order=%s" % (self.aircraft,order,))
         self.copilot.process_order(order)
     
             
     def update(self,time):
-        ahead = PositionMessages.get_near(self.aircraft.callsign, 40, True)
-        if len(ahead):
-            if self.dynamics.props.speed:
-                llogger.debug("[%s] Traffic ahead while at %s. Waiting..." % (self.aircraft.callsign,self.dynamics.props.speed,))
-                self._bkp_speed = self.dynamics.props.speed
-                self.dynamics.props.speed = 0
-        elif self._bkp_speed:
+        ahead = PositionMessages.get_near(self.aircraft.callsign, 10, True)
+        if len(ahead) and self.dynamics.props.speed > 0:
+            llogger.debug("[%s] Traffic ahead while at %s. Waiting..." % (self.aircraft.callsign,self.dynamics.props.speed,))
+            self.dynamics.wait(5)
+        elif self.dynamics._waiting:
             llogger.debug("[%s] No traffic ahead. Resuming at %s" % (self.aircraft.callsign,self._bkp_speed,))
-            self.dynamics.props.speed = self._bkp_speed
-            self._bkp_speed = None
-        
+            self.dynamics._waiting=0
+
         self.dynamics.update(time)
         status = self.dynamics.update_aircraft()
         
@@ -161,10 +160,10 @@ class StatePlane(object):
         return status
     
     def entering_state_changed(self):
-        print(self.aircraft,"entering state %s" % self.state)
+        llogger.debug("%s entering state %s" % (self.aircraft,self.state))
         
     def state_changed(self):
-        print(self.aircraft,"state changed to %s" % self.state)
+        llogger.debug("%s state changed to %s" % (self.aircraft,self.state))
         self.dynamics.check()
         self.copilot.state_changed()
 #           
@@ -180,7 +179,6 @@ class StatePlane(object):
         llogger.debug("{%s}(%s) reached waypoint %s | %s" % (self.aircraft, self.state, waypoint.status, waypoint))
         llogger.debug("{%s}(%s) clearances: %s " % (self.aircraft, self.state, self.clearances))
         if waypoint.status == PlaneInfo.STOPPED:
-            print("STOPPING")
             self.stopped_time = sim_time()
             self.stop()
         elif waypoint.status == PlaneInfo.TAXIING and self.is_pushback():

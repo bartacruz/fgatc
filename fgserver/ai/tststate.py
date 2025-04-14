@@ -16,14 +16,14 @@ from fgserver.messages import alias, sim_time
 from fgserver.ai.common import ReceivedOrder, PlaneRequest
 from fgserver.ai.state_plane import StatePlane
 from fgserver.models import Aircraft, Comm, Airport
-from fgserver.ai.dynamics import TurboPropDynamicManager
 
 def init_plane(plan):
-    plane = StatePlane(plan.aircraft, TurboPropDynamicManager)
+    plane = StatePlane(plan, init_delay=randint(5,40))
     plane.clearances.start = True
-    plane.dynamics.wait(randint(5,40))
+    #plane.dynamics.wait(randint(5,60))
     plane.start()
-    plane.update(timezone.now())
+    plane.update(sim_time())
+    plane._saved = timezone.now()
     plane._request = None
     plane._order = None
     plane._rerouted = False
@@ -61,7 +61,7 @@ def process_request(plane,request):
     elif request.req == alias.INBOUND_APPROACH:
         rwy = airport.active_runway().name
         plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.JOIN_CIRCUIT, rwy=rwy, cirt=alias.CIRCUIT_LEFT,\
-                                cirw = alias.CIRCUIT_CROSSWIND, alt = plan.altitude )
+                                cirw = alias.CIRCUIT_CROSSWIND, alt = plane.altitude )
     
     elif request.req == alias.CIRCUIT_CROSSWIND:
         plane._order = ReceivedOrder(apt=airport.icao,to=callsign,ord=alias.REPORT_CIRCUIT, rwy=rwy,cirw = alias.CIRCUIT_DOWNWIND)
@@ -84,7 +84,7 @@ def process_request(plane,request):
 def dummy_atc(icao):
     airport = Airport.objects.get(icao=icao)
     planes = []
-    for plan in airport.circuits.filter(enabled=True):
+    for plan in airport.departures.filter(enabled=True):
         plane = init_plane(plan)
         planes.append(plane)
         
@@ -109,14 +109,14 @@ def dummy_atc(icao):
                 plane._request = request
                                
             if plane.is_stopped():
-                print("%s is stopped. ")
+                print("%s is stopped. " % plane)
                 planes.remove(plane)
                 plane = init_plane(plan)
                 
                 planes.append(plane)
                  
  
-dummy_atc("SABE")
+dummy_atc("SAAR")
 # aircraft = Aircraft.objects.get(callsign="barta")
 # print(aircraft.orders.last().order)
 # for order in aircraft.orders.all().order_by("-id")[:30]:
