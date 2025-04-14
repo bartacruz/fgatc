@@ -156,9 +156,11 @@ class ReadBackAction(Action):
     
 class TuneInAction(Action):
     
-    def __init__(self, handler, freq):
+    def __init__(self, handler, freq, comm = None):
         Action.__init__(self, handler)
-        if freq:
+        if comm:
+            pass
+        elif freq:
             comm =self.handler.get_comm_by_freq(self.handler.airport(),freq)
         elif self.handler.plane.state in ['stopped','starting','pushback','taxiing']:
             comm = self.handler.get_comm_by_type(self.handler.airport(),Comm.GND)

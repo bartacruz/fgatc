@@ -89,7 +89,7 @@ class DynamicManager():
             delta_speed = min(accel * dt,abs(diff))
             mult = diff / abs(diff)
             self.speed += delta_speed*mult
-            llogger.debug("(De)accelerating %s" % self.speed)
+            # llogger.debug("(De)accelerating %s" % self.speed)
 
     def update(self,time):
         if not self.waypoint:
@@ -128,7 +128,7 @@ class DynamicManager():
             ncourse = get_heading_to(self.waypoint.get_position(), self.waypoint_next.get_position())
             nang = angle_diff(course_to_wp, ncourse) 
             seconds_before = nang/self.props.turn_rate+2
-        turn_dist = distance_to_wp - move_distance*seconds_before/(dt*2)
+        turn_dist = distance_to_wp - move_distance*seconds_before/dt
         
         step = False
         if move_distance >= abs(turn_dist) or distance_to_wp < move_distance:
@@ -145,7 +145,7 @@ class DynamicManager():
         if step:
             # Hack to align plane to the runway when lined up.
             # TODO: Make sure we reach every waypoint heading to the next, and remove this hack
-            if self.waypoint.status == PlaneInfo.LINED_UP:
+            if self.waypoint.status == PlaneInfo.LINED_UP and self.waypoint_next:
                 llogger.debug("calculating course heading from %s to %s" % (self.position,self.waypoint_next))
                 depart_course = get_heading_to(self.position, self.waypoint_next.get_position())
                 llogger.debug("is_linedup. Setting course from %s to %s" % (self.course, depart_course))
@@ -164,21 +164,20 @@ class DynamicManager():
         vs = Position.fromV3D(dif.scale(1/dt))
         q1 = Quaternion.fromLatLon(newpos.x, newpos.y)
         
-        coursediff=abs(newcourse - target_course)
+        coursediff=abs(normdeg(self.course - newcourse))
         self.actual_turn_rate= coursediff/dt
         self.roll = 0
         if not self.on_ground() and coursediff >= 0.01:
             #self.roll = (self.props.turn_rate*self.bank_sense)*2
-            self.roll = (self.actual_turn_rate* self.bank_sense)*2
-            #self.log("tr",self.props.turn_rate,"self.roll",self.roll,"bank",self.bank_sense)
+            self.roll = coursediff * self.bank_sense *2 /dt
+            #llogger.debug("turn_rate=%s, actual_tr=%s, roll=%s, bank=%s",self.props.turn_rate, self.actual_turn_rate,self.roll,self.bank_sense)
         q2 = Quaternion.fromYawPitchRoll(newcourse, 0, self.roll)
         
         self.position = newpos
         self.orientation =  Position.fromV3D(q1.multiply(q2).normalize().get_angle_axis())
         self.linear_velocity = vs
         self.course=newcourse
-        
-        
+
     def next_altitude(self,dt):
         if self.on_ground():
             return self.waypoint.altitude
@@ -190,17 +189,17 @@ class DynamicManager():
         # Pitch up or down?
         diff = self.target_altitude - self.position.z
         multi  = round(diff / abs(diff))
-        vsdiff = self.props.vertical_speed*units.KNOTS - self.vertical_speed
+        vsdiff = self.props.vertical_speed*units.FPM - self.vertical_speed
         vsdiffa = abs(vsdiff)
         
-        if vsdiff !=0:
+        if vsdiffa > 0:
+            vsmult = round(vsdiff / vsdiffa)
             if self.vertical_speed==0:
-                self.vertical_speed=0.5
-            vsmult = round(vsdiff / abs(vsdiff))
-            self.vertical_speed += vsmult * min((self.vertical_speed*self.vertical_speed)/vsdiffa, vsdiffa)
+                self.vertical_speed=0.5*vsmult
+            self.vertical_speed += vsmult * min(abs(self.vertical_speed*self.vertical_speed)/vsdiffa, vsdiffa)
         
-        vertical_speed = multi * min(self.vertical_speed*dt,abs(diff))
-        next_altitude= self.position.z+vertical_speed;
+        delta_alt = multi * min(abs(self.vertical_speed)*dt,abs(diff))
+        next_altitude= self.position.z+delta_alt;
         return next_altitude
 
     def next_course(self,dt):
@@ -227,7 +226,7 @@ class DynamicManager():
         return next_course
     
     def on_ground(self):
-        return self.plane.state in ['stopped','taxiing','linedup','short', 'rolling']
+        return self.plane.state in ['stopped','pushback','taxiing','linedup','short', 'rolling']
     
     def update_aircraft(self):
         ''' Update aircraft and status with current data '''

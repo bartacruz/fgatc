@@ -11,7 +11,7 @@ from fgserver.ai.common import PlaneInfo
 from random import randint
 from fgserver import get_qnh, units, get_controllers, setInterval,\
     get_metar_cycle
-from fgserver.helper import get_distance, get_heading_to, angle_diff, get_heading_to_360
+from fgserver.helper import get_distance, get_heading_to, angle_diff, get_heading_to_360, move, normalize
 import time
 import threading
 from fgserver.atc.functions import get_message
@@ -538,15 +538,24 @@ class Approach(Controller):
 
     def inbound(self,request):
         response=self._init_response(request)
+        rwy = self.active_runway()
+        plane_pos =request.sender.get_position()
         circp = self.get_airport().tags.filter(status__in=(PlaneInfo.LANDING,PlaneInfo.CIRCUIT_FINAL,PlaneInfo.CIRCUIT_BASE,PlaneInfo.CIRCUIT_DOWNWIND,PlaneInfo.CIRCUIT_CROSSWIND,PlaneInfo.CIRCUIT_STRAIGHT)).exclude(aircraft__callsign=request.sender.callsign).count()
-        ph = get_heading_to(request.sender.get_position(),self.active_runway().get_position())
-        s = angle_diff(ph,float(self.active_runway().bearing))
+        ph = get_heading_to(plane_pos,rwy.get_position())
+        s = angle_diff(ph,float(rwy.bearing))
         self.debug("circp=%s, ph=%s, s=%s" % (circp,ph,s))
         if circp or s > 40:
             # other planes in circuit or not straight of rwy, must join.
+            join_point = alias.CIRCUIT_CROSSWIND
+            p1 = move(rwy.get_position(), rwy.bearing, rwy.length+2000, plane_pos.z)
+            p_cross = move(p1,normalize(rwy.bearing+90), 2000, p1.z)
+            p_down = move(p1,normalize(rwy.bearing-90), 2000, p1.z)
+            
+            if get_distance(plane_pos, p_down) < get_distance(plane_pos,p_cross):
+                join_point = alias.CIRCUIT_DOWNWIND
             response.add_param(Order.PARAM_ORDER, alias.JOIN_CIRCUIT)
             response.add_param(Order.PARAM_CIRCUIT_TYPE, self.circuit_type)
-            response.add_param(Order.PARAM_CIRCUIT_WP,[alias.CIRCUIT_CROSSWIND,alias.CIRCUIT_DOWNWIND][randint(0,1)])
+            response.add_param(Order.PARAM_CIRCUIT_WP,join_point)
         else:
             llogger.info("[%s] straight landing for %s(%s) because of angle %s" % (self.comm,request.sender,request.sender.get_position(),s))
             response.add_param(Order.PARAM_ORDER, alias.CIRCUIT_STRAIGHT)

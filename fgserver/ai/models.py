@@ -32,6 +32,8 @@ llogger = logging.getLogger(__name__)
 
 class FDM(Model):
     name = CharField(max_length=25)
+    takeoff_distance = IntegerField(help_text='in meters', default=0)
+    landing_distance = IntegerField(help_text='in meters', default=0)
     
     def __str__(self):
         return str(self.name)
@@ -46,6 +48,7 @@ class FDMState(Model):
     vertical_speed=IntegerField(help_text='in Feets per minute')
     turn_rate=IntegerField(help_text='Degrees/second')
     acceleration=FloatField(help_text="in m/s2", default=0)
+
 
 def __str__(self):
         return str(self.state)
