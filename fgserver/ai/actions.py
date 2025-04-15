@@ -95,16 +95,16 @@ class ReadBackAction(Action):
         if not self.handler.controller:
             return
         templates={
-           alias.CLEAR_LAND:"clear to land runway {rwy}{qnh}",
-           alias.CLEAR_TOUCHNGO:"clear touch and go{onum} runway {rwy}{qnh}",
+           alias.CLEAR_LAND:"clear to land runway {rwy}",
+           alias.CLEAR_TOUCHNGO:"clear touch and go{onum} runway {rwy}",
            alias.CLEAR_TK : "cleared for take off runway {rwy}",
            alias.CLEAR_CROSS_RUNWAY : "crossing runway {rwy}",
            alias.GO_AROUND : "going around, report on {cirw}",
            alias.JOIN_CIRCUIT:"{cirw} for {rwy} at {alt}{qnh}",
-           alias.CIRCUIT_STRAIGHT:"straight for {rwy}, report on {cirw}{qnh}",
+           alias.CIRCUIT_STRAIGHT:"straight for {rwy}, report on {cirw}",
            alias.LINEUP : "line up on {rwy}{hld}",
            alias.REPORT_CIRCUIT: 'report on {cirw}',
-           alias.STARTUP: "start up approved{qnh}",
+           alias.STARTUP: "start up approved",
            alias.PUSHBACK: "pushback approved",
            alias.TAXI_TO: "taxi to {rwy}{via}{hld}{short}{lineup}",
            alias.WAIT: "we wait", 
