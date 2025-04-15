@@ -26,7 +26,6 @@ def init_plane(plan):
     ''' Inits a state plane, with a Start clearance and an initial push'''
     plane = StatePlane(plan, init_delay=randint(20,120))
     plane.clearances.start = True
-    #plane.dynamics.wait(randint(5,60))
     plane.update(sim_time())
     plane._saved = timezone.now()
     return plane
@@ -55,10 +54,16 @@ def stateplanes_loop():
                     StatePlaneConsumer.publish_plane(plane) # publish to map!
             
                 process_message(pos) # check the Pos msg for requests
-                order = Order.objects.filter(receiver=plane.aircraft, expired=False, received=False, acked=False, lost=False).first()
-                if order:
-                    received= ReceivedOrder.from_string(order.get_order())
-                    plane.process_order(received)
+
+                orders = Order.objects.filter(receiver=plane.aircraft, expired=False, received=False, acked=False, lost=False)
+                for order in orders:
+                    if (timezone.now() - order.date).total_seconds() > 60:
+                        llogger.info("Expiring order due to inactivity %s" % order)
+                        order.expired = True
+                        order.save()
+                    else:
+                        received= ReceivedOrder.from_string(order.get_order())
+                        plane.process_order(received)
 
                 
             time.sleep(delay)
