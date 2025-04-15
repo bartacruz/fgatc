@@ -118,8 +118,9 @@ def get_wind(apt):
         return text
     return None
 
-def get_closest_metar(apt,max_range=80,unit=units.NM):
+def get_closest_metar(apt,max_range=20,unit=units.NM):
     from fgserver.models import airportsWithinRange
+    from fgserver.tools.weather import get_metar
     obs = fetch_metar(apt.icao)
     if not obs:
         apts = airportsWithinRange(apt.get_position(),max_range,unit)
@@ -129,6 +130,9 @@ def get_closest_metar(apt,max_range=80,unit=units.NM):
             if obs:
                 llogger.debug("METAR found for %s" % napt)
                 return obs
+        obs = get_metar(apt.icao)
+        if obs:
+            return obs
         llogger.info("NO METAR FOR %s or any airport within range" % apt)
     else:
         return obs

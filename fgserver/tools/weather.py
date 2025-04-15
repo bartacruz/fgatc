@@ -1,17 +1,18 @@
 import sys
 import django
 django.setup()
+from metar.Metar import Metar
 from fgserver.models import Airport
 from urllib import request
 import requests
 import xml.etree.ElementTree as E
 base_url = 'https://api.met.no/weatherapi/locationforecast/2.0/complete?lat={:.2f}&lon={:.2f}&altitude={:d}'
 from datetime import datetime
-def get_metar(icao):
-    tree = E.parse('{}.xml'.format(icao))
-    root = tree.getroot()
-    print("root:",root)
-    print(child.find("time"))
+# def get_metar(icao):
+#     tree = E.parse('{}.xml'.format(icao))
+#     root = tree.getroot()
+#     print("root:",root)
+#     print(child.find("time"))
 #     for child in root.iter("time"):
 #         data = child.attrib
 #         print(data)
@@ -63,6 +64,11 @@ def get_clouds(details):
         clouds = "{}030 {}".format(label(cl),clouds)
 
     return clouds
+
+def get_metar(icao):
+    line = encode_metar(icao)
+    obs = Metar(line)
+    return obs
 
 def encode_metar(icao):
     airport = Airport.objects.get(icao=icao)
