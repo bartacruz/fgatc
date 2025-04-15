@@ -13,12 +13,13 @@ $.widget("fgatc.bench", {
 	 _create: function() {
 	 	this.selected = null;
 	 	$("#bench").on('stateplane',$.proxy(this.update_plane,this));
+		$(".planes-list").on("click",".plane-item",$.proxy(this.select_plane,this));
 	 },
 	 update_plane: function(event,plane) {
 	 	var planes= $(this.element).find(".planes-list");
 	 	var le = planes.find("div[callsign='"+plane.callsign+"']");
 	 	if (!le.length) {
-	 		planes.append("<div class='dropdown-item' callsign='"+plane.callsign+"'>"+plane.callsign+"</div>");
+	 		planes.append("<div class='dropdown-item plane-item' callsign='"+plane.callsign+"'>"+plane.callsign+"</div>");
 	 	}
 	 	if (!this.selected) {
 	 		this.select(plane.callsign);
@@ -27,6 +28,12 @@ $.widget("fgatc.bench", {
 	 		this.fill_plane(plane);
 	 	}
 	 	
+	 },
+	 select_plane: function(event) {
+		var callsign = $(event.target).attr("callsign");
+		this.reset_bench();
+		this.select(callsign);
+
 	 },
 	 select: function(callsign) {
 	 	this.selected = callsign;
@@ -63,6 +70,26 @@ $.widget("fgatc.bench", {
 	 	
 	 	
 	 },
+	 reset_bench: function() {
+		//console.debug("plane:",plane);
+		$("#bench .properties .lat").html("");
+		$("#bench .properties .lon").html("");
+		$("#bench .properties .altitude").html("");
+		$("#bench .properties .speed").html("");
+		$("#bench .properties .vertical-speed").html("round(plane.vertical_speed,1");
+		$("#bench .properties .turn-rate").html("");
+		$("#bench .properties .yaw").html("");
+		$("#bench .properties .pitch").html("");
+		$("#bench .properties .roll").html("");
+		$("#bench .properties .waypoint-name").html("");
+		$("#bench .properties .waypoint-heading").html("");
+		$("#bench .properties .waypoint-distance").html("");
+		$("#bench .properties .state").html("");
+		
+		$("#bench .comms .request").html("");
+		$("#bench .comms .message").html("");
+		$("#bench .clearances").removeClass("active");
+	},
 });
 
 

@@ -85,7 +85,6 @@ class AircraftConsumer(JsonWebsocketConsumer):
     def update_flightplan(self,event):
         data = event.get('data',event)
         message = {'type': 'flightplan_update', 'Model':'FlightPlan','data':data}
-        llogger.debug("update_flightplan: sending %s" % message)
         self.send_json(message,)
 
     def receive_json(self, content):
@@ -109,5 +108,4 @@ class AircraftConsumer(JsonWebsocketConsumer):
         message = {'type': 'update_flightplan','data':ser}
         
         channel_layer = get_channel_layer()
-        llogger.debug("update_flightplan: sending %s" % message)
         async_to_sync(channel_layer.group_send)("aircrafts",message)   
