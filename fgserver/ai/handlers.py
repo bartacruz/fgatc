@@ -234,7 +234,7 @@ class Copilot():
             llogger.debug("{%s-CP} Plane is rejoining, finding waypoint" % self.aircraft)
             wp = self.plane.flightplan.waypoints.filter(status=PlaneInfo.APPROACHING).last()
             self.plane.clearances.report=alias.CIRCUIT_CROSSWIND
-            self.plane.flightplan.reroute(wp)
+            self.plane.manager.reroute(wp)
             llogger.debug("{%s-CP} Waypoint found. Setting course to %s" % (self.aircraft,wp))
             self.plane.dynamics.set_waypoint(self.plane.flightplan.waypoint(),self.plane.flightplan.next_waypoint())
             self.plane.approach()            
