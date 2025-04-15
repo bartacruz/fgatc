@@ -38,7 +38,7 @@
 }
 .properties .altitude:after,
 .properties .waypoint-distance:after {
-	content: ' m';
+	content: ' ft';
 }
 
 .properties .speed:after {
@@ -46,7 +46,7 @@
 }
 
 .properties .vertical-speed:after {
-	content: ' m/s';
+	content: ' fpm';
 }
 
 .properties .waypoint-heading:after,

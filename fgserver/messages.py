@@ -570,7 +570,7 @@ class PosMsg:
             freq = "%s" % freq #force str
             return int(freq.replace(".",'').ljust(5,'0') )
         except:
-            llogger.exception("getfreq")
+            # llogger.exception("getfreq")
             return None
     
     def get_heading(self):

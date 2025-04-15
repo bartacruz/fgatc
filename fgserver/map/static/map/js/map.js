@@ -78,6 +78,7 @@ function addPlane(fields,airport) {
 	var planeicon = L.icon({
 	    iconUrl: static_url + 'images/plane-25.png',
 	    iconSize: [25,25],
+		iconAnchor:[12,12],
 	    className: callsign,
 	});
 	var marker = L.rotatedMarker([fields.lat,fields.lon],{icon:planeicon,title:callsign,angle:fields.heading}).addTo(aircrafts_layer);
@@ -106,7 +107,7 @@ function update_airports(airports) {
 		var fields = airport.fields;
 		if (!_airports[fields.icao]) {
 			console.debug("update airport",airport, airports);	
-			callsign=airport.fields.icao;
+			var callsign=airport.fields.icao;
 			var planeicon = L.icon({
 		    	iconUrl: static_url + 'images/atc.png',
 		    	iconSize: [25,25],
