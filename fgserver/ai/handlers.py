@@ -218,7 +218,6 @@ class Copilot():
         
         if self.plane.is_stopped():
             llogger.debug("{%s-CP} Stopped! resetting flightplan" % self.aircraft)
-            self.plane.manager.reset()
             self.actions.clear()
             self.action = None
             self.messages.clear()
@@ -229,6 +228,8 @@ class Copilot():
             self.freq = None
             self.next_freq = None
             self.controller = None
+            self.plane.manager.reset()
+            self.plane.reset()
             
         if self.plane.is_rejoining():
             llogger.debug("{%s-CP} Plane is rejoining, finding waypoint" % self.aircraft)
@@ -301,6 +302,7 @@ class Copilot():
         elif self.plane.is_climbing() and not self.request.req == alias.LEAVING:
             self.actions.append( LeavingAction(self,clearances.runway) )
         elif self.plane.is_approaching() and not (clearances.join or clearances.land) and not self.already_requested(alias.INBOUND_APPROACH):
+
             llogger.debug("{%s-CP} check_request: queing inbound approach action" % self.aircraft)
             comm = self.get_comm_by_type(self.airport(),Comm.APP)
             self.actions.append(TuneInAction(self,comm.frequency)) # Make sure we are tunned right
@@ -331,16 +333,17 @@ class FlightPlanManager():
     def reset(self):
         self._waypoint = 0
         # TODO: free handler from FlightPlan.
-        self.flightplan.waypoints.all().delete()
         self.plane.aircraft.state=2
         self.plane.aircraft.save()
         self.handler = self.flightplan.get_handler()
+        self.handler.reset()
         self.landing_generated = False
         self.depart_generated = False
         self.climb_generated = False
         self.cruise_generated = False
         self.rolling_generated = False
         self.parking_generated = False
+        
 #         self.reached(self.waypoint())
         llogger.debug("{%s-FP} waypoint: %s %s" % (self.plane.aircraft,self._waypoint,self.waypoint() ) )
         
@@ -430,11 +433,14 @@ class CircuitHandler():
         self.flightplan = flightplan
         self.airport = flightplan.departure
         self.aircraft = flightplan.aircraft
+        self.reset()
+    
+    def reset(self):
+        self.flightplan.waypoints.all().delete()
         self.generate_start_waypoints()
         self.status=None
         self.radius = 2*units.NM
-        AircraftConsumer.publish_plan(flightplan)
-    
+        AircraftConsumer.publish_plan(self.flightplan)
     def waypoint_reached(self,wp):
         self.status=wp.status
         
@@ -490,11 +496,13 @@ class CircuitHandler():
         return float(self.flightplan.arrival.altitude*units.FT)
     
     def generate_parking_waypoints(self, position, park):
-        path = taxi_path(self.airport,position, park)
+        path = taxi_path(self.flightplan.arrival,position, park)
         for node in path:
-            position=Position(node.point.y,node.point.x, self.departure_apalt)
+            position=Position(node.point.y,node.point.x, self.arrival_apalt)
             self.create_waypoint(position, "Taxi %s" % node.id, WayPoint.TAXI, PlaneInfo.TAXIING)
+        
         # Last wp is the parking itself. Stop.
+        park.z = self.arrival_apalt
         self.create_waypoint(park, "Parking", WayPoint.PARKING, PlaneInfo.STOPPED)
                 
     def generate_taxi_waypoints(self, pos1, pos2, heading = None):
@@ -638,33 +646,95 @@ class CircuitHandler():
         self.create_waypoint(position, "Approaching 1", WayPoint.POINT, PlaneInfo.APPROACHING)
         position = move(position,normdeg(straight+230*mult),radius*0.6,self.apalt+altitude)
         self.create_waypoint(position, "Approaching 2", WayPoint.POINT, PlaneInfo.APPROACHING)
-
     
-    def generate_landing_waypoints(self,runway,clearances):
-        radius = self.radius
+    def get_approach_distance(self):
+        ''' 
+        returns the distance needed to get from cruise altitude to circuit altitude
+        '''
+        # get props from fdm
+        state_props = self.flightplan.fdm.get_props("approaching")
+        speed = state_props.speed * units.KNOTS
+        vertical_speed= state_props.vertical_speed * units.FPM
         altitude = self.flightplan.altitude
+        circuit_altitude = self.arrival_apalt + 1000*units.FT
+        delta_alt = altitude - circuit_altitude
+        distance_needed = delta_alt * speed / vertical_speed
+        return distance_needed
+
+    def get_join_circuit_position(self,runway,clearances):
+        # TODO: get this from join clearance
+        radius = self.radius
         straight=runway.bearing
         reverse= normdeg(straight-180)
         left = normdeg(straight-90)
         right = normdeg(straight+90)
         rwystart = move(runway.position(), reverse, runway.length/2,self.arrival_apalt)
         rwyend = move(runway.position(), straight, runway.length/2,self.arrival_apalt)
+        circuit_height = self.arrival_apalt + 1000*units.FT
         if clearances.straight:
-            position = move(rwystart,reverse,radius*2,self.arrival_apalt+altitude)
+            join_position = move(rwystart,reverse,radius*2,circuit_height)
+        elif clearances.report == "crosswind":
+            join_position = move(rwyend,right,radius/5,circuit_height)
+        else:
+            join_position = move(rwyend,left,radius,circuit_height)
+        return join_position
+
+    def create_approach_waypoints(self,runway,clearances):
+        position = self.flightplan.waypoints.last().get_position()
+        join_position = self.get_join_circuit_position(runway, clearances)
+        bearing_to_join = get_heading_to(position,join_position)
+        distance_to_join = get_distance(position,join_position)
+
+        # get props from fdm
+        state_props = self.flightplan.fdm.get_props("approaching")
+        speed = state_props.speed * units.KNOTS
+        vertical_speed= state_props.vertical_speed * units.FPM
+        t_alt = position.z
+        
+        distance_needed = self.get_approach_distance()
+        llogger.debug("approach waypoints: t_alt=%d, join_position.z=%d, distance_to_join=%d, distance_needed=%d" % (t_alt, join_position.z, distance_to_join,  distance_needed ))
+        if distance_needed > distance_to_join:
+            #make a 360 descent
+            llogger.debug("{%s-CH} needed a 360! distance_to_join=%d, distance_needed=%d)" % (self.aircraft, distance_to_join, distance_needed))
+        wp = None
+        while t_alt > join_position.z:
+            step = 1000*units.M
+            t_alt = position.z - (step/speed) * vertical_speed
+            t_alt = max(t_alt, join_position.z)
+            position = move(position,bearing_to_join, step, t_alt)
+            wp = self.create_waypoint(position, "Approach %d ft" % (t_alt / units.FT), WayPoint.POINT, PlaneInfo.APPROACHING)
+        return wp
+        
+    
+    def generate_landing_waypoints(self,runway,clearances):
+        self.create_approach_waypoints(runway,clearances)
+        radius = self.radius
+        altitude = self.flightplan.altitude
+        # TODO: get this from join clearance
+        circuit_altitude = self.arrival_apalt + 1000*units.FT
+        straight=runway.bearing
+        reverse= normdeg(straight-180)
+        left = normdeg(straight-90)
+        right = normdeg(straight+90)
+        rwystart = move(runway.position(), reverse, runway.length/2,self.arrival_apalt)
+        rwyend = move(runway.position(), straight, runway.length/2,self.arrival_apalt)
+        position = self.get_join_circuit_position(runway, clearances)
+        
+        if clearances.straight:
+            #position = move(rwystart,reverse,radius*2,altitude)
             self.create_waypoint(position, "Straight 1 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_STRAIGHT)
-            position = move(rwystart,reverse,radius*1.2,self.arrival_apalt+altitude*0.7)
+            position = move(rwystart,reverse,radius*1.5, circuit_altitude)
             self.create_waypoint(position, "Straight 2 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_STRAIGHT)
-            position = move(position,straight,radius/3,self.arrival_apalt+500*units.FT)
+            position = move(position,straight,radius, self.arrival_apalt+700*units.FT)
             self.create_waypoint(position, "Final 1 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_FINAL)
         else:
             if clearances.report == "crosswind":
-                position = move(rwyend,right,radius/5,self.arrival_apalt+altitude)
                 self.create_waypoint(position, "Crosswind %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_CROSSWIND)
-            position = move(rwyend,left,radius,self.arrival_apalt+altitude)
-            self.create_waypoint(position, "Downwind %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_DOWNWIND)
-            position = move(position,reverse,radius*1.2+runway.length,self.arrival_apalt+altitude)
+            position = move(rwyend,left, radius, circuit_altitude)
+            self.create_waypoint(position, "Downwind %s" % runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_DOWNWIND)
+            position = move(position,reverse, radius*1.2+runway.length, circuit_altitude)
             self.create_waypoint(position, "Base %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_BASE)
-            position = move(position,right,radius,self.arrival_apalt+500*units.FT)
+            position = move(position,right, radius, self.arrival_apalt+700*units.FT)
             self.create_waypoint(position, "Final 1 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_FINAL)
 
         landing_distance = self.flightplan.fdm.landing_distance
@@ -677,33 +747,17 @@ class CircuitHandler():
         position = move(position,straight,final_distance*0.33,self.arrival_apalt+10*units.FT)
         self.create_waypoint(position, "Final 4 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.LANDING)
 
-        position = move(position,straight,landing_distance*0.1,self.arrival_apalt+10*units.FT)
+        position = move(position, straight, landing_distance*0.1, self.arrival_apalt+10*units.FT)
         self.create_waypoint(position, "Flare 1 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.LANDING)
-        position = move(position,straight,landing_distance*0.1,self.arrival_apalt+5*units.FT)
-        self.create_waypoint(position, "Flare 2 %s"%runway.name, WayPoint.RWY, PlaneInfo.LANDING)
+        position = move(position,straight, landing_distance*0.1, self.arrival_apalt+5*units.FT)
+        self.create_waypoint(position, "Flare 2 %s" % runway.name, WayPoint.RWY, PlaneInfo.LANDING)
         position = move(position,straight,landing_distance*0.1,self.arrival_apalt)
-        self.create_waypoint(position, "Touchdown %s"%runway.name, WayPoint.RWY, PlaneInfo.TOUCHDOWN)
+        self.create_waypoint(position, "Touchdown %s" % runway.name, WayPoint.RWY, PlaneInfo.TOUCHDOWN)
         position = move(position,straight,landing_distance*0.1,self.arrival_apalt)
-        self.create_waypoint(position, "Landing Roll start%s" % runway.name, WayPoint.RWY, PlaneInfo.ROLLING)
+        self.create_waypoint(position, "Landing Roll start %s" % runway.name, WayPoint.RWY, PlaneInfo.ROLLING)
         position = move(position,straight,landing_distance*0.6,self.arrival_apalt)
-        self.create_waypoint(position, "Landing Roll end%s" % runway.name, WayPoint.RWY, PlaneInfo.ROLLING)
+        self.create_waypoint(position, "Landing Roll end %s" % runway.name, WayPoint.RWY, PlaneInfo.ROLLING)
 
-
-        # position = move(position,straight,radius/3,self.apalt+350*units.FT)
-        # self.create_waypoint(position, "Final 2 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.LANDING)
-        # position = move(position,straight,radius/3,self.apalt+250*units.FT)
-        # self.create_waypoint(position, "Final 3 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.LANDING)
-        # position = move(rwystart,reverse,30,self.apalt+15)
-        # self.create_waypoint(position, "Flare 1 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.LANDING)
-        # position = move(position,straight,100,self.apalt+10)
-        # self.create_waypoint(position, "Flare 2 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.LANDING)
-        # position = move(position,straight,100,self.apalt+5)
-        # self.create_waypoint(position, "Flare 3 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.LANDING)
-        # position = move(position,straight,100,self.apalt)
-        # self.create_waypoint(position, "Touchdown %s"%runway.name, WayPoint.RWY, PlaneInfo.TOUCHDOWN)
-        # position = move(position,straight,180,self.apalt)
-        # self.create_waypoint(position, "Landing Roll End%s" % runway.name, WayPoint.RWY, PlaneInfo.ROLLING)
-        # # TODO: Create parking
         
     def create_waypoint(self,position, name, atype, status):
         try:
@@ -741,7 +795,7 @@ class TripHandler(CircuitHandler):
         
         position_to = self.flightplan.arrival.get_position()
         course = straight
-        while wps < 20 and position.z < altitude:
+        while position.z < altitude:
             bearing = get_heading_to(position,position_to)
             diff = normdeg(course - bearing)
             bank_sense = 1
@@ -749,7 +803,7 @@ class TripHandler(CircuitHandler):
                 bank_sense = int(diff/abs(diff))*-1
             delta = min(15,abs(diff))
             course = normalize(course+(delta*bank_sense))
-            distance =500*units.M
+            distance =1000*units.M
             t = distance/speed
             t_alt = position.z + t * vertical_speed
             t_alt = min(t_alt,altitude)
@@ -780,14 +834,14 @@ class TripHandler(CircuitHandler):
                 turns = turns +1
                 bank_sense = int(diff/abs(diff)*-1)
                 course = normalize(course+(20*bank_sense))
-                position = move(position,course,0.5*units.NM,self.apalt+altitude)
+                position = move(position,course, 0.5*units.NM, altitude)
                 self.create_waypoint(position, "Cruising turn %d" % turns, WayPoint.POINT, PlaneInfo.CRUISING)
                 bearing = get_heading_to(position,position_to)
                 diff = normdeg(course - bearing)
-        
-        position = move(position_to,normdeg(bearing-180),12*units.NM,altitude)
+        approach_distance = self.get_approach_distance()
+        position = move(position_to,normdeg(bearing-180),approach_distance*2,altitude)
         self.create_waypoint(position, "Cruising Long", WayPoint.POINT, PlaneInfo.CRUISING)
-        position = move(position,normdeg(bearing),2*units.NM,altitude)
+        position = move(position,normdeg(bearing),approach_distance/4,altitude)
         self.create_waypoint(position, "Approaching 1", WayPoint.POINT, PlaneInfo.APPROACHING)
-        position = move(position,normdeg(bearing),5*units.NM,altitude)
+        position = move(position,normdeg(bearing),approach_distance/4,altitude)
         self.create_waypoint(position, "Approaching 2", WayPoint.POINT, PlaneInfo.APPROACHING)

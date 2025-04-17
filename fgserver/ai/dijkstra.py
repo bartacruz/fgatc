@@ -375,7 +375,6 @@ def dj_waypoints(airport, start, endp, start_on_rwy=False,end_on_rwy=False):
     root = ET.parse(os.path.join(settings.FGATC_FG_SCENERY,"Airports",icao[0],icao[1],icao[2],"%s.groundnet.xml" % icao))
     
     graph = Graph()
-    #nodes = list(root.findall('.//parkingList/Parking'))+list(root.findall('.//TaxiNodes/node'))
     nodes = list(root.findall('.//parkingList/Parking'))+list(root.findall('.//TaxiNodes/node'))
     runway_points = []
     

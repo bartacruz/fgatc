@@ -119,18 +119,17 @@ class StatePlane(object):
         self.dynamics = DynamicManager(self,self.flightplan.fdm)
         
         
-        
+        self.reset()
         self.copilot = Copilot(self)
         
+    def reset(self):
         # HACK
         self.dynamics.position = self.manager.waypoint().get_position()
         self.dynamics.set_waypoint(self.manager.waypoint(),self.manager.next_waypoint())
         self.jammed = False
-        
-        
+
     def process_order(self,order):
         self.copilot.process_order(order)
-    
             
     def update(self,time):
         # Jam detection
