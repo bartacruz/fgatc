@@ -13,11 +13,9 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
 <script type="text/javascript" src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js">
-<!--
-
-//-->
 </script>
-<script src="{% static "map/js/rotated-marker.js" %}"></script>
+{% comment %} <script src="{% static "map/js/rotated-marker.js" %}"></script> {% endcomment %}
+<script src="{% static "map/js/leaflet.rotatedMarker.js" %}"></script>
 <script src="{% static "map/js/map.js" %}"></script>
 <script src="{% static "map/js/map-ws.js" %}"></script>
 <script src="{% static "map/js/bench.js" %}"></script>

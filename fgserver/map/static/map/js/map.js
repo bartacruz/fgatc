@@ -68,23 +68,24 @@ function updatePlane(fields) {
 	marker = planes[fields.callsign];
 	if (_follow == fields.callsign) {
 		map.panTo([fields.lat,fields.lon]);
-		marker.options.icon.iconUrl=static_url + 'images/plane_f-25.png'
+		//marker.options.icon.iconUrl=static_url + 'images/plane_f-25.png'
 	}
-	marker.options.angle=fields.heading;
+	// marker.options.angle=fields.heading;
+	marker.setRotationAngle(fields.heading);
 	marker.setLatLng([fields.lat,fields.lon]);	
 }
 function addPlane(fields,airport) {
-	callsign=fields.callsign;
+	var callsign=fields.callsign;
 	var planeicon = L.icon({
 	    iconUrl: static_url + 'images/plane-25.png',
 	    iconSize: [25,25],
 		iconAnchor:[12,12],
 	    className: callsign,
 	});
-	var marker = L.rotatedMarker([fields.lat,fields.lon],{icon:planeicon,title:callsign,angle:fields.heading}).addTo(aircrafts_layer);
-	marker.on({
-		click:show_plan,
-	});
+	var marker = L.marker([fields.lat,fields.lon],{icon:planeicon,title:callsign,rotationAngle:fields.heading, rotationOrigin: "center center"}).addTo(aircrafts_layer);
+	// marker.on({
+	// 	click:show_plan,
+	// });
 	planes[callsign]= marker;
 	//console.debug(callsign,marker.getLatLng(),marker);
 }
@@ -151,8 +152,8 @@ function update_flightplan(plan) {
 		var wpicon = L.icon({
 		    iconUrl: static_url + 'images/wpred.png',
 		    className: "wp-"+wp.fields.type,
-		    iconSize:[10,10],
-		    iconAnchor:[5,5],
+		    iconSize:[6,6],
+		    iconAnchor:[3,3],
 		});
 		var pos = [wp.fields.lat,wp.fields.lon]
 		path.push(pos);
