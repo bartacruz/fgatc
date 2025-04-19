@@ -6,7 +6,7 @@ Created on 7 may. 2020
 StatePlane dynamics calculation
 
 '''
-
+import math
 from fgserver import units
 from fgserver.helper import move, Position, Quaternion, normdeg, normalize,\
     get_heading_to, get_distance, angle_diff
@@ -15,7 +15,6 @@ from fgserver.models import AircraftStatus
 from django.contrib.gis.geos.point import Point
 from fgserver.ai.common import PlaneInfo
 import logging
-from numpy import angle
 
 llogger = logging.getLogger(__name__)
 
@@ -120,23 +119,29 @@ class DynamicManager():
         
         #self.log("course_to_wp: %s, move_distance:%s, distance_to_wp:%s" % (course_to_wp,move_distance,distance_to_wp))
         seconds_before=0
-        nang=0
-        
-        '''Calculate turn time to next waypoint to see if we reached actual'''
+        turn_angle=0
+        turn_course = 0
+        L=0
+        '''Calculate turn time and distance to next waypoint to see if we reached actual'''
         if self.waypoint_next and not self.on_ground():
             #llogger.debug("%s => %s" % (self.waypoint,self.waypoint_next,))
-            ncourse = get_heading_to(self.waypoint.get_position(), self.waypoint_next.get_position())
-            nang = angle_diff(course_to_wp, ncourse) 
-            seconds_before = nang/self.props.turn_rate+2
-        turn_dist = distance_to_wp - move_distance*seconds_before/dt
-        
+            turn_course = get_heading_to(self.waypoint.get_position(), self.waypoint_next.get_position())
+            turn_angle = angle_diff(course_to_wp, turn_course)
+            seconds_before = turn_angle/self.props.turn_rate-1
+            turn_arc_length = seconds_before*self.speed
+            turn_angle_rad = turn_angle/units.RAD
+            turn_radio = turn_arc_length / turn_angle_rad
+            turn_chord = 2*turn_radio*math.sin(turn_angle_rad/2)
+            L = (turn_chord/2) / math.cos(turn_angle_rad/2)
+
+        turn_dist = distance_to_wp - L        
         step = False
-        if move_distance >= abs(turn_dist) or distance_to_wp < move_distance:
-            llogger.debug("Reached waypoint %s" % self.waypoint)
-            llogger.debug('nang=%s, seconds_before=%s ,move_distance=%s,distance_to_wp=%s,turn_move_distance=%s' % (nang,seconds_before,move_distance,distance_to_wp,turn_dist))
+
+        if move_distance > abs(turn_dist) or distance_to_wp < move_distance:
+            llogger.debug("{%s-DYN} Reached waypoint %s" % (self.plane, self.waypoint))
+            llogger.debug('{%s-DYN} nang=%s, ncourse=%s, ctwp=%s, course=%s, seconds_before=%s ,move_distance=%s,distance_to_wp=%s,L=%sturn_distance=%s' % (self.plane,turn_angle, turn_course, course_to_wp, self.course, seconds_before,move_distance,distance_to_wp,L,turn_dist))
             
             move_distance = min(move_distance,distance_to_wp)
-            #plane.course = course
             step = True
             
             
@@ -146,9 +151,9 @@ class DynamicManager():
             # Hack to align plane to the runway when lined up.
             # TODO: Make sure we reach every waypoint heading to the next, and remove this hack
             if self.waypoint.status == PlaneInfo.LINED_UP and self.waypoint_next:
-                llogger.debug("calculating course heading from %s to %s" % (self.position,self.waypoint_next))
+                llogger.debug("{%s-DYN} calculating course heading from %s to %s" % (self.plane, self.position,self.waypoint_next))
                 depart_course = get_heading_to(self.position, self.waypoint_next.get_position())
-                llogger.debug("is_linedup. Setting course from %s to %s" % (self.course, depart_course))
+                llogger.debug("{%s-DYN} is_linedup. Setting course from %s to %s" % (self.plane, self.course, depart_course))
                 self.course=depart_course
                 
             self.plane.reached(self.waypoint)
@@ -216,13 +221,12 @@ class DynamicManager():
         # Respect the current turn_rate.
         max_diff = self.props.turn_rate*dt
         turn_angle = min(heading_diff, max_diff) * self.bank_sense
-
         next_course =normalize(self.course + turn_angle)
         
         # Avoid rounding errors.
-        if angle_diff(self.course, next_course) > angle_diff(self.course, self.target_course):
+        if angle_diff(self.course, next_course) >= angle_diff(self.course, self.target_course):
             return self.target_course
-        
+        #llogger.debug("{%s-DYN} heading_diff=%s, max_diff=%s, TURN ANGLE=%s, dt=%s, real turn_rate=%s, course=%s, next=%s, target=%s" % (self.plane, heading_diff, max_diff, turn_angle, dt, turn_angle/dt, self.course, next_course, self.target_course))
         return next_course
     
     def on_ground(self):
@@ -255,39 +259,3 @@ class DynamicManager():
             return
         self.props = self.fdm.get_props(self.plane.state) or self.props
 
-# class TurboPropDynamicManager(DynamicManager):    
-#     templates = {
-#         'stopped': {'speed':0, 'vertical_speed':0, 'turn_rate':1, 'target_vertical_speed':1},
-#         'pushback': {'speed':1*units.KNOTS, 'vertical_speed':0, 'turn_rate':160, 'target_vertical_speed':1},
-#         'taxiing': {'speed':10*units.KNOTS, 'vertical_speed':0, 'turn_rate':160, 'target_vertical_speed':1},
-#         'crossing': {'turn_rate': 160, 'speed': 5*units.KNOTS, 'target_vertical_speed':1},
-#         'departing': {'turn_rate': 3,'speed': 70*units.KNOTS, 'target_vertical_speed':200*units.FPM},
-#         'climbing': {'turn_rate': 5, 'speed': 80*units.KNOTS, 'target_vertical_speed': 700*units.FPM},
-#         'cruising': {'turn_rate': 5, 'speed': 120*units.KNOTS, 'target_vertical_speed':300*units.FPM},
-#         'approaching': {'turn_rate':5, 'speed': 90*units.KNOTS, 'target_vertical_speed':700*units.FPM},
-#         'on_circuit': {'turn_rate': 5, 'speed': 80*units.KNOTS, 'target_vertical_speed': 300*units.FPM},
-#         'landing': {'turn_rate':3, 'speed': 70*units.KNOTS, 'target_vertical_speed':500*units.FPM},
-#         'rolling': {'turn_rate':160, 'speed':40*units.KNOTS},
-#     }
-    
-#     def check(self):
-#         if self.plane.state == self.props.name:
-#             return
-#         plane = self.plane
-#         state = plane.state
-        
-#         if state in ['stopped', 'short','linedup', 'starting', 'holding']:
-#             self.props.update(self.template['stopped'],name=state)
-#         else:
-#             template = self.templates.get(state, None)
-#             if template:
-#                 self.props.update(template,name=state)
-#                 llogger.debug("FDM props updated: %s" % self.props)
-#             else:
-#                 llogger.debug("No FDM template for state %s" % state)
-        
-        
-        
-        
-    
-        
