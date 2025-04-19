@@ -185,6 +185,8 @@ class Copilot():
         elif order.ord==alias.GO_AROUND:
             self.actions.append(ReadBackAction(self, order))
             clearances.land = False
+            clearances.report = order.cirw
+            clearances.join = True
             llogger.debug("{%s-CP}(%s) going around" % (self.aircraft, self.plane.state))
             if order.freq:
                 self.actions.append(TuneInAction(self,order.freq.replace(".",'')))
@@ -237,7 +239,7 @@ class Copilot():
             self.plane.clearances.report=alias.CIRCUIT_CROSSWIND
             self.plane.manager.reroute(wp)
             llogger.debug("{%s-CP} Waypoint found. Setting course to %s" % (self.aircraft,wp))
-            self.plane.dynamics.set_waypoint(self.plane.flightplan.waypoint(),self.plane.flightplan.next_waypoint())
+            self.plane.dynamics.set_waypoint(self.plane.manager.waypoint(),self.plane.manager.next_waypoint())
             self.plane.approach()            
         
     @staticmethod
@@ -471,9 +473,10 @@ class CircuitHandler():
     def generate_rolling_waypoints(self,position,runway):
         path = get_runway_exit(runway, position, runway.bearing)
         if not len(path):
+            position = self.flightplan.waypoints.last().get_position()
             position = move(position,runway.bearing,runway.width*5,self.arrival_apalt)
-            self.create_waypoint(position, "On runway %s" % runway.name, WayPoint.RWY, PlaneInfo.ROLLING)
-            position = move(position,normalize(runway.bearing+45),runway.width*2,self.arrival_apalt)
+            self.create_waypoint(position, "On runway %s" % runway.name, WayPoint.RWY, PlaneInfo.TAXIING)
+            position = move(position,normalize(runway.bearing+45),runway.width*3,self.arrival_apalt)
             self.create_waypoint(position, "Aside of runway %s" % runway.name, WayPoint.HOLD, PlaneInfo.SHORT)
             return
         for node in path:
@@ -557,7 +560,7 @@ class CircuitHandler():
             self.create_waypoint(position, "Taxi 1", WayPoint.TAXI, PlaneInfo.TAXIING)
             position = move(position,heading,distance/2,self.departure_apalt)
             self.create_waypoint(position, "Taxi 2", WayPoint.TAXI, PlaneInfo.TAXIING)
-            position = move(rwystart,normalize(heading+180),50*units.M,p2.z)
+            position = move(rwystart,normalize(heading+180),50*units.M,self.departure_apalt)
             last_short = self.create_waypoint(position, "Short of rwy", WayPoint.HOLD, PlaneInfo.SHORT)
             position = move(rwystart, pos2.bearing, 20,self.departure_apalt)
             self.create_waypoint(position, "Taxi 3", WayPoint.TAXI, PlaneInfo.TAXIING)
@@ -604,7 +607,7 @@ class CircuitHandler():
         
 
     def generate_climb_waypoints(self, runway):
-        altitude = self.flightplan.altitude
+        altitude = self.flightplan.altitude+self.departure_apalt
         position = self.flightplan.waypoints.last().get_position()
         straight = runway.bearing
         # get speeds from fdm
