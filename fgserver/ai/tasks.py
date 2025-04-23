@@ -24,7 +24,8 @@ loop_enabled = True
 
 def init_plane(plan):
     ''' Inits a state plane, with a Start clearance and an initial push'''
-    plane = StatePlane(plan, init_delay=randint(20,120))
+    llogger.info("Creating plane %s" % plan.aircraft.callsign)
+    plane = StatePlane(plan, init_delay=randint(60,1200))
     plane.clearances.start = True
     plane.update(sim_time())
     plane._saved = timezone.now()
@@ -38,7 +39,8 @@ def stateplanes_loop():
     planes = {}
     while loop_enabled:
         try:
-            for plan in FlightPlan.objects.filter(enabled=True):
+            enabled = FlightPlan.objects.filter(enabled=True)
+            for plan in enabled:
                 plane = planes.get(plan.aircraft.callsign)
                 if not plane:
                     plane = init_plane(plan)
@@ -65,7 +67,10 @@ def stateplanes_loop():
                         received= ReceivedOrder.from_string(order.get_order())
                         plane.process_order(received)
 
-                
+            to_remove = [x for x in planes.keys() if not x in enabled.values_list("aircraft__callsign", flat=True)]
+            for callsign in to_remove:
+                llogger.info("Removing inactive %s" % callsign)
+                planes.pop(callsign)
             time.sleep(delay)
         except:
             llogger.exception('In AI loop')
