@@ -236,7 +236,7 @@ class Copilot():
         if self.plane.is_rejoining():
             llogger.debug("{%s-CP} Plane is rejoining, finding waypoint" % self.aircraft)
             wp = self.plane.flightplan.waypoints.filter(status=PlaneInfo.APPROACHING).last()
-            self.plane.clearances.report=alias.CIRCUIT_CROSSWIND
+            # self.plane.clearances.report=alias.CIRCUIT_CROSSWIND
             self.plane.manager.reroute(wp)
             llogger.debug("{%s-CP} Waypoint found. Setting course to %s" % (self.aircraft,wp))
             self.plane.dynamics.set_waypoint(self.plane.manager.waypoint(),self.plane.manager.next_waypoint())
@@ -729,7 +729,7 @@ class CircuitHandler():
             position = move(rwystart,reverse,radius*1.5, circuit_altitude)
             self.create_waypoint(position, "Straight 2 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_STRAIGHT)
             position = move(position,straight,radius, self.arrival_apalt+700*units.FT)
-            self.create_waypoint(position, "Final 1 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_FINAL)
+            self.create_waypoint(position, "Straight 3 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_STRAIGHT)
         else:
             if clearances.report == "crosswind":
                 self.create_waypoint(position, "Crosswind %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_CROSSWIND)
@@ -738,17 +738,17 @@ class CircuitHandler():
             position = move(position,reverse, radius*1.2+runway.length, circuit_altitude)
             self.create_waypoint(position, "Base %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_BASE)
             position = move(position,right, radius, self.arrival_apalt+700*units.FT)
-            self.create_waypoint(position, "Final 1 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_FINAL)
+            self.create_waypoint(position, "Turn to Final %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_BASE)
 
         landing_distance = self.flightplan.fdm.landing_distance
         final_distance = get_distance(position,rwystart)
         delta_alt = position.z -self.arrival_apalt
         position = move(position,straight,final_distance*0.33,position.z-delta_alt*0.33)
-        self.create_waypoint(position, "Final 2 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.LANDING)
+        self.create_waypoint(position, "Final 1 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.CIRCUIT_FINAL)
         position = move(position,straight,final_distance*0.33,position.z-delta_alt*0.33)
-        self.create_waypoint(position, "Final 3 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.LANDING)
+        self.create_waypoint(position, "Final 2 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.LANDING)
         position = move(position,straight,final_distance*0.33,self.arrival_apalt+10*units.FT)
-        self.create_waypoint(position, "Final 4 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.LANDING)
+        self.create_waypoint(position, "Final 3 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.LANDING)
 
         position = move(position, straight, landing_distance*0.1, self.arrival_apalt+10*units.FT)
         self.create_waypoint(position, "Flare 1 %s"%runway.name, WayPoint.CIRCUIT, PlaneInfo.LANDING)
