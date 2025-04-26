@@ -23,6 +23,7 @@ var get_dialog_column=func(tag){
 var dialog_columns=func(){
 	var cols = [];
 	var unicom = fgatc.controller_type == "51";
+	var tunned = fgatc.airport;
 	if (fgatc.last_order != nil and fgatc.last_order != "") {
 		append(cols,get_dialog_column('roger'));
 	}
@@ -31,7 +32,7 @@ var dialog_columns=func(){
 		if (next) {
 			append(cols,get_dialog_column(next));
 	    }
-	} else if (viewnode == 'depart') {
+	} else if (tunned and viewnode == 'depart') {
 		if (unicom) {
 			append(cols,get_dialog_column('abt_tko'));
 			append(cols,get_dialog_column('enterrw'));
@@ -44,7 +45,7 @@ var dialog_columns=func(){
 			
 		}
 		append(cols,get_dialog_column('leaving'));
-	} else if (viewnode == 'arrival') {
+	} else if (tunned and viewnode == 'arrival') {
 		append(cols,get_dialog_column('inbound'));
     	append(cols,get_dialog_column('downwind'));
     	append(cols,get_dialog_column('crosswind'));
@@ -53,7 +54,7 @@ var dialog_columns=func(){
     	append(cols,get_dialog_column('straight'));
     	append(cols,get_dialog_column('clearrw'));
     	append(cols,get_dialog_column('around'));    	
-    } else if (viewnode == 'approach') {
+    } else if (tunned and viewnode == 'approach') {
     	append(cols,get_dialog_column('transition'));
     	if (!unicom) {
 			append(cols,get_dialog_column('withyou'));
@@ -61,11 +62,12 @@ var dialog_columns=func(){
     } else if (viewnode == 'options') {
 		append(cols,{ type: "checkbox", label: "Remain in the pattern", code: "remain", halign: "left", callback: "fgatc.set_option", property: fgatc.root ~ "/options/remain" });
 		append(cols,{ type: "checkbox", label: "Touch & go", code: "tngo", halign: "left", callback: "fgatc.set_option", property: fgatc.root ~ "/options/tngo" });
+		append(cols,{ type: "checkbox", label: "Update Metar from ATC", code: "metar-update", halign: "left", callback: "fgatc.set_option", property: fgatc.root ~ "/options/metar-update" });
 		append(cols,{ type: "input", label: "ATIS report", format: "%s", code: "atis", halign: "left", property: fgatc.root ~ "/options/atis", callback:nil });
 		append(cols,{ type: "input", label: "Target Altitude", format: "%d", code: "talt", halign: "left", property: fgatc.root ~ "/options/talt", callback:nil });
 		append(cols,{ type: "input", label: "Force RWY", format: "%s", code: "frwy", halign: "left", property: fgatc.root ~ "/options/frwy", callback:nil });
 		append(cols,{ type: "checkbox", label: "test", code: "test", halign: "left", callback: "fgatc.set_option", property: fgatc.root ~ "/options/test" });
-		
+		append(cols,{ type: "button", legend: "Set metar", code: 'metar', halign: "left", callback: "fgatc.set_metar" });
     }
      return cols;
 }
@@ -188,7 +190,7 @@ var dialog = {
     show : func {
     	if (fgatc.airport == nil) {
     		print("Not tunned to an ATC.");
-    		return;
+			viewnode = "options";
     	}
         if (!CONFIG_DLG) {
             CONFIG_DLG = 1;

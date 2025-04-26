@@ -374,6 +374,7 @@ class alias():
     TUNE_IN='tunein'
     TUNE_OK='tuneok'
     TUNE_TO='tuneto'
+    METAR_OBS='metar'
     
     CIRCUIT_LEFT='left'
     CIRCUIT_RIGHT='right'

@@ -184,7 +184,6 @@ class Controller(object):
         order = Order(sender=self.comm,receiver=request.sender,date=timezone.now())
         order.add_param(Order.PARAM_AIRPORT,self.comm.airport.icao)
         order.add_param(Order.PARAM_RECEIVER,request.sender.callsign)
-        #self.debug("init response devuelve",order)
         return order
     
     def manage(self,request):
@@ -234,6 +233,11 @@ class Controller(object):
         response.add_param(Order.PARAM_CONTROLLER,self.comm.identifier)
         response.add_param(Order.PARAM_CONTROLLER_TYPE, self.comm.type)
         response.add_param(Order.PARAM_ORDER, alias.TUNE_OK)
+        if request.get_param("metar"):
+            metar = self.comm.airport.metar.last()
+            if metar:
+                response.add_param(Order.PARAM_METAR_OBSERVATION,metar.observation)
+                response.add_param(Order.PARAM_METAR_CYCLE,metar.cycle)
 
         self.set_status(request.sender, PlaneInfo.TUNNED)
         return response
@@ -263,6 +267,16 @@ class Controller(object):
                 response.add_param(Order.PARAM_ATIS, cycle)
         else:
             response.add_param(Order.PARAM_QNH, str(get_qnh(self.comm.airport)))
+    
+    def metar(self,request):
+        response=self._init_response(request)
+        response.message = ""
+        metar = self.comm.airport.metar.last()
+        if metar:
+            response.add_param(Order.PARAM_ORDER, alias.METAR_OBS)
+            response.add_param(Order.PARAM_METAR_OBSERVATION,metar.observation)
+            response.add_param(Order.PARAM_METAR_CYCLE,metar.cycle)
+        return response
 
     def __unicode__(self):
         return '%s for %s' % (type(self).__name__, self.comm)

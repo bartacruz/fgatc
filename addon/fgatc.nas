@@ -94,6 +94,17 @@ var check_models = func(){
 		}
 	}
 }
+var set_metar = func(){
+	var metar = getprop(root ~ "/atc-metar");
+	if (metar) {
+		print("setting metar ", metar);
+		setprop( "/environment/params/metar-updates-environment", 1 );
+        setprop( "/environment/realwx/enabled", 0 );
+        setprop( "/environment/config/enabled", 1 );
+        setprop( "/environment/weather-scenario", "Manual input");
+		setprop( "/environment/metar/data", metar);
+	}
+};
 
 var set_radio = func(apt=nil,contr=nil, ctype=nil) {
 	airport = apt;
@@ -158,6 +169,18 @@ var process_order = func(order=nil) {
 		set_radio(last_order['apt'],last_order['atc'],last_order['cty']);
 	} else {
 		print( sprintf("[FGATC] Dummy %s (not sent)",parse_message("roger") ) );
+	}
+	if (last_order["obs"]) {
+		setprop(root ~ "/atc-metar",last_order["obs"]);
+		print("Received metar obs: ",last_order["obs"]);
+		if (get_option("metar-update")) {
+			set_metar();
+		}
+	}
+	if (last_order["cyc"]) {
+		var last_metar_cycle = chr(65+ int(last_order["cyc"]));
+		setprop(root ~ "atc-metar-cycle",last_metar_cycle);
+		print("Received metar cycle: ",last_order["cyc"]," = ",last_metar_cycle);
 	}
 	setprop( channel_oid, sprintf("%s",last_order['oid']));
 	#print(sprintf("ATCNG incoming order=%s",order));
@@ -247,6 +270,9 @@ var sendmessage = func(message="",dlg=1){
 	}
 	if (get_option('remain')) {
 		request = sprintf("%s;remain=1",request);
+	}
+	if (message == 'tunein' and get_option("metar-update")) {
+		request = sprintf("%s;metar=1",request);
 	}
 	print(sprintf("[FGATC] Sendmessage: %s | %s",request , msg));
 	setprop(channel_request,request);
@@ -424,9 +450,10 @@ setlistener("/instrumentation/comm/power-btn",fgatc.set_frequency,1,0);
 setlistener("/instrumentation/comm[1]/frequencies/selected-mhz",fgatc.set_frequency,1,0);
 setlistener("/instrumentation/comm[1]/power-btn",fgatc.set_frequency,1,0);
 setlistener("/controls/switches/master-avionics",fgatc.set_frequency,1,0);
-setprop("/sim/fgatc/request","Test");
-setprop("/sim/fgatc/message",my_callsign);
-setprop("/sim/fgatc/oid",17);
+setprop(root ~ "/request","Test");
+setprop(root ~ "/message",my_callsign);
+setprop(root ~ "/oid",17);
+setprop(root ~ "/options/metar-update",false);
 
 var models_timer = maketimer(1,check_models);
 models_timer.start();

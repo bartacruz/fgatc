@@ -538,6 +538,8 @@ class Order(Model):
     PARAM_ATIS='atis'
     PARAM_RECEIVER='to'
     PARAM_CONTROLLER='atc'
+    PARAM_METAR_OBSERVATION='obs'
+    PARAM_METAR_CYCLE='cyc'
     PARAM_CONTROLLER_TYPE='cty'
     
     
